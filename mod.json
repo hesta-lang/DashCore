@@ -1,0 +1,16 @@
+{
+  "geode": "5.11.2",
+  "gd": {
+    "android": "2.2081"
+  },
+  "id": "hesta.optgod",
+  "name": "OptGod",
+  "version": "0.1.0",
+  "developer": "hesta-lang",
+  "description": "Experimental vanilla-preserving rendering optimization for Geometry Dash. Initial Android64 development build.",
+  "tags": [
+    "optimizations",
+    "performance"
+  ],
+  "settings": {}
+}
