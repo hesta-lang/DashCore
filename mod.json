@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "OptGod",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "developer": "hesta-lang",
-  "description": "Experimental vanilla-preserving rendering optimization for Geometry Dash. Initial Android64 development build.",
+  "description": "Diagnostic review build for measuring Geometry Dash level startup and main update performance on Android64.",
   "tags": [
     "optimizations",
     "performance"
