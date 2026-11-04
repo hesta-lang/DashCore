@@ -1,31 +1,37 @@
-# OptGod — Android64 review build
+# OptGod 0.3.0 — Android64 diagnostic profiler
 
-Diagnostic-only review build for Geometry Dash 2.2081 / Geode 5.11.2.
+Target: Geometry Dash 2.2081 / Geode 5.11.2 / Android64 (arm64-v8a), minimum Android SDK 29.
 
-## What this build measures
+## What 0.3.0 measures
 
-- Duration of `PlayLayer::init`.
-- Duration of `setupHasCompleted`.
-- Duration of the first 180 `PlayLayer::postUpdate` calls after setup.
-- Average and maximum post-update time, count of post-updates over 8 ms, gaps over 25 ms, maximum gap, and the observed `dt` range.
-- Progress snapshots every 30 post-update calls, so a partial run still produces useful measurements.
+- Duration of `PlayLayer::init` and `setupHasCompleted`.
+- First 180 `PlayLayer::postUpdate` calls after level setup: average/max CPU callback duration, calls over 8 ms, gaps over 25 ms, maximum gap, and observed `dt` range.
+- First 180 `CCDirector::drawScene` calls after level setup: average/max CPU duration, calls over 8 ms, gaps over 25 ms, and maximum gap.
+- Progress snapshots every 30 samples, plus final reports.
 
-## Instrumentation fix in 0.2.1
+## How to interpret DRAWSCENE-CPU
 
-The previous build cleared the profile state after calling the original `PlayLayer::init`. Since `setupHasCompleted` can run from inside that initialization, this erased the active PlayLayer pointer before frame sampling began. Version 0.2.1 clears old state before calling the original init and samples `PlayLayer::postUpdate`, rather than relying on a PlayLayer `update` override that may not be dispatched on this game version.
+This times the CPU-side duration of Cocos2d's scene drawing function. It can include scene traversal and graphics-command submission, depending on the engine/driver. It is **not** a direct GPU execution timer and does not prove that the GPU finished rendering during the measured interval. A slow drawScene callback points toward CPU-side rendering/traversal or driver submission; a short callback with visible stutter leaves GPU workload, synchronization, resource upload, and frame pacing as possibilities.
 
-## Important
+The update and draw samples are independent and each collects up to 180 calls. The profile ends after both complete.
 
-This build does **not** enable culling, skip objects, change rendering, or modify gameplay. It is intended to establish whether post-update processing and frame pacing are associated with level-entry stutter before a behavior-changing optimization is attempted. The post-update duration is not a complete GPU/render-thread measurement; the frame-gap metric captures spacing between observed post-update calls.
+## Safety
+
+This version is diagnostic only. It does not cull objects, skip drawing, change textures/shaders, alter physics, modify triggers, or change gameplay. Timing instrumentation itself has a small measurement overhead.
 
 ## Test procedure
 
-1. Install this build on the target device.
+1. Install the 0.3.0 artifact.
 2. Force-close Geometry Dash, reopen it, and enter a normal level that usually stutters.
-3. Play normally for at least 5 seconds after the level becomes playable.
-4. Export the Geode log and send the complete log, not only the lines containing OptGod.
+3. Play normally for at least 5–8 seconds after the level becomes playable.
+4. Export and send the complete Geode log.
 
-Search the log for `OptGod REVIEW`. Expected markers include `first PlayLayer::postUpdate reached`, progress reports at 30, 60, 90, 120, 150 frames, and a final report at 180 frames. If setup is logged but the first post-update marker is absent, the next investigation should move to a different verified gameplay callback.
+Search for `OptGod 0.3.0`. Important final markers:
+- `UPDATE FINAL`
+- `DRAWSCENE-CPU FINAL`
+- `both 180-frame samples complete`
+
+If either final marker is missing, send the full log anyway; partial progress reports are useful.
 
 ## Build target
 
@@ -33,4 +39,4 @@ Search the log for `OptGod REVIEW`. Expected markers include `first PlayLayer::p
 - Android minimum SDK 29
 - Geometry Dash 2.2081
 - Geode 5.11.2
-- Release build through GitHub Actions
+- Release build via GitHub Actions
