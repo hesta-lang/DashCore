@@ -1,27 +1,33 @@
-# OptGod
+# OptGod — Android64 review build
 
-Experimental, vanilla-preserving rendering optimization for Geometry Dash.
+Diagnostic-only review build for Geometry Dash 2.2081 / Geode 5.11.2.
 
-## Target
+## What this build measures
 
-- Geometry Dash: 2.2081 (Android)
-- Geode: 5.11.2
-- ABI: Android64 / arm64-v8a
-- Android minimum SDK: 29
-- Build: GitHub Actions
+- Duration of `PlayLayer::init`.
+- Duration of `setupHasCompleted`.
+- Duration of the first 180 `PlayLayer::update` calls after setup.
+- Average and maximum update time, count of updates over 8 ms, gaps over 25 ms, maximum gap, and the observed `dt` range.
+- Progress snapshots every 30 update calls, so a partial run still produces useful measurements.
 
-## Design rules
+## Important
 
-OptGod is not a low-detail or visual-removal mod. It must preserve the original menus, textures, colors, particles, shaders, object behavior, physics, triggers, collisions, and hitboxes.
+This build does **not** enable culling, skip objects, change rendering, or modify gameplay. It is intended to establish whether the main update loop is where the level-entry stutter is occurring before a behavior-changing optimization is attempted.
 
-The first optimization stage will investigate camera-frustum culling: skip render submission for objects that are provably outside the active gameplay camera, without disabling their game logic or changing their visibility state globally. Objects with uncertain bounds, dynamic effects, triggers, or special render behavior must fail open and continue rendering.
+## Test procedure
 
-Later stages may investigate batching and reducing redundant per-frame render preparation. GPU-side culling is a separate, more invasive research stage.
+1. Install this build on the target device.
+2. Force-close Geometry Dash, reopen it, and enter a normal level that usually stutters.
+3. Let it run for at least 5 seconds after the level becomes playable.
+4. Repeat once with a StartPos if useful; keep the same level and conditions.
+5. Export the Geode log and send the complete log, not only the lines containing OptGod.
 
-## Safety and validation
+Search the log for `OptGod REVIEW`. If the log contains init/setup lines but no `first PlayLayer::update reached`, that absence is itself important: it means the hook is not observing the expected update path.
 
-The initial build is intentionally passive. No render hooks are enabled until the target Geometry Dash/Geode Android bindings are verified. Each optimization must be tested with moving objects, particles, glow, shaders, portals, triggers, editor mode, and camera transitions. Correctness takes priority over benchmark results.
+## Build target
 
-## Build
-
-Pushes and manual runs build an Android64 .geode package through the official geode-sdk/build-geode-mod GitHub Action.
+- Android64 / arm64-v8a
+- Android minimum SDK 29
+- Geometry Dash 2.2081
+- Geode 5.11.2
+- Release build through GitHub Actions
