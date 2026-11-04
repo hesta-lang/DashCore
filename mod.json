@@ -1,16 +1,11 @@
 {
   "geode": "5.11.2",
-  "gd": {
-    "android": "2.2081"
-  },
+  "gd": { "android": "2.2081" },
   "id": "hesta.optgod",
   "name": "OptGod",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "developer": "hesta-lang",
-  "description": "Diagnostic-only Android64 profiler for level startup, gameplay updates, scene draw CPU time and frame pacing.",
-  "tags": [
-    "optimizations",
-    "performance"
-  ],
+  "description": "Diagnostic-only Android64 profiler for level startup, update and draw timing distributions and frame pacing.",
+  "tags": ["optimizations", "performance"],
   "settings": {}
 }
