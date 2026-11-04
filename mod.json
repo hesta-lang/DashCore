@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "OptGod",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "developer": "hesta-lang",
-  "description": "Diagnostic review build for measuring Geometry Dash level startup and main update performance on Android64.",
+  "description": "Diagnostic review build for measuring Geometry Dash level startup and post-update frame timing on Android64.",
   "tags": [
     "optimizations",
     "performance"
