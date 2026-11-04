@@ -2,6 +2,7 @@
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/CCDirector.hpp>
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <limits>
@@ -10,6 +11,9 @@ using namespace geode::prelude;
 
 namespace {
     using Clock = std::chrono::steady_clock;
+
+    // Buckets are <=2, <=4, <=8, <=16, <=25, and >25 milliseconds.
+    using Buckets = std::array<std::uint32_t, 6>;
 
     struct StartupProfile {
         PlayLayer* layer = nullptr;
@@ -27,6 +31,10 @@ namespace {
         std::int64_t maxDrawGapUs = 0;
         float minDt = std::numeric_limits<float>::max();
         float maxDt = 0.f;
+        Buckets updateDurationBuckets{};
+        Buckets drawDurationBuckets{};
+        Buckets updateGapBuckets{};
+        Buckets drawGapBuckets{};
         Clock::time_point previousPostUpdate{};
         Clock::time_point previousDrawScene{};
     };
@@ -37,10 +45,50 @@ namespace {
     constexpr std::int64_t kSlowCallbackUs = 8000;
     constexpr std::int64_t kLongFrameGapUs = 25000;
 
+    std::size_t durationBucket(std::int64_t us) {
+        if (us <= 2000) return 0;
+        if (us <= 4000) return 1;
+        if (us <= 8000) return 2;
+        if (us <= 16000) return 3;
+        if (us <= 25000) return 4;
+        return 5;
+    }
+
+    std::size_t gapBucket(std::int64_t us) {
+        if (us <= 16667) return 0;
+        if (us <= 25000) return 1;
+        if (us <= 50000) return 2;
+        if (us <= 100000) return 3;
+        return 4;
+    }
+
+    void addGap(Buckets& buckets, std::int64_t us) {
+        auto const bucket = gapBucket(us);
+        if (bucket < buckets.size()) ++buckets[bucket];
+    }
+
+    void addDuration(Buckets& buckets, std::int64_t us) {
+        ++buckets[durationBucket(us)];
+    }
+
+    void logBuckets(char const* label, Buckets const& b) {
+        log::info(
+            "OptGod 0.4.0 {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
+            label, b[0], b[1], b[2], b[3], b[4], b[5]
+        );
+    }
+
+    void logGapBuckets(char const* label, Buckets const& b) {
+        log::info(
+            "OptGod 0.4.0 {} buckets: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}.",
+            label, b[0], b[1], b[2], b[3], b[4]
+        );
+    }
+
     void maybeFinishProfile() {
         if (g_profile.updateFrames >= kFramesToMeasure &&
             g_profile.drawFrames >= kFramesToMeasure) {
-            log::info("OptGod 0.3.0: both 180-frame samples complete; diagnostic-only.");
+            log::info("OptGod 0.4.0: both 180-frame samples complete; diagnostic-only.");
             g_profile.layer = nullptr;
         }
     }
@@ -48,24 +96,28 @@ namespace {
     void reportUpdateProfile(char const* stage) {
         if (g_profile.updateFrames == 0) return;
         log::info(
-            "OptGod 0.3.0 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
+            "OptGod 0.4.0 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
             stage, g_profile.updateFrames,
             g_profile.totalPostUpdateUs / g_profile.updateFrames,
             g_profile.maxPostUpdateUs, g_profile.slowPostUpdates,
             g_profile.longUpdateGaps, g_profile.maxUpdateGapUs,
             g_profile.minDt, g_profile.maxDt
         );
+        logBuckets("UPDATE duration", g_profile.updateDurationBuckets);
+        logGapBuckets("UPDATE frame-gap", g_profile.updateGapBuckets);
     }
 
     void reportDrawProfile(char const* stage) {
         if (g_profile.drawFrames == 0) return;
         log::info(
-            "OptGod 0.3.0 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
+            "OptGod 0.4.0 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
             stage, g_profile.drawFrames,
             g_profile.totalDrawSceneUs / g_profile.drawFrames,
             g_profile.maxDrawSceneUs, g_profile.slowDrawScenes,
             g_profile.longDrawGaps, g_profile.maxDrawGapUs
         );
+        logBuckets("DRAWSCENE duration", g_profile.drawDurationBuckets);
+        logGapBuckets("DRAWSCENE frame-gap", g_profile.drawGapBuckets);
     }
 }
 
@@ -81,12 +133,12 @@ class $modify(OptGodPlayLayer, PlayLayer) {
 
         if (result) {
             log::info(
-                "OptGod 0.3.0: PlayLayer::init={}us ({}ms), levelID={}, replay={}, dontCreateObjects={}.",
+                "OptGod 0.4.0: PlayLayer::init={}us ({}ms), levelID={}, replay={}, dontCreateObjects={}.",
                 elapsedUs, elapsedUs / 1000, level ? level->m_levelID : 0,
                 useReplay, dontCreateObjects
             );
         } else {
-            log::warn("OptGod 0.3.0: PlayLayer::init failed after {}us.", elapsedUs);
+            log::warn("OptGod 0.4.0: PlayLayer::init failed after {}us.", elapsedUs);
         }
         return result;
     }
@@ -101,7 +153,7 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         g_profile = {};
         g_profile.layer = this;
         log::info(
-            "OptGod 0.3.0: setupHasCompleted={}us ({}ms); collecting 180 UPDATE and 180 DRAWSCENE samples.",
+            "OptGod 0.4.0: setupHasCompleted={}us ({}ms); collecting 180 UPDATE and 180 DRAWSCENE samples with duration/gap distributions.",
             elapsedUs, elapsedUs / 1000
         );
     }
@@ -116,6 +168,7 @@ class $modify(OptGodPlayLayer, PlayLayer) {
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     start - g_profile.previousPostUpdate).count());
             g_profile.maxUpdateGapUs = std::max(g_profile.maxUpdateGapUs, gapUs);
+            addGap(g_profile.updateGapBuckets, gapUs);
             if (gapUs > kLongFrameGapUs) ++g_profile.longUpdateGaps;
         }
 
@@ -130,6 +183,7 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         ++g_profile.updateFrames;
         g_profile.totalPostUpdateUs += elapsedUs;
         g_profile.maxPostUpdateUs = std::max(g_profile.maxPostUpdateUs, elapsedUs);
+        addDuration(g_profile.updateDurationBuckets, elapsedUs);
         g_profile.minDt = std::min(g_profile.minDt, dt);
         g_profile.maxDt = std::max(g_profile.maxDt, dt);
         if (elapsedUs > kSlowCallbackUs) ++g_profile.slowPostUpdates;
@@ -155,6 +209,7 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     start - g_profile.previousDrawScene).count());
             g_profile.maxDrawGapUs = std::max(g_profile.maxDrawGapUs, gapUs);
+            addGap(g_profile.drawGapBuckets, gapUs);
             if (gapUs > kLongFrameGapUs) ++g_profile.longDrawGaps;
         }
 
@@ -169,6 +224,7 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
         ++g_profile.drawFrames;
         g_profile.totalDrawSceneUs += elapsedUs;
         g_profile.maxDrawSceneUs = std::max(g_profile.maxDrawSceneUs, elapsedUs);
+        addDuration(g_profile.drawDurationBuckets, elapsedUs);
         if (elapsedUs > kSlowCallbackUs) ++g_profile.slowDrawScenes;
 
         if (g_profile.drawFrames % kReportEvery == 0) {
@@ -183,6 +239,6 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
 
 $on_mod(Loaded) {
     log::info(
-        "OptGod 0.3.0 loaded: measures PlayLayer init/setup/postUpdate and CPU time in CCDirector::drawScene for 180 frames. No gameplay or rendering behavior is changed."
+        "OptGod 0.4.0 loaded: diagnostic-only profiler for level startup, update/draw CPU duration distributions and frame-gap distributions. No gameplay or rendering behavior is changed."
     );
 }
