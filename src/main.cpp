@@ -11,17 +11,17 @@ namespace {
     struct StartupProfile {
         PlayLayer* layer = nullptr;
         std::uint32_t frames = 0;
-        std::uint32_t slowPostUpdates = 0;
+        std::uint32_t slowUpdates = 0;
         std::uint32_t longFrameGaps = 0;
-        std::int64_t totalPostUpdateUs = 0;
-        std::int64_t maxPostUpdateUs = 0;
+        std::int64_t totalUpdateUs = 0;
+        std::int64_t maxUpdateUs = 0;
         std::int64_t maxFrameGapUs = 0;
-        Clock::time_point previousPostUpdate{};
+        Clock::time_point previousUpdate{};
     };
 
     StartupProfile g_profile;
     constexpr std::uint32_t kFramesToMeasure = 120;
-    constexpr std::int64_t kSlowPostUpdateUs = 8000;
+    constexpr std::int64_t kSlowUpdateUs = 8000;
     constexpr std::int64_t kLongFrameGapUs = 25000;
 }
 
@@ -29,8 +29,8 @@ class $modify(OptGodPlayLayer, PlayLayer) {
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
         auto const start = Clock::now();
         bool const result = PlayLayer::init(level, useReplay, dontCreateObjects);
-        auto const elapsedUs =
-            std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count();
+        auto const elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(
+            Clock::now() - start).count();
 
         if (result) {
             g_profile = {};
@@ -46,36 +46,37 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         PlayLayer::setupHasCompleted();
         g_profile = {};
         g_profile.layer = this;
-        log::info("OptGod: level setup completed; measuring next {} post-update frames.", kFramesToMeasure);
+        log::info("OptGod: level setup completed; profiling next {} update calls.", kFramesToMeasure);
     }
 
-    void postUpdate(float dt) {
-        bool const profiling = g_profile.layer == this && g_profile.frames < kFramesToMeasure;
-        auto const frameStart = Clock::now();
+    void update(float dt) {
+        bool const profiling = g_profile.layer == this &&
+            g_profile.frames < kFramesToMeasure;
+        auto const updateStart = Clock::now();
 
-        if (profiling && g_profile.previousPostUpdate.time_since_epoch().count() != 0) {
+        if (profiling && g_profile.previousUpdate.time_since_epoch().count() != 0) {
             auto const gapUs = std::chrono::duration_cast<std::chrono::microseconds>(
-                frameStart - g_profile.previousPostUpdate).count();
+                updateStart - g_profile.previousUpdate).count();
             if (gapUs > g_profile.maxFrameGapUs) g_profile.maxFrameGapUs = gapUs;
             if (gapUs > kLongFrameGapUs) ++g_profile.longFrameGaps;
         }
 
-        PlayLayer::postUpdate(dt);
+        PlayLayer::update(dt);
 
         if (!profiling) return;
 
-        auto const postUpdateUs = std::chrono::duration_cast<std::chrono::microseconds>(
-            Clock::now() - frameStart).count();
-        g_profile.previousPostUpdate = frameStart;
+        auto const updateUs = std::chrono::duration_cast<std::chrono::microseconds>(
+            Clock::now() - updateStart).count();
+        g_profile.previousUpdate = updateStart;
         ++g_profile.frames;
-        g_profile.totalPostUpdateUs += postUpdateUs;
-        if (postUpdateUs > g_profile.maxPostUpdateUs) g_profile.maxPostUpdateUs = postUpdateUs;
-        if (postUpdateUs > kSlowPostUpdateUs) ++g_profile.slowPostUpdates;
+        g_profile.totalUpdateUs += updateUs;
+        if (updateUs > g_profile.maxUpdateUs) g_profile.maxUpdateUs = updateUs;
+        if (updateUs > kSlowUpdateUs) ++g_profile.slowUpdates;
 
         if (g_profile.frames == kFramesToMeasure) {
-            log::info("OptGod startup profile ({} post-update frames): avg={} us, max={} us, post-updates >8ms={}, frame gaps >25ms={}, max frame gap={} us.",
-                g_profile.frames, g_profile.totalPostUpdateUs / kFramesToMeasure,
-                g_profile.maxPostUpdateUs, g_profile.slowPostUpdates,
+            log::info("OptGod startup profile ({} update calls): avg={} us, max={} us, updates >8ms={}, gaps >25ms={}, max gap={} us.",
+                g_profile.frames, g_profile.totalUpdateUs / kFramesToMeasure,
+                g_profile.maxUpdateUs, g_profile.slowUpdates,
                 g_profile.longFrameGaps, g_profile.maxFrameGapUs);
             g_profile.layer = nullptr;
         }
@@ -83,5 +84,5 @@ class $modify(OptGodPlayLayer, PlayLayer) {
 };
 
 $on_mod(Loaded) {
-    log::info("OptGod loaded: level setup and first-frame profiling enabled; no gameplay or rendering changes.");
+    log::info("OptGod loaded: level setup and main update profiling enabled; no gameplay or rendering changes.");
 }
