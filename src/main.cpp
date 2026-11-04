@@ -82,8 +82,8 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         auto const updateStart = Clock::now();
 
         if (profiling && g_profile.previousUpdate.time_since_epoch().count() != 0) {
-            auto const gapUs = std::chrono::duration_cast<std::chrono::microseconds>(
-                updateStart - g_profile.previousUpdate).count();
+            auto const gapUs = static_cast<std::int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                updateStart - g_profile.previousUpdate).count());
             g_profile.maxFrameGapUs = std::max(g_profile.maxFrameGapUs, gapUs);
             if (gapUs > kLongFrameGapUs) ++g_profile.longFrameGaps;
         }
@@ -92,8 +92,8 @@ class $modify(OptGodPlayLayer, PlayLayer) {
 
         if (!profiling) return;
 
-        auto const updateUs = std::chrono::duration_cast<std::chrono::microseconds>(
-            Clock::now() - updateStart).count();
+        auto const updateUs = static_cast<std::int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+            Clock::now() - updateStart).count());
 
         g_profile.previousUpdate = updateStart;
         ++g_profile.frames;
