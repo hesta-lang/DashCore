@@ -1,6 +1,7 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/CCDirector.hpp>
+#include <Geode/modify/GameObject.hpp>
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -40,6 +41,44 @@ namespace {
     };
 
     StartupProfile g_profile;
+
+    // First experimental stage: skip only the draw traversal of distant,
+    // static, ungrouped GameObjects. Effect objects (including triggers) and
+    // grouped objects are deliberately never culled.
+    bool shouldCullStaticObject(GameObject* object) {
+        if (!object || object->m_classType == GameObjectClassType::Effect ||
+            object->m_groupCount > 0) {
+            return false;
+        }
+
+        auto parent = object->getParent();
+        if (!parent) return false;
+
+        auto bounds = object->getBoundingBox();
+        auto const x1 = bounds.origin.x;
+        auto const y1 = bounds.origin.y;
+        auto const x2 = x1 + bounds.size.width;
+        auto const y2 = y1 + bounds.size.height;
+
+        auto const p1 = parent->convertToWorldSpace({ x1, y1 });
+        auto const p2 = parent->convertToWorldSpace({ x2, y1 });
+        auto const p3 = parent->convertToWorldSpace({ x1, y2 });
+        auto const p4 = parent->convertToWorldSpace({ x2, y2 });
+
+        auto const minX = std::min({ p1.x, p2.x, p3.x, p4.x });
+        auto const maxX = std::max({ p1.x, p2.x, p3.x, p4.x });
+        auto const minY = std::min({ p1.y, p2.y, p3.y, p4.y });
+        auto const maxY = std::max({ p1.y, p2.y, p3.y, p4.y });
+
+        auto const screen = cocos2d::CCDirector::sharedDirector()->getWinSize();
+        // Keep a generous guard band so nearby off-screen objects are already
+        // drawn before camera movement brings them into view.
+        auto const marginX = screen.width * 0.75f;
+        auto const marginY = screen.height * 0.75f;
+
+        return maxX < -marginX || minX > screen.width + marginX ||
+               maxY < -marginY || minY > screen.height + marginY;
+    }
     constexpr std::uint32_t kFramesToMeasure = 180;
     constexpr std::uint32_t kReportEvery = 30;
     constexpr std::int64_t kSlowCallbackUs = 8000;
@@ -73,14 +112,14 @@ namespace {
 
     void logBuckets(char const* label, Buckets const& b) {
         log::info(
-            "OptGod 0.4.0 {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
+            "OptGod 0.5.0 {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
             label, b[0], b[1], b[2], b[3], b[4], b[5]
         );
     }
 
     void logGapBuckets(char const* label, Buckets const& b) {
         log::info(
-            "OptGod 0.4.0 {} buckets: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}.",
+            "OptGod 0.5.0 {} buckets: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}.",
             label, b[0], b[1], b[2], b[3], b[4]
         );
     }
@@ -88,7 +127,7 @@ namespace {
     void maybeFinishProfile() {
         if (g_profile.updateFrames >= kFramesToMeasure &&
             g_profile.drawFrames >= kFramesToMeasure) {
-            log::info("OptGod 0.4.0: both 180-frame samples complete; diagnostic-only.");
+            log::info("OptGod 0.5.0: both 180-frame samples complete; diagnostic-only.");
             g_profile.layer = nullptr;
         }
     }
@@ -96,7 +135,7 @@ namespace {
     void reportUpdateProfile(char const* stage) {
         if (g_profile.updateFrames == 0) return;
         log::info(
-            "OptGod 0.4.0 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
+            "OptGod 0.5.0 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
             stage, g_profile.updateFrames,
             g_profile.totalPostUpdateUs / g_profile.updateFrames,
             g_profile.maxPostUpdateUs, g_profile.slowPostUpdates,
@@ -110,7 +149,7 @@ namespace {
     void reportDrawProfile(char const* stage) {
         if (g_profile.drawFrames == 0) return;
         log::info(
-            "OptGod 0.4.0 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
+            "OptGod 0.5.0 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
             stage, g_profile.drawFrames,
             g_profile.totalDrawSceneUs / g_profile.drawFrames,
             g_profile.maxDrawSceneUs, g_profile.slowDrawScenes,
@@ -120,6 +159,16 @@ namespace {
         logGapBuckets("DRAWSCENE frame-gap", g_profile.drawGapBuckets);
     }
 }
+
+class $modify(OptGodGameObject, GameObject) {
+    void visit() {
+        if (Mod::get()->getSettingValue<bool>("experimental-render-culling") &&
+            shouldCullStaticObject(this)) {
+            return;
+        }
+        GameObject::visit();
+    }
+};
 
 class $modify(OptGodPlayLayer, PlayLayer) {
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
@@ -133,12 +182,12 @@ class $modify(OptGodPlayLayer, PlayLayer) {
 
         if (result) {
             log::info(
-                "OptGod 0.4.0: PlayLayer::init={}us ({}ms), levelID={}, replay={}, dontCreateObjects={}.",
+                "OptGod 0.5.0: PlayLayer::init={}us ({}ms), levelID={}, replay={}, dontCreateObjects={}.",
                 elapsedUs, elapsedUs / 1000, level ? level->m_levelID : 0,
                 useReplay, dontCreateObjects
             );
         } else {
-            log::warn("OptGod 0.4.0: PlayLayer::init failed after {}us.", elapsedUs);
+            log::warn("OptGod 0.5.0: PlayLayer::init failed after {}us.", elapsedUs);
         }
         return result;
     }
@@ -153,7 +202,7 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         g_profile = {};
         g_profile.layer = this;
         log::info(
-            "OptGod 0.4.0: setupHasCompleted={}us ({}ms); collecting 180 UPDATE and 180 DRAWSCENE samples with duration/gap distributions.",
+            "OptGod 0.5.0: setupHasCompleted={}us ({}ms); collecting 180 UPDATE and 180 DRAWSCENE samples with duration/gap distributions.",
             elapsedUs, elapsedUs / 1000
         );
     }
@@ -239,6 +288,6 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
 
 $on_mod(Loaded) {
     log::info(
-        "OptGod 0.4.0 loaded: diagnostic-only profiler for level startup, update/draw CPU duration distributions and frame-gap distributions. No gameplay or rendering behavior is changed."
+        "OptGod 0.5.0 loaded: Android64 profiler plus an opt-in experimental render-culling prototype. The prototype only skips draw traversal for distant, static, ungrouped objects; Effect objects and grouped objects are always preserved."
     );
 }
