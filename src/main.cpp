@@ -54,7 +54,7 @@ namespace {
         auto parent = object->getParent();
         if (!parent) return false;
 
-        auto bounds = object->getBoundingBox();
+        auto bounds = object->getBoundingRect();
         auto const x1 = bounds.origin.x;
         auto const y1 = bounds.origin.y;
         auto const x2 = x1 + bounds.size.width;
