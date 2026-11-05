@@ -1,11 +1,23 @@
 {
   "geode": "5.11.2",
-  "gd": { "android": "2.2081" },
+  "gd": {
+    "android": "2.2081"
+  },
   "id": "hesta.optgod",
   "name": "OptGod",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "developer": "hesta-lang",
-  "description": "Diagnostic-only Android64 profiler for level startup, update and draw timing distributions and frame pacing.",
-  "tags": ["optimizations", "performance"],
-  "settings": {}
+  "description": "Android64 performance profiler with opt-in experimental static-object render culling; triggers and grouped objects are preserved.",
+  "tags": [
+    "optimizations",
+    "performance"
+  ],
+  "settings": {
+    "experimental-render-culling": {
+      "type": "bool",
+      "name": "Experimental render culling",
+      "description": "Skip drawing distant static objects without groups. Triggers/effect objects and grouped objects are never culled. Experimental; disable if any visual issue occurs.",
+      "default": false
+    }
+  }
 }
