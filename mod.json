@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "developer": "hesta-lang",
-  "description": "Experimental Android64 render culling. Effect objects (including triggers) and grouped objects are excluded; gameplay logic is unchanged.",
+  "description": "Android64 performance profiling. Experimental render culling is opt-in; visibility-pass timing is logged to identify frame bottlenecks.",
   "tags": [
     "optimizations",
     "performance"
@@ -16,8 +16,8 @@
     "experimental-render-culling": {
       "type": "bool",
       "name": "Experimental render culling",
-      "description": "Experimental: skips drawing distant, ungrouped, non-Effect GameObjects. Triggers and grouped objects are protected. Disable immediately if a level renders incorrectly.",
-      "default": true
+      "description": "Optional experimental culling of distant, ungrouped, non-Effect GameObjects. Off by default; enable only for testing.",
+      "default": false
     }
   }
 }
