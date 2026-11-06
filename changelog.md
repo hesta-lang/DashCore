@@ -1,5 +1,14 @@
 # DashCore changelog
 
+## 0.7.6 — trigger and grouped-object validation
+- Adds independent trigger and grouped-object samples so generic traversal samples cannot hide these categories.
+- Reports group-count range and dedicated sample totals.
+- Adds per-object GPU-input reason flags for triggers, effects, grouped objects, grouped-near protection, missing parents, and invalid bounds.
+- Forces parentless and invalid-bound records visible in the diagnostic mask; reports grouped-near/far classification totals.
+- Corrects the GLES compute probe's remaining 0.7.3 labels to 0.7.6.
+- Keeps live render culling hard-disabled; all new classification is read-only and diagnostic.
+
+
 ## 0.7.5 — final validation build
 - Adds up to 12 concrete GameObject samples: class type, trigger flag, group count, parent presence, local/world anchor, raw rectangle, and object/parent transforms.
 - Separates GLES compute dispatch submission time from barrier/readback/CPU comparison time; total probe time remains reported.
