@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "developer": "hesta-lang",
-  "description": "A lightweight Android64 performance toolkit for Geometry Dash. DashCore profiles level updates and render traversal, validates a Bismuth-inspired GLES compute visibility mask, and keeps experimental object culling disabled by default while safety checks are developed.",
+  "description": "An Android64 performance diagnostics toolkit for Geometry Dash. DashCore measures gameplay update and render costs, inspects the live level scene graph, and validates a Bismuth-inspired GLES compute visibility mask. Experimental live render culling is locked off while object coverage and bounds are verified.",
   "tags": [
     "optimizations",
     "performance"
@@ -15,8 +15,8 @@
   "settings": {
     "experimental-render-culling": {
       "type": "bool",
-      "name": "Experimental render culling",
-      "description": "Experimental CPU-side off-screen draw culling. Disabled by default. Effects and triggers are protected; grouped objects near the player are protected. The GPU visibility-mask test is diagnostic only and never changes game rendering.",
+      "name": "Experimental render culling (locked)",
+      "description": "Temporarily inactive in DashCore 0.7.2. Live object hiding is hard-disabled for safety while scene traversal and object bounds are validated. The setting is retained for compatibility.",
       "default": false
     }
   }
