@@ -7,7 +7,7 @@
   "name": "DashCore",
   "version": "0.7.0",
   "developer": "hesta-lang",
-  "description": "Android64 performance profiling with an isolated Bismuth-inspired GLES 3.1 compute/SSBO self-test. The original Geometry Dash renderer remains active; experimental render culling stays opt-in.",
+  "description": "Android64 profiling with a read-only Bismuth-inspired GLES compute visibility-mask test over real scene objects. The original Geometry Dash renderer remains active; live experimental render culling stays opt-in.",
   "tags": [
     "optimizations",
     "performance"
@@ -16,7 +16,7 @@
     "experimental-render-culling": {
       "type": "bool",
       "name": "Experimental render culling",
-      "description": "Experimental off-screen render culling. Triggers and effects are always protected. Grouped objects are protected near the player and may be culled only when distant. Off by default; enable only for testing.",
+      "description": "Experimental CPU off-screen render culling. Triggers and effects are protected. Grouped objects are protected near the player and may be culled only when distant. Off by default. The 0.7.0 GPU visibility-mask test is diagnostic only and never hides objects.",
       "default": false
     }
   }
