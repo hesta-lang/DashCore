@@ -90,11 +90,13 @@ else
   echo "No launcher crash signature found in Android crash buffer." | tee -a "$REPORT_DIR/result.txt"
 fi
 
-GEODE_LOG_ROOT="/sdcard/Android/data/$PACKAGE_NAME/files/geode/logs"
-adb shell "find /sdcard/Android/data/$PACKAGE_NAME/files/geode -maxdepth 4 -type f 2>/dev/null | head -100" > "$REPORT_DIR/geode-files.txt" || true
-adb pull "$GEODE_LOG_ROOT" "$REPORT_DIR/geode-logs" >/dev/null 2>&1 || true
+GEODE_LOG_ROOT_INTERNAL="/sdcard/Android/data/$PACKAGE_NAME/files/geode"
+GEODE_LOG_ROOT_MEDIA="/sdcard/Android/media/$PACKAGE_NAME/game/geode"
+adb shell "find $GEODE_LOG_ROOT_INTERNAL $GEODE_LOG_ROOT_MEDIA -maxdepth 5 -type f 2>/dev/null | head -150" > "$REPORT_DIR/geode-files.txt" || true
+adb pull "$GEODE_LOG_ROOT_INTERNAL/logs" "$REPORT_DIR/geode-logs-internal" >/dev/null 2>&1 || true
+adb pull "$GEODE_LOG_ROOT_MEDIA/logs" "$REPORT_DIR/geode-logs-media" >/dev/null 2>&1 || true
 
-if [ -d "$REPORT_DIR/geode-logs" ] && grep -R -I -E "hesta\.optgod|DashCore" "$REPORT_DIR/geode-logs" > "$REPORT_DIR/mod-log-matches.txt"; then
+if grep -R -I -E "hesta\.optgod|DashCore" "$REPORT_DIR"/geode-logs-* > "$REPORT_DIR/mod-log-matches.txt" 2>/dev/null; then
   echo "DashCore identifier was found in Geode logs." | tee -a "$REPORT_DIR/result.txt"
   MOD_LOG_CONFIRMED="true"
 else
