@@ -293,6 +293,10 @@ namespace {
         std::uint64_t scaledObjects = 0;
         std::uint64_t rotatedObjects = 0;
         std::uint64_t centerComparisons = 0;
+        std::uint64_t rawCandidateOffscreenTriggers = 0;
+        std::uint64_t rawCandidateOffscreenEffects = 0;
+        std::uint64_t rawCandidateOffscreenGrouped = 0;
+        std::uint64_t rawCandidateOffscreenOrdinary = 0;
         double centerDeltaTotal = 0.0;
         float centerDeltaMax = 0.f;
         float maxAbsRotation = 0.f;
@@ -337,6 +341,20 @@ namespace {
                 else {
                     if (rect.size.width == 0.f || rect.size.height == 0.f) ++stats.zeroRect;
                     if (rect.size.width < 0.f || rect.size.height < 0.f) ++stats.negativeRect;
+
+                    // Breakdown of the raw-rectangle candidate only. This
+                    // deliberately does not declare that candidate correct.
+                    bool const rawCandidateOffscreen = !intersectsExpandedViewport(
+                        rect.getMinX(), rect.getMinY(), rect.getMaxX(), rect.getMaxY(),
+                        cocos2d::CCDirector::sharedDirector()->getWinSize().width,
+                        cocos2d::CCDirector::sharedDirector()->getWinSize().height
+                    );
+                    if (rawCandidateOffscreen) {
+                        if (object->isTrigger()) ++stats.rawCandidateOffscreenTriggers;
+                        else if (object->m_classType == GameObjectClassType::Effect) ++stats.rawCandidateOffscreenEffects;
+                        else if (object->m_groupCount > 0) ++stats.rawCandidateOffscreenGrouped;
+                        else ++stats.rawCandidateOffscreenOrdinary;
+                    }
                 }
 
                 auto const size = object->getContentSize();
@@ -374,7 +392,7 @@ namespace {
                         rect.origin.y + rect.size.height * 0.5f
                     );
                     auto const rectWorld = parent->convertToWorldSpace(rectCenter);
-                    auto const anchorWorld = object->convertToWorldSpace({0.f, 0.f});
+                    auto const anchorWorld = parent->convertToWorldSpace(object->getPosition());
                     auto const dx = rectWorld.x - anchorWorld.x;
                     auto const dy = rectWorld.y - anchorWorld.y;
                     auto const delta = std::sqrt(dx * dx + dy * dy);
@@ -406,7 +424,10 @@ namespace {
             s.zeroContent, s.scaledObjects, s.rotatedObjects,
             s.maxAbsRotation,
             s.minScaleMagnitude == std::numeric_limits<float>::max() ? 0.f : s.minScaleMagnitude,
-            s.maxScaleMagnitude, s.centerComparisons,
+            s.maxScaleMagnitude,
+            s.rawCandidateOffscreenTriggers, s.rawCandidateOffscreenEffects,
+            s.rawCandidateOffscreenGrouped, s.rawCandidateOffscreenOrdinary,
+            s.centerComparisons,
             s.centerComparisons ? s.centerDeltaTotal / s.centerComparisons : 0.0,
             s.centerDeltaMax
         );
