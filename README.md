@@ -1,15 +1,15 @@
-# OptGod 0.5.1 — Android64 profiler + render-culling instrumentation
+# OptGod 0.5.2 — Android64 profiler + render-culling instrumentation
 
 Target: Geometry Dash 2.2081 / Geode 5.11.2 / Android64 (arm64-v8a), minimum Android SDK 29.
 
-## What's new in 0.5.1
+## What's new in 0.5.2
 
-This release adds counters to the experimental render-culling prototype so a test log can show whether it is enabled and how many GameObject visits are evaluated or skipped.
+This release fixes the render hook: GameObjects inherit Cocos2d's visit implementation, so hooking GameObject::visit did not reliably intercept drawing. The mod now hooks cocos2d::CCNode::visit and uses Geode runtime type information to identify GameObject instances before applying culling.
 
 During the first 180 drawScene samples after level setup, the log reports:
 
 - `enabled`: whether Experimental render culling was enabled when the level setup completed.
-- `visited`: GameObject::visit calls observed during the measurement window.
+- `visited`: GameObject instances encountered through CCNode::visit during the measurement window.
 - `eligible`: visited objects that are neither Effect-class nor grouped.
 - `protectedEffect`: Effect-class objects that are deliberately preserved.
 - `protectedGrouped`: objects with group membership that are deliberately preserved.
@@ -46,7 +46,7 @@ Important limitations:
 - First 180 `PlayLayer::postUpdate` calls after level setup: average/max CPU callback duration, calls over 8 ms, frame gaps over 25 ms, maximum gap, observed `dt` range, and duration/gap distributions.
 - First 180 `CCDirector::drawScene` calls after level setup: average/max CPU duration, calls over 8 ms, frame gaps over 25 ms, maximum gap, and duration/gap distributions.
 - Progress snapshots every 30 samples, plus final reports.
-- Render-culling state and object counters in `OptGod 0.5.1 CULL FINAL`.
+- Render-culling state and object counters in `OptGod 0.5.2 CULL FINAL`.
 
 Duration buckets: <=2 ms, 2–4 ms, 4–8 ms, 8–16 ms, 16–25 ms, and >25 ms.
 
@@ -58,12 +58,12 @@ This times the CPU-side duration of Cocos2d's scene drawing function. It can inc
 
 ## Test procedure
 
-1. Install the 0.5.1 artifact.
+1. Install the 0.5.2 artifact.
 2. Run a baseline test with **Experimental render culling disabled**. The log should say `experimental-render-culling=false` and `CULL FINAL enabled=false`.
 3. Restart the same level from the same position, enable the option, and run the same test again. The log should say `experimental-render-culling=true`.
 4. Compare `DRAWSCENE-CPU FINAL` and `CULL FINAL` between the two runs.
 5. Check for missing objects, pop-in, trigger differences, or camera/zoom issues. Disable culling immediately if anything behaves incorrectly.
-6. Send the complete Geode log, especially the `OptGod 0.5.1` lines.
+6. Send the complete Geode log, especially the `OptGod 0.5.2` lines.
 
 For a fair comparison, use the same level, StartPos, graphics settings, and approximate test duration. Avoid comparing a menu/transition-heavy run with a steady gameplay run.
 
