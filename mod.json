@@ -5,7 +5,7 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "developer": "hesta-lang",
   "description": "Android64 performance profiling with an isolated Bismuth-inspired GLES 3.1 compute/SSBO self-test. The original Geometry Dash renderer remains active; experimental render culling stays opt-in.",
   "tags": [
