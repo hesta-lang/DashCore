@@ -1,52 +1,42 @@
-# DashCore 0.5.2 — Android64 profiler + render-culling instrumentation
+# DashCore 0.5.3 — Android64 profiler + scene-graph diagnostics
 
 Target: Geometry Dash 2.2081 / Geode 5.11.2 / Android64 (arm64-v8a), minimum Android SDK 29.
 
-## What's new in 0.5.2
+## What's new in 0.5.3
 
-This release fixes the render hook: GameObjects inherit Cocos2d's visit implementation, so hooking GameObject::visit did not reliably intercept drawing. The mod now hooks cocos2d::CCNode::visit and uses Geode runtime type information to identify GameObject instances before applying culling.
+This release pauses the experimental render-culling action because the previous Android test showed that the `CCNode::visit` hook only observed a very small number of GameObjects (about one per rendered frame). That is not enough evidence to safely skip any object's drawing.
 
-During the first 180 drawScene samples after level setup, the log reports:
+DashCore now performs a separate, read-only traversal of the active `PlayLayer` child tree every 30 draw samples. It reports:
 
-- `enabled`: whether Experimental render culling was enabled when the level setup completed.
-- `visited`: GameObject instances encountered through CCNode::visit during the measurement window.
-- `eligible`: visited objects that are neither Effect-class nor grouped.
-- `protectedEffect`: Effect-class objects that are deliberately preserved.
-- `protectedGrouped`: objects with group membership that are deliberately preserved.
-- `boundsChecks`: eligible objects for which the distance/bounds test was attempted.
-- `culled`: draw traversals actually skipped by the prototype.
+- `nodes`: total Cocos nodes found in the PlayLayer subtree.
+- `gameObjects`: GameObject instances found by Geode runtime type information.
+- `effects`: Effect-class GameObjects.
+- `grouped`: GameObjects with group membership.
+- `hiddenGameObjects`: GameObjects already marked invisible by the game.
+- `maxChildren` and `maxDepth`: shape of the scene tree.
+- `lastScan`: CPU time spent on the most recent read-only scan.
+- `dontCreateObjects`: the flag passed to PlayLayer::init for this session.
 
-The counters are cumulative across the measurement window, not unique-object counts. An object can be visited more than once, so these values must not be interpreted as the total number of distinct objects in a level.
+This inspection does not modify visibility, transforms, scheduling, triggers, object state, or rendering.
 
-## Experimental render-culling prototype
+## Experimental culling status
 
-This is a cautious first step toward chunk-style rendering. It does **not** unload level objects or change when gameplay logic runs. All level objects are still created and remain in the game.
+The setting remains present for compatibility, but culling is **temporarily forced off**, even if the setting is enabled. The log distinguishes:
 
-When **Experimental render culling** is enabled in Geode mod settings, DashCore skips only the Cocos draw traversal for a GameObject when all of these conditions are true:
+- `requested=true/false`: the user's saved setting.
+- `active=false`: actual culling state in 0.5.3.
+- `visited`: GameObjects encountered by the CCNode::visit hook.
+- `culled=0`: expected while culling is suspended.
 
-- It is an ordinary non-Effect object.
-- It has no group membership.
-- Its transformed bounds are farther than a wide 0.75-screen guard band from the visible window.
-
-Effect-class objects (including trigger-class objects) and grouped objects are never culled. Trigger execution is not advanced, delayed, or otherwise modified.
-
-The feature is **disabled by default**. Keep it disabled for the baseline test. Enable it only for the comparison test, and turn it off if you notice missing objects, pop-in, visual differences, or unusual behavior. This is render culling, not true chunk loading.
-
-Important limitations:
-- It does not reduce initial object creation or level parsing time.
-- It does not unload memory or texture resources.
-- It deliberately leaves Effect objects and grouped objects alone.
-- It may offer limited gains on levels where most objects are grouped or animated.
-- The guard band needs testing with camera movement, zoom, rotated gameplay, and moving objects.
-- The counters count visits, not unique objects.
+Do not use 0.5.3 to compare culling performance. Its purpose is to establish whether the PlayLayer tree contains all level objects and whether the current visit hook sees the same objects. Culling will only be re-enabled after that detection is validated on Android.
 
 ## Profiler
 
 - Duration of `PlayLayer::init` and `setupHasCompleted`.
 - First 180 `PlayLayer::postUpdate` calls after level setup: average/max CPU callback duration, calls over 8 ms, frame gaps over 25 ms, maximum gap, observed `dt` range, and duration/gap distributions.
 - First 180 `CCDirector::drawScene` calls after level setup: average/max CPU duration, calls over 8 ms, frame gaps over 25 ms, maximum gap, and duration/gap distributions.
+- Read-only scene-graph snapshots every 30 draw samples.
 - Progress snapshots every 30 samples, plus final reports.
-- Render-culling state and object counters in `DashCore 0.5.2 CULL FINAL`.
 
 Duration buckets: <=2 ms, 2–4 ms, 4–8 ms, 8–16 ms, 16–25 ms, and >25 ms.
 
@@ -58,14 +48,13 @@ This times the CPU-side duration of Cocos2d's scene drawing function. It can inc
 
 ## Test procedure
 
-1. Install the 0.5.2 artifact.
-2. Run a baseline test with **Experimental render culling disabled**. The log should say `experimental-render-culling=false` and `CULL FINAL enabled=false`.
-3. Restart the same level from the same position, enable the option, and run the same test again. The log should say `experimental-render-culling=true`.
-4. Compare `DRAWSCENE-CPU FINAL` and `CULL FINAL` between the two runs.
-5. Check for missing objects, pop-in, trigger differences, or camera/zoom issues. Disable culling immediately if anything behaves incorrectly.
-6. Send the complete Geode log, especially the `DashCore 0.5.2` lines.
+1. Install the 0.5.3 artifact.
+2. Start a normal level from the level's Play button (not the editor's preview/test mode).
+3. Let it run for at least 5–10 seconds so the 180-frame sample completes.
+4. Send the complete Geode log, especially the `DashCore 0.5.3 SCENE-GRAPH`, `CULL FINAL`, and `PlayLayer::init` lines.
+5. Make sure the log shows `dontCreateObjects=false` for the normal gameplay test. If it is true, tell me exactly how the level was launched.
 
-For a fair comparison, use the same level, StartPos, graphics settings, and approximate test duration. Avoid comparing a menu/transition-heavy run with a steady gameplay run.
+For a fair profiler comparison, use the same level, StartPos, graphics settings, and approximate test duration. Avoid comparing a menu/transition-heavy run with steady gameplay.
 
 ## Build target
 
