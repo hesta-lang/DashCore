@@ -4,7 +4,7 @@
     "android": "2.2081"
   },
   "id": "hesta.optgod",
-  "name": "OptGod",
+  "name": "DashCore",
   "version": "0.5.2",
   "developer": "hesta-lang",
   "description": "Android64 performance profiler with CCNode-based experimental render culling.",
