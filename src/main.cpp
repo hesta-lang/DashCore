@@ -309,6 +309,7 @@ namespace {
         ObjectGeometryStats stats;
         if (!root) return stats;
 
+        auto const screen = cocos2d::CCDirector::sharedDirector()->getWinSize();
         std::vector<CCNode*> pending{root};
         while (!pending.empty()) {
             auto* node = pending.back();
@@ -346,8 +347,7 @@ namespace {
                     // deliberately does not declare that candidate correct.
                     bool const rawCandidateOffscreen = !intersectsExpandedViewport(
                         rect.getMinX(), rect.getMinY(), rect.getMaxX(), rect.getMaxY(),
-                        cocos2d::CCDirector::sharedDirector()->getWinSize().width,
-                        cocos2d::CCDirector::sharedDirector()->getWinSize().height
+                        screen.width, screen.height
                     );
                     if (rawCandidateOffscreen) {
                         if (object->isTrigger()) ++stats.rawCandidateOffscreenTriggers;
