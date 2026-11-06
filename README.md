@@ -1,38 +1,36 @@
-# DashCore 0.7.0 — Android64 Bismuth adaptation prototype
+# DashCore 0.7.4 — Android64 Bismuth adaptation diagnostics
 
 Target: Geometry Dash 2.2081 / Geode 5.11.2 / Android64 (arm64-v8a), minimum Android SDK 29.
 
-## 0.7.0: real-object GLES compute visibility test
+## What 0.7.4 measures
 
-This release adds the first Bismuth-inspired compute-culling prototype that receives real GameObject bounds collected from the active Geometry Dash scene graph.
+DashCore is still a diagnostic build. It does not replace Geometry Dash's renderer or hide objects.
 
-The Android GLES 3.1 compute shader:
-- Receives each GameObject's transformed bounding rectangle through an SSBO.
-- Receives a protection flag for Effect objects, triggers, grouped objects near the player, and objects whose parent transform is unavailable.
-- Computes a visibility mask using an expanded viewport with a 75% guard band.
-- Reads the mask back and compares every result against a CPU reference implementation.
-- Reports the number of processed objects, CPU/GPU visible counts, mismatches, dispatch workgroups, and elapsed time.
+After the first 180 measured frames of a level, it performs a same-frame comparison of:
+- The scene-graph inspector's node and GameObject totals.
+- The GameObject collection uploaded to the GLES compute probe.
+- Three candidate interpretations of object bounds: parent-transformed, raw rectangle, and node-local content rectangle.
+- Object geometry and state: triggers, effects, grouped/ungrouped objects, missing parents, self-hidden objects, hidden ancestors, invalid/zero/negative bounds, scaled objects, and rotated objects.
+- The distance between the world-space center inferred from getBoundingRect() and the node's world-space anchor. This is a diagnostic comparison, not proof of the correct bounds.
+- CPU time spent in scene scanning, GPU-input collection, bounds validation, and geometry inspection.
 
-**Important:** this is a diagnostic GPU prototype only. It does not hide objects, change visibility flags, alter draw calls, update scheduling, collision, physics, or trigger execution. The original Geometry Dash renderer remains in control. The existing experimental CPU render-culling setting remains separate and opt-in.
+The GLES 3.1+ compute probe checks whether the Android GPU can process the collected visibility mask and match the CPU reference. A PASS proves formula parity only; it does not prove that the chosen coordinates are correct or that culling is safe.
 
-## What the test proves
+## Safety
 
-A successful result confirms that the device can compile and dispatch a compute shader over actual scene-object bounds and produce the same visibility decisions as the CPU reference. It does not yet prove a frame-rate improvement or that it is safe to replace Geometry Dash's renderer.
-
-## Existing experimental CPU culling
-
-The separate `Experimental render culling` option can skip the Cocos draw traversal for eligible objects outside the expanded screen rectangle. It is disabled by default. Effects and triggers are protected; grouped objects near the player are protected. Keep it disabled for ordinary play until it has been validated in dense levels.
+- Live render culling is hard-disabled, even if the experimental setting is enabled.
+- Effects and triggers are never hidden.
+- No visibility flags, draw calls, transforms, updates, collisions, physics, or trigger execution are changed.
+- The original Geometry Dash renderer remains in control.
 
 ## Test procedure
 
-1. Install the Android64 0.7.0 artifact.
-2. Leave `Experimental render culling` disabled for this test.
-3. Open a normal level with Play and allow the first scene draw to complete.
-4. Play for at least 30 seconds, preferably in a dense level.
-5. Send the complete Geode log and include the `BISMUTH-CULL` lines.
-6. Report any crash, visual issue, flicker, or abnormal behavior.
-
-The GPU object probe runs once per game session, after the first measured draw. Its one-off cost is excluded from the frame-time sample.
+1. Install the Android64 0.7.4 artifact.
+2. Leave the experimental render-culling setting disabled.
+3. Open a normal level and play for at least 30 seconds after the level appears.
+4. Prefer a level with many objects, groups, triggers, and moving objects.
+5. Send the complete Geode log, especially the `OBJECT-GEOMETRY`, `BOUNDS`, `DIAGNOSTIC-COST`, and `BISMUTH-CULL` lines.
+6. Report any visual issue, flicker, crash, or unusual stutter.
 
 ## Build target
 
