@@ -78,7 +78,7 @@ def main() -> int:
                             header = stream.read(64)
                     except Exception:
                         continue
-                    if len(header) >= 20 and header[:4] == b"\\x7fELF":
+                    if len(header) >= 20 and header[:4] == b"\x7fELF":
                         elf_class = header[4]
                         data_encoding = header[5]
                         if data_encoding == 1:
