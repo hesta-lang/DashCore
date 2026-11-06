@@ -243,7 +243,7 @@ namespace {
 
     void reportSceneGraph(char const* stage) {
         log::info(
-            "DashCore 0.7.1 SCENE-GRAPH {}: scans={}, nodes={}, gameObjects={}, effects={}, grouped={}, hiddenGameObjects={}, maxChildren={}, maxDepth={}, lastScan={}us, dontCreateObjects={}.",
+            "DashCore 0.7.2 SCENE-GRAPH {}: scans={}, nodes={}, gameObjects={}, effects={}, grouped={}, hiddenGameObjects={}, maxChildren={}, maxDepth={}, lastScan={}us, engineInitFlag={}.",
             stage, g_profile.sceneScans, g_profile.sceneNodes,
             g_profile.sceneGameObjects, g_profile.sceneEffectObjects,
             g_profile.sceneGroupedObjects, g_profile.sceneHiddenGameObjects,
@@ -285,14 +285,14 @@ namespace {
 
     void logBuckets(char const* label, Buckets const& b) {
         log::info(
-            "DashCore 0.7.1 {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
+            "DashCore 0.7.2 {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
             label, b[0], b[1], b[2], b[3], b[4], b[5]
         );
     }
 
     void logGapBuckets(char const* label, Buckets const& b) {
         log::info(
-            "DashCore 0.7.1 {} buckets: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}.",
+            "DashCore 0.7.2 {} buckets: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}.",
             label, b[0], b[1], b[2], b[3], b[4]
         );
     }
@@ -300,7 +300,7 @@ namespace {
     void maybeFinishProfile() {
         if (g_profile.updateFrames >= kFramesToMeasure &&
             g_profile.drawFrames >= kFramesToMeasure) {
-            log::info("DashCore 0.7.1: both 180-frame samples complete; diagnostic-only.");
+            log::info("DashCore 0.7.2: both 180-frame samples complete; diagnostic-only.");
             g_profile.layer = nullptr;
         }
     }
@@ -308,7 +308,7 @@ namespace {
     void reportUpdateProfile(char const* stage) {
         if (g_profile.updateFrames == 0) return;
         log::info(
-            "DashCore 0.7.1 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
+            "DashCore 0.7.2 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
             stage, g_profile.updateFrames,
             g_profile.totalPostUpdateUs / g_profile.updateFrames,
             g_profile.maxPostUpdateUs, g_profile.slowPostUpdates,
@@ -321,7 +321,7 @@ namespace {
 
     void reportCullStats(char const* stage) {
         log::info(
-            "DashCore 0.7.1 CULL {}: requested={}, active={}, frames={}, visited={}, eligible={}, protectedEffect={}, protectedTrigger={}, protectedGroupedNear={}, eligibleGroupedFar={}, culledGroupedFar={}, boundsChecks={}, culled={}.",
+            "DashCore 0.7.2 CULL {}: requested={}, active={}, frames={}, visited={}, eligible={}, protectedEffect={}, protectedTrigger={}, protectedGroupedNear={}, eligibleGroupedFar={}, culledGroupedFar={}, boundsChecks={}, culled={}.",
             stage, g_cullingRequested, g_cullingEnabled, g_profile.drawFrames,
             g_profile.visitedObjects, g_profile.eligibleObjects,
             g_profile.protectedEffectObjects, g_profile.protectedTriggerObjects,
@@ -333,7 +333,7 @@ namespace {
     void reportDrawProfile(char const* stage) {
         if (g_profile.drawFrames == 0) return;
         log::info(
-            "DashCore 0.7.1 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
+            "DashCore 0.7.2 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
             stage, g_profile.drawFrames,
             g_profile.totalDrawSceneUs / g_profile.drawFrames,
             g_profile.maxDrawSceneUs, g_profile.slowDrawScenes,
@@ -354,28 +354,33 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
             g_profile.drawFrames < kFramesToMeasure;
         bool const sampleVisit = profiling &&
             (g_profile.drawFrames % kReportEvery == 0);
-        // Sample real GameObject visits every 30 draw frames even with culling
-        // disabled. The old early return hid this baseline; sampling avoids
-        // adding RTTI work to every node on every frame.
+
+        // With live culling disabled, perform RTTI and classification only on
+        // diagnostic sample frames. If culling is ever enabled in a future
+        // validated build, classification still runs each frame as required.
         if (!g_cullingEnabled && !sampleVisit) {
             CCNode::visit();
             return;
         }
+
         auto* object = typeinfo_cast<GameObject*>(this);
-        if (object && sampleVisit) ++g_profile.visitedObjects;
-        if (!g_cullingEnabled) {
+        if (!object) {
             CCNode::visit();
             return;
         }
 
-        bool const isEffect = object &&
-            object->m_classType == GameObjectClassType::Effect;
-        bool const isTrigger = object && object->isTrigger();
-        bool const isGrouped = object && object->m_groupCount > 0;
-        bool const groupedNearPlayer = isGrouped && isGroupedObjectNearPlayer(object);
-        bool const eligible = object && !isEffect && !isTrigger && !groupedNearPlayer;
+        if (sampleVisit) ++g_profile.visitedObjects;
 
-        if (object && profiling) {
+        bool const isEffect = object->m_classType == GameObjectClassType::Effect;
+        bool const isTrigger = object->isTrigger();
+        bool const isGrouped = object->m_groupCount > 0;
+        bool const groupedNearPlayer = isGrouped && isGroupedObjectNearPlayer(object);
+        bool const eligible = !isEffect && !isTrigger && !groupedNearPlayer;
+
+        // Every diagnostic category is counted on exactly the same sampled
+        // visits, so the totals are comparable instead of mixing one-frame
+        // samples with 180-frame accumulated counters.
+        if (sampleVisit) {
             if (isEffect) {
                 ++g_profile.protectedEffectObjects;
             } else if (isTrigger) {
@@ -385,16 +390,19 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
             } else {
                 ++g_profile.eligibleObjects;
                 if (isGrouped) ++g_profile.eligibleGroupedFarObjects;
-                ++g_profile.boundsChecks;
+                if (g_cullingEnabled) ++g_profile.boundsChecks;
             }
         }
 
-        // Skip only the visual visit of off-screen objects. Triggers and
-        // effects are always protected; grouped objects are protected near
-        // the player and may be culled only when far away. Update, collision,
-        // and trigger processing are not modified by this hook.
-        if (g_cullingEnabled && eligible && shouldCullObject(object)) {
-            if (profiling) {
+        if (!g_cullingEnabled) {
+            CCNode::visit();
+            return;
+        }
+
+        // This branch is deliberately unreachable in 0.7.2: live culling is
+        // hard-disabled until the object collector and bounds are validated.
+        if (eligible && shouldCullObject(object)) {
+            if (sampleVisit) {
                 ++g_profile.culledObjects;
                 if (isGrouped) ++g_profile.culledGroupedFarObjects;
             }
@@ -418,12 +426,12 @@ class $modify(OptGodPlayLayer, PlayLayer) {
 
         if (result) {
             log::info(
-                "DashCore 0.7.1: PlayLayer::init={}us ({}ms), levelID={}, replay={}, engineInitFlag={}. ",
+                "DashCore 0.7.2: PlayLayer::init={}us ({}ms), levelID={}, replay={}, engineInitFlag={}. ",
                 elapsedUs, elapsedUs / 1000, level ? level->m_levelID : 0,
                 useReplay, dontCreateObjects
             );
         } else {
-            log::warn("DashCore 0.7.1: PlayLayer::init failed after {}us.", elapsedUs);
+            log::warn("DashCore 0.7.2: PlayLayer::init failed after {}us.", elapsedUs);
         }
         return result;
     }
@@ -440,10 +448,10 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         g_cullingRequested = Mod::get()->getSettingValue<bool>("experimental-render-culling");
         // The experimental option controls the live CCNode::visit culling.
         // It remains opt-in while grouped-object behavior is validated.
-        g_cullingEnabled = g_cullingRequested;
+        g_cullingEnabled = false; // 0.7.2 safety lock: never alter live rendering.
         g_profile.engineInitFlag = g_lastEngineInitFlag;
         log::info(
-            "DashCore 0.7.1: setupHasCompleted={}us ({}ms); culling-requested={}, culling-active={}, engineInitFlag={} (raw engine argument; not a gameplay-mode detector); grouped far-object culling protects triggers, effects, and groups within 1.25 screen dimensions of the player.",
+            "DashCore 0.7.2: setupHasCompleted={}us ({}ms); culling-requested={}, culling-active={}, engineInitFlag={} (raw engine argument; not a gameplay-mode detector). Live render culling is hard-disabled in 0.7.2 while scene coverage and bounds are validated.",
             elapsedUs, elapsedUs / 1000, g_cullingRequested, g_cullingEnabled,
             g_profile.engineInitFlag
         );
@@ -547,14 +555,25 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
         }
         maybeFinishProfile();
 
-        // Run the real-object compute-mask comparison once per game session,
-        // after the first measured draw, so its one-off cost is not included
-        // in the frame-time sample. It never changes visibility or draw calls.
-        if (g_profile.layer && g_profile.drawFrames == 1 && !g_gpuObjectProbeStarted) {
+        // Wait until the full 180-frame sample has completed before collecting
+        // GPU inputs. The previous build collected on frame 1, before the
+        // level's object graph had finished populating (only 2 objects seen).
+        // Use the exact same PlayLayer root as inspectSceneGraph and compare
+        // both traversals before running the read-only GLES probe.
+        if (g_profile.layer && g_profile.drawFrames == kFramesToMeasure &&
+            !g_gpuObjectProbeStarted) {
             g_gpuObjectProbeStarted = true;
+            auto* root = static_cast<CCNode*>(g_profile.layer);
+            auto const scan = inspectSceneGraph(root);
+            auto const inputs = collectGpuCullInputs(root);
+            log::info(
+                "DashCore 0.7.2 BISMUTH-CULL: final-root check; rootChildren={}, scannedNodes={}, scannedGameObjects={}, collectedGameObjects={}, traversalDelta={}.",
+                root->getChildrenCount(), scan.nodes, scan.gameObjects,
+                inputs.size(),
+                static_cast<std::int64_t>(scan.gameObjects) -
+                    static_cast<std::int64_t>(inputs.size())
+            );
             auto const screen = cocos2d::CCDirector::sharedDirector()->getWinSize();
-            auto const inputs = collectGpuCullInputs(g_profile.layer);
-            log::info("DashCore 0.7.1 BISMUTH-CULL: collected {} GameObjects from the scene graph; effects, triggers, near-grouped objects, and objects without a parent are marked force-visible.", inputs.size());
             dashcore::bismuth::runGLESObjectCullingProbeOnce(
                 inputs, screen.width, screen.height
             );
@@ -564,6 +583,6 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
 
 $on_mod(Loaded) {
     log::info(
-        "DashCore 0.7.1 build fix: visibility-pass hook removed because Geode bindings define updateVisibility inline; frame and draw profiling remain enabled."
+        "DashCore 0.7.2 build fix: visibility-pass hook removed because Geode bindings define updateVisibility inline; frame and draw profiling remain enabled."
     );
 }
