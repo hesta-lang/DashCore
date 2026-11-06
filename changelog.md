@@ -1,5 +1,12 @@
 # DashCore changelog
 
+## 0.7.5 — final validation build
+- Adds up to 12 concrete GameObject samples: class type, trigger flag, group count, parent presence, local/world anchor, raw rectangle, and object/parent transforms.
+- Separates GLES compute dispatch submission time from barrier/readback/CPU comparison time; total probe time remains reported.
+- Corrects diagnostic labels to 0.7.5 throughout the runtime probes.
+- Keeps live render culling hard-disabled. No visibility, draw calls, transforms, updates, collisions, physics, or trigger execution are changed.
+- This is a validation build, not an optimization release.
+
 ## 0.7.4
 - Adds object-geometry diagnostics for triggers, effects, grouped/ungrouped objects, parentless nodes, self-hidden objects, and objects under hidden ancestors.
 - Reports invalid, zero-sized, and negative bounding/content dimensions, plus scaled and rotated object counts.
