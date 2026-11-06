@@ -417,7 +417,7 @@ namespace {
 
     void reportObjectGeometry(ObjectGeometryStats const& s) {
         log::info(
-            "DashCore 0.7.4 OBJECT-GEOMETRY: scannedNodes={}, objects={}, triggers={}, effects={}, grouped={}, ungrouped={}, parentless={}, selfHidden={}, ancestorHidden={}, invalidRect={}, zeroRect={}, negativeRect={}, invalidContent={}, zeroContent={}, scaled={}, rotated={}, maxAbsRotation={:.2f}, scaleMagnitudeRange={:.3f}-{:.3f}, centerComparisons={}, centerDeltaAvg={:.3f}, centerDeltaMax={:.3f}.",
+            "DashCore 0.7.4 OBJECT-GEOMETRY: scannedNodes={}, objects={}, triggers={}, effects={}, grouped={}, ungrouped={}, parentless={}, selfHidden={}, ancestorHidden={}, invalidRect={}, zeroRect={}, negativeRect={}, invalidContent={}, zeroContent={}, scaled={}, rotated={}, maxAbsRotation={:.2f}, scaleMagnitudeRange={:.3f}-{:.3f}, rawRectCandidateOffscreen(trigger/effect/grouped/ordinary)={}/{}/{}/{}, centerComparisons={}, centerDeltaAvg={:.3f}, centerDeltaMax={:.3f}.",
             s.scannedNodes, s.objects, s.triggers, s.effects, s.grouped,
             s.ungrouped, s.parentless, s.selfHidden, s.ancestorHidden,
             s.invalidRect, s.zeroRect, s.negativeRect, s.invalidContent,
