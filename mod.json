@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "OptGod",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "developer": "hesta-lang",
-  "description": "Android64 performance profiler with instrumented experimental render culling; reports object visit, protection, bounds-check and cull counters.",
+  "description": "Android64 performance profiler with CCNode-based experimental render culling.",
   "tags": [
     "optimizations",
     "performance"
@@ -16,7 +16,7 @@
     "experimental-render-culling": {
       "type": "bool",
       "name": "Experimental render culling",
-      "description": "Experimental: skip drawing distant ungrouped non-Effect objects. Logs whether enabled and counts visited, eligible, protected, checked and culled objects. Disabled by default.",
+      "description": "Experimental: intercept Cocos CCNode::visit and skip distant ungrouped non-Effect GameObjects. Effect and grouped objects are protected. Disabled by default.",
       "default": false
     }
   }
