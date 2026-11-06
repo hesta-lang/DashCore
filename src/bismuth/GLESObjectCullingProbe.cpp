@@ -98,7 +98,7 @@ void runGLESObjectCullingProbeOnce(
     attempted = true;
 
     if (objects.empty() || viewportWidth <= 0.f || viewportHeight <= 0.f) {
-        log::warn("DashCore 0.7.0 BISMUTH-CULL: skipped; no usable scene objects or viewport.");
+        log::warn("DashCore 0.7.1 BISMUTH-CULL: skipped; no usable scene objects or viewport.");
         return;
     }
 
@@ -106,7 +106,7 @@ void runGLESObjectCullingProbeOnce(
     auto const* rendererRaw = glGetString(GL_RENDERER);
     auto const version = versionRaw ? reinterpret_cast<char const*>(versionRaw) : "unknown";
     auto const renderer = rendererRaw ? reinterpret_cast<char const*>(rendererRaw) : "unknown";
-    log::info("DashCore 0.7.0 BISMUTH-CULL: renderer='{}', context='{}', objects={}.",
+    log::info("DashCore 0.7.1 BISMUTH-CULL: renderer='{}', context='{}', objects={}.",
         renderer, version, objects.size());
 
     GLint major = 0;
@@ -116,14 +116,14 @@ void runGLESObjectCullingProbeOnce(
     glGetIntegerv(GL_MINOR_VERSION, &minor);
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &maxBindings);
     if (major < 3 || (major == 3 && minor < 1) || maxBindings < 2) {
-        log::warn("DashCore 0.7.0 BISMUTH-CULL: unavailable; GLES 3.1 and two SSBO bindings are required.");
+        log::warn("DashCore 0.7.1 BISMUTH-CULL: unavailable; GLES 3.1 and two SSBO bindings are required.");
         return;
     }
 
     auto const started = std::chrono::steady_clock::now();
     GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
     if (!shader) {
-        log::warn("DashCore 0.7.0 BISMUTH-CULL: glCreateShader failed.");
+        log::warn("DashCore 0.7.1 BISMUTH-CULL: glCreateShader failed.");
         return;
     }
     glShaderSource(shader, 1, &kComputeSource, nullptr);
@@ -131,7 +131,7 @@ void runGLESObjectCullingProbeOnce(
     GLint compiled = GL_FALSE;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
     if (compiled != GL_TRUE) {
-        log::warn("DashCore 0.7.0 BISMUTH-CULL: shader compilation failed: {}", shaderLog(shader));
+        log::warn("DashCore 0.7.1 BISMUTH-CULL: shader compilation failed: {}", shaderLog(shader));
         glDeleteShader(shader);
         return;
     }
@@ -139,7 +139,7 @@ void runGLESObjectCullingProbeOnce(
     GLuint program = glCreateProgram();
     if (!program) {
         glDeleteShader(shader);
-        log::warn("DashCore 0.7.0 BISMUTH-CULL: glCreateProgram failed.");
+        log::warn("DashCore 0.7.1 BISMUTH-CULL: glCreateProgram failed.");
         return;
     }
     glAttachShader(program, shader);
@@ -148,7 +148,7 @@ void runGLESObjectCullingProbeOnce(
     glGetProgramiv(program, GL_LINK_STATUS, &linked);
     glDeleteShader(shader);
     if (linked != GL_TRUE) {
-        log::warn("DashCore 0.7.0 BISMUTH-CULL: program link failed: {}", programLog(program));
+        log::warn("DashCore 0.7.1 BISMUTH-CULL: program link failed: {}", programLog(program));
         glDeleteProgram(program);
         return;
     }
@@ -158,7 +158,7 @@ void runGLESObjectCullingProbeOnce(
     if (!buffers[0] || !buffers[1]) {
         if (buffers[0] || buffers[1]) glDeleteBuffers(2, buffers);
         glDeleteProgram(program);
-        log::warn("DashCore 0.7.0 BISMUTH-CULL: SSBO allocation failed.");
+        log::warn("DashCore 0.7.1 BISMUTH-CULL: SSBO allocation failed.");
         return;
     }
 
@@ -193,15 +193,15 @@ void runGLESObjectCullingProbeOnce(
     glDispatchCompute(workGroups, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
 
-    std::uint32_t const* mapped = nullptr;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers[1]);
-    mapped = static_cast<std::uint32_t const*>(
+    auto const* mapped = static_cast<std::uint32_t const*>(
         glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, outputBytes, GL_MAP_READ_BIT));
+    bool readbackSucceeded = mapped != nullptr;
 
     std::uint64_t cpuVisible = 0;
     std::uint64_t gpuVisible = 0;
     std::uint64_t mismatches = 0;
-    if (mapped) {
+    if (readbackSucceeded) {
         for (std::size_t i = 0; i < objects.size(); ++i) {
             auto const& item = objects[i];
             bool const forceVisible = (item.flags & kForceVisible) != 0u;
@@ -216,7 +216,7 @@ void runGLESObjectCullingProbeOnce(
             if (actual) ++gpuVisible;
             if (expected != actual) ++mismatches;
         }
-        glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+        readbackSucceeded = glUnmapBuffer(GL_SHADER_STORAGE_BUFFER) == GL_TRUE;
     }
 
     // Restore all GL state touched by the probe before returning to GD.
@@ -233,19 +233,19 @@ void runGLESObjectCullingProbeOnce(
     auto const elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - started).count();
 
-    if (!mapped) {
-        log::warn("DashCore 0.7.0 BISMUTH-CULL: SSBO readback failed; no game rendering was changed.");
+    if (!readbackSucceeded) {
+        log::warn("DashCore 0.7.1 BISMUTH-CULL: SSBO readback failed; no game rendering was changed.");
         return;
     }
 
     log::info(
-        "DashCore 0.7.0 BISMUTH-CULL: {} objects processed; CPU-visible={}, GPU-visible={}, mismatches={}, dispatchGroups={}, total={}us. Diagnostic only; live culling remains disabled.",
+        "DashCore 0.7.1 BISMUTH-CULL: {} objects processed; CPU-visible={}, GPU-visible={}, mismatches={}, dispatchGroups={}, total={}us. Diagnostic only; live culling remains disabled.",
         objects.size(), cpuVisible, gpuVisible, mismatches, workGroups, elapsedUs
     );
     if (mismatches == 0) {
-        log::info("DashCore 0.7.0 BISMUTH-CULL: PASS — GLES compute visibility mask matches the CPU reference.");
+        log::info("DashCore 0.7.1 BISMUTH-CULL: PASS — GLES compute visibility mask matches the CPU reference.");
     } else {
-        log::warn("DashCore 0.7.0 BISMUTH-CULL: FAIL — GPU mask differs from CPU reference; live culling remains disabled.");
+        log::warn("DashCore 0.7.1 BISMUTH-CULL: FAIL — GPU mask differs from CPU reference; live culling remains disabled.");
     }
 }
 } // namespace dashcore::bismuth
