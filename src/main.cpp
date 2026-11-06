@@ -132,6 +132,148 @@ namespace {
         return dx * dx + dy * dy <= radius * radius;
     }
 
+    struct BoundsCandidateStats {
+        std::uint64_t objects = 0;
+        std::uint64_t valid = 0;
+        std::uint64_t invalid = 0;
+        std::uint64_t visible = 0;
+        std::uint64_t offscreen = 0;
+        float minX = std::numeric_limits<float>::max();
+        float minY = std::numeric_limits<float>::max();
+        float maxX = std::numeric_limits<float>::lowest();
+        float maxY = std::numeric_limits<float>::lowest();
+    };
+
+    struct BoundsValidation {
+        BoundsCandidateStats parentTransformed;
+        BoundsCandidateStats rawRect;
+        BoundsCandidateStats nodeLocal;
+        std::uint64_t scannedNodes = 0;
+        std::uint64_t scannedGameObjects = 0;
+    };
+
+    bool intersectsExpandedViewport(
+        float minX, float minY, float maxX, float maxY,
+        float width, float height
+    ) {
+        if (!std::isfinite(minX) || !std::isfinite(minY) ||
+            !std::isfinite(maxX) || !std::isfinite(maxY) ||
+            minX > maxX || minY > maxY) return false;
+        auto const marginX = width * 0.75f;
+        auto const marginY = height * 0.75f;
+        return maxX >= -marginX && minX <= width + marginX &&
+               maxY >= -marginY && minY <= height + marginY;
+    }
+
+    void recordBoundsCandidate(
+        BoundsCandidateStats& stats,
+        float minX, float minY, float maxX, float maxY,
+        float width, float height
+    ) {
+        ++stats.objects;
+        if (!std::isfinite(minX) || !std::isfinite(minY) ||
+            !std::isfinite(maxX) || !std::isfinite(maxY) ||
+            minX > maxX || minY > maxY) {
+            ++stats.invalid;
+            return;
+        }
+        ++stats.valid;
+        stats.minX = std::min(stats.minX, minX);
+        stats.minY = std::min(stats.minY, minY);
+        stats.maxX = std::max(stats.maxX, maxX);
+        stats.maxY = std::max(stats.maxY, maxY);
+        if (intersectsExpandedViewport(minX, minY, maxX, maxY, width, height)) {
+            ++stats.visible;
+        } else {
+            ++stats.offscreen;
+        }
+    }
+
+    BoundsValidation validateObjectBounds(CCNode* root, float width, float height) {
+        BoundsValidation result;
+        if (!root || width <= 0.f || height <= 0.f) return result;
+
+        std::vector<CCNode*> pending{root};
+        while (!pending.empty()) {
+            auto* node = pending.back();
+            pending.pop_back();
+            if (!node) continue;
+            ++result.scannedNodes;
+
+            if (auto* object = typeinfo_cast<GameObject*>(node)) {
+                ++result.scannedGameObjects;
+                auto const rect = object->getBoundingRect();
+                auto* parent = object->getParent();
+
+                // Candidate A: interpret getBoundingRect() in parent space,
+                // then transform all four corners through the parent.
+                if (parent) {
+                    auto const x1 = rect.origin.x;
+                    auto const y1 = rect.origin.y;
+                    auto const x2 = x1 + rect.size.width;
+                    auto const y2 = y1 + rect.size.height;
+                    auto const p1 = parent->convertToWorldSpace({x1, y1});
+                    auto const p2 = parent->convertToWorldSpace({x2, y1});
+                    auto const p3 = parent->convertToWorldSpace({x1, y2});
+                    auto const p4 = parent->convertToWorldSpace({x2, y2});
+                    recordBoundsCandidate(
+                        result.parentTransformed,
+                        std::min({p1.x,p2.x,p3.x,p4.x}),
+                        std::min({p1.y,p2.y,p3.y,p4.y}),
+                        std::max({p1.x,p2.x,p3.x,p4.x}),
+                        std::max({p1.y,p2.y,p3.y,p4.y}), width, height
+                    );
+                } else {
+                    ++result.parentTransformed.objects;
+                    ++result.parentTransformed.invalid;
+                }
+
+                // Candidate B: treat the returned rectangle as already in
+                // world/screen space. This helps detect double transforms.
+                recordBoundsCandidate(
+                    result.rawRect,
+                    rect.getMinX(), rect.getMinY(),
+                    rect.getMaxX(), rect.getMaxY(), width, height
+                );
+
+                // Candidate C: transform the node's own local content rect.
+                auto const size = object->getContentSize();
+                auto const anchor = object->getAnchorPoint();
+                auto const lx1 = -anchor.x * size.width;
+                auto const ly1 = -anchor.y * size.height;
+                auto const lx2 = lx1 + size.width;
+                auto const ly2 = ly1 + size.height;
+                auto const q1 = object->convertToWorldSpace({lx1, ly1});
+                auto const q2 = object->convertToWorldSpace({lx2, ly1});
+                auto const q3 = object->convertToWorldSpace({lx1, ly2});
+                auto const q4 = object->convertToWorldSpace({lx2, ly2});
+                recordBoundsCandidate(
+                    result.nodeLocal,
+                    std::min({q1.x,q2.x,q3.x,q4.x}),
+                    std::min({q1.y,q2.y,q3.y,q4.y}),
+                    std::max({q1.x,q2.x,q3.x,q4.x}),
+                    std::max({q1.y,q2.y,q3.y,q4.y}), width, height
+                );
+            }
+
+            auto const count = node->getChildrenCount();
+            if (count == 0 || !node->getChildren()) continue;
+            for (auto* child : CCArrayExt<CCNode*>(node->getChildren())) {
+                if (child) pending.push_back(child);
+            }
+        }
+        return result;
+    }
+
+    void reportBoundsCandidate(char const* name, BoundsCandidateStats const& s) {
+        log::info(
+            "DashCore 0.7.3 BOUNDS {}: objects={}, valid={}, invalid={}, visibleWithMargin={}, offscreenWithMargin={}, extents=({:.1f},{:.1f})-({:.1f},{:.1f}).",
+            name, s.objects, s.valid, s.invalid, s.visible, s.offscreen,
+            s.valid ? s.minX : 0.f, s.valid ? s.minY : 0.f,
+            s.valid ? s.maxX : 0.f, s.valid ? s.maxY : 0.f
+        );
+    }
+
     struct SceneScan {
         std::uint64_t nodes = 0;
         std::uint64_t gameObjects = 0;
@@ -243,7 +385,7 @@ namespace {
 
     void reportSceneGraph(char const* stage) {
         log::info(
-            "DashCore 0.7.2 SCENE-GRAPH {}: scans={}, nodes={}, gameObjects={}, effects={}, grouped={}, hiddenGameObjects={}, maxChildren={}, maxDepth={}, lastScan={}us, engineInitFlag={}.",
+            "DashCore 0.7.3 SCENE-GRAPH {}: scans={}, nodes={}, gameObjects={}, effects={}, grouped={}, hiddenGameObjects={}, maxChildren={}, maxDepth={}, lastScan={}us, engineInitFlag={}.",
             stage, g_profile.sceneScans, g_profile.sceneNodes,
             g_profile.sceneGameObjects, g_profile.sceneEffectObjects,
             g_profile.sceneGroupedObjects, g_profile.sceneHiddenGameObjects,
@@ -285,14 +427,14 @@ namespace {
 
     void logBuckets(char const* label, Buckets const& b) {
         log::info(
-            "DashCore 0.7.2 {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
+            "DashCore 0.7.3 {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
             label, b[0], b[1], b[2], b[3], b[4], b[5]
         );
     }
 
     void logGapBuckets(char const* label, Buckets const& b) {
         log::info(
-            "DashCore 0.7.2 {} buckets: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}.",
+            "DashCore 0.7.3 {} buckets: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}.",
             label, b[0], b[1], b[2], b[3], b[4]
         );
     }
@@ -300,7 +442,7 @@ namespace {
     void maybeFinishProfile() {
         if (g_profile.updateFrames >= kFramesToMeasure &&
             g_profile.drawFrames >= kFramesToMeasure) {
-            log::info("DashCore 0.7.2: both 180-frame samples complete; diagnostic-only.");
+            log::info("DashCore 0.7.3: both 180-frame samples complete; diagnostic-only.");
             g_profile.layer = nullptr;
         }
     }
@@ -308,7 +450,7 @@ namespace {
     void reportUpdateProfile(char const* stage) {
         if (g_profile.updateFrames == 0) return;
         log::info(
-            "DashCore 0.7.2 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
+            "DashCore 0.7.3 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
             stage, g_profile.updateFrames,
             g_profile.totalPostUpdateUs / g_profile.updateFrames,
             g_profile.maxPostUpdateUs, g_profile.slowPostUpdates,
@@ -321,7 +463,7 @@ namespace {
 
     void reportCullStats(char const* stage) {
         log::info(
-            "DashCore 0.7.2 CULL {}: requested={}, active={}, frames={}, visited={}, eligible={}, protectedEffect={}, protectedTrigger={}, protectedGroupedNear={}, eligibleGroupedFar={}, culledGroupedFar={}, boundsChecks={}, culled={}.",
+            "DashCore 0.7.3 CULL {}: requested={}, active={}, frames={}, visited={}, eligible={}, protectedEffect={}, protectedTrigger={}, protectedGroupedNear={}, eligibleGroupedFar={}, culledGroupedFar={}, boundsChecks={}, culled={}.",
             stage, g_cullingRequested, g_cullingEnabled, g_profile.drawFrames,
             g_profile.visitedObjects, g_profile.eligibleObjects,
             g_profile.protectedEffectObjects, g_profile.protectedTriggerObjects,
@@ -333,7 +475,7 @@ namespace {
     void reportDrawProfile(char const* stage) {
         if (g_profile.drawFrames == 0) return;
         log::info(
-            "DashCore 0.7.2 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
+            "DashCore 0.7.3 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
             stage, g_profile.drawFrames,
             g_profile.totalDrawSceneUs / g_profile.drawFrames,
             g_profile.maxDrawSceneUs, g_profile.slowDrawScenes,
@@ -416,6 +558,7 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
 class $modify(OptGodPlayLayer, PlayLayer) {
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
         g_profile = {};
+        g_gpuObjectProbeStarted = false;
         g_lastEngineInitFlag = dontCreateObjects;
 
         auto const start = Clock::now();
@@ -426,12 +569,12 @@ class $modify(OptGodPlayLayer, PlayLayer) {
 
         if (result) {
             log::info(
-                "DashCore 0.7.2: PlayLayer::init={}us ({}ms), levelID={}, replay={}, engineInitFlag={}. ",
+                "DashCore 0.7.3: PlayLayer::init={}us ({}ms), levelID={}, replay={}, engineInitFlag={}. ",
                 elapsedUs, elapsedUs / 1000, level ? level->m_levelID : 0,
                 useReplay, dontCreateObjects
             );
         } else {
-            log::warn("DashCore 0.7.2: PlayLayer::init failed after {}us.", elapsedUs);
+            log::warn("DashCore 0.7.3: PlayLayer::init failed after {}us.", elapsedUs);
         }
         return result;
     }
@@ -451,7 +594,7 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         g_cullingEnabled = false; // 0.7.2 safety lock: never alter live rendering.
         g_profile.engineInitFlag = g_lastEngineInitFlag;
         log::info(
-            "DashCore 0.7.2: setupHasCompleted={}us ({}ms); culling-requested={}, culling-active={}, engineInitFlag={} (raw engine argument; not a gameplay-mode detector). Live render culling is hard-disabled in 0.7.2 while scene coverage and bounds are validated.",
+            "DashCore 0.7.3: setupHasCompleted={}us ({}ms); culling-requested={}, culling-active={}, engineInitFlag={} (raw engine argument; not a gameplay-mode detector). Live render culling is hard-disabled in 0.7.2 while scene coverage and bounds are validated.",
             elapsedUs, elapsedUs / 1000, g_cullingRequested, g_cullingEnabled,
             g_profile.engineInitFlag
         );
@@ -550,8 +693,19 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
             reportDrawProfile("progress");
         }
         if (g_profile.drawFrames == kFramesToMeasure) {
+            // Refresh the scene snapshot at the exact end of the 180-frame
+            // window. Geometry Dash may continue populating object nodes
+            // during early gameplay, so older snapshots are not comparable.
+            auto const finalScan = inspectSceneGraph(g_profile.layer);
+            g_profile.sceneNodes = finalScan.nodes;
+            g_profile.sceneGameObjects = finalScan.gameObjects;
+            g_profile.sceneEffectObjects = finalScan.effectObjects;
+            g_profile.sceneGroupedObjects = finalScan.groupedObjects;
+            g_profile.sceneHiddenGameObjects = finalScan.hiddenGameObjects;
+            g_profile.sceneMaxChildren = finalScan.maxChildren;
+            g_profile.sceneMaxDepth = finalScan.maxDepth;
             reportDrawProfile("FINAL");
-            reportSceneGraph("FINAL");
+            reportSceneGraph("FINAL-REFRESHED");
         }
         maybeFinishProfile();
 
@@ -566,14 +720,18 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
             auto* root = static_cast<CCNode*>(g_profile.layer);
             auto const scan = inspectSceneGraph(root);
             auto const inputs = collectGpuCullInputs(root);
+            auto const screen = cocos2d::CCDirector::sharedDirector()->getWinSize();
+            auto const bounds = validateObjectBounds(root, screen.width, screen.height);
             log::info(
-                "DashCore 0.7.2 BISMUTH-CULL: final-root check; rootChildren={}, scannedNodes={}, scannedGameObjects={}, collectedGameObjects={}, traversalDelta={}.",
+                "DashCore 0.7.3 BISMUTH-CULL: same-frame traversal check; rootChildren={}, scannedNodes={}, scannedGameObjects={}, collectedGameObjects={}, boundsScannedNodes={}, boundsScannedObjects={}, traversalDelta={}.",
                 root->getChildrenCount(), scan.nodes, scan.gameObjects,
-                inputs.size(),
+                inputs.size(), bounds.scannedNodes, bounds.scannedGameObjects,
                 static_cast<std::int64_t>(scan.gameObjects) -
                     static_cast<std::int64_t>(inputs.size())
             );
-            auto const screen = cocos2d::CCDirector::sharedDirector()->getWinSize();
+            reportBoundsCandidate("parent-transformed", bounds.parentTransformed);
+            reportBoundsCandidate("raw-rect", bounds.rawRect);
+            reportBoundsCandidate("node-local", bounds.nodeLocal);
             dashcore::bismuth::runGLESObjectCullingProbeOnce(
                 inputs, screen.width, screen.height
             );
@@ -583,6 +741,6 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
 
 $on_mod(Loaded) {
     log::info(
-        "DashCore 0.7.2 build fix: visibility-pass hook removed because Geode bindings define updateVisibility inline; frame and draw profiling remain enabled."
+        "DashCore 0.7.3 build fix: visibility-pass hook removed because Geode bindings define updateVisibility inline; frame and draw profiling remain enabled."
     );
 }
