@@ -58,7 +58,6 @@ jobs:
           print(f"run_id={run['id']}")
           print(f"build_sha={run['head_sha']}")
           print(f"build_url={run['html_url']}")
-          print(f"Selected Android64 build: {run['id']} ({run['head_sha']})")
           PY
 
       - name: Download latest DashCore .geode artifact
