@@ -98,7 +98,7 @@ void runGLESObjectCullingProbeOnce(
     attempted = true;
 
     if (objects.empty() || viewportWidth <= 0.f || viewportHeight <= 0.f) {
-        log::warn("DashCore 0.7.3 BISMUTH-CULL: skipped; no usable scene objects or viewport.");
+        log::warn("DashCore 0.7.5 BISMUTH-CULL: skipped; no usable scene objects or viewport.");
         return;
     }
 
@@ -106,7 +106,7 @@ void runGLESObjectCullingProbeOnce(
     auto const* rendererRaw = glGetString(GL_RENDERER);
     auto const version = versionRaw ? reinterpret_cast<char const*>(versionRaw) : "unknown";
     auto const renderer = rendererRaw ? reinterpret_cast<char const*>(rendererRaw) : "unknown";
-    log::info("DashCore 0.7.3 BISMUTH-CULL: renderer='{}', context='{}', objects={}.",
+    log::info("DashCore 0.7.5 BISMUTH-CULL: renderer='{}', context='{}', objects={}.",
         renderer, version, objects.size());
 
     GLint major = 0;
@@ -116,14 +116,14 @@ void runGLESObjectCullingProbeOnce(
     glGetIntegerv(GL_MINOR_VERSION, &minor);
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &maxBindings);
     if (major < 3 || (major == 3 && minor < 1) || maxBindings < 2) {
-        log::warn("DashCore 0.7.3 BISMUTH-CULL: unavailable; GLES 3.1 and two SSBO bindings are required.");
+        log::warn("DashCore 0.7.5 BISMUTH-CULL: unavailable; GLES 3.1 and two SSBO bindings are required.");
         return;
     }
 
     auto const started = std::chrono::steady_clock::now();
     GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
     if (!shader) {
-        log::warn("DashCore 0.7.3 BISMUTH-CULL: glCreateShader failed.");
+        log::warn("DashCore 0.7.5 BISMUTH-CULL: glCreateShader failed.");
         return;
     }
     glShaderSource(shader, 1, &kComputeSource, nullptr);
@@ -131,7 +131,7 @@ void runGLESObjectCullingProbeOnce(
     GLint compiled = GL_FALSE;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
     if (compiled != GL_TRUE) {
-        log::warn("DashCore 0.7.3 BISMUTH-CULL: shader compilation failed: {}", shaderLog(shader));
+        log::warn("DashCore 0.7.5 BISMUTH-CULL: shader compilation failed: {}", shaderLog(shader));
         glDeleteShader(shader);
         return;
     }
@@ -139,7 +139,7 @@ void runGLESObjectCullingProbeOnce(
     GLuint program = glCreateProgram();
     if (!program) {
         glDeleteShader(shader);
-        log::warn("DashCore 0.7.3 BISMUTH-CULL: glCreateProgram failed.");
+        log::warn("DashCore 0.7.5 BISMUTH-CULL: glCreateProgram failed.");
         return;
     }
     glAttachShader(program, shader);
@@ -148,7 +148,7 @@ void runGLESObjectCullingProbeOnce(
     glGetProgramiv(program, GL_LINK_STATUS, &linked);
     glDeleteShader(shader);
     if (linked != GL_TRUE) {
-        log::warn("DashCore 0.7.3 BISMUTH-CULL: program link failed: {}", programLog(program));
+        log::warn("DashCore 0.7.5 BISMUTH-CULL: program link failed: {}", programLog(program));
         glDeleteProgram(program);
         return;
     }
@@ -158,7 +158,7 @@ void runGLESObjectCullingProbeOnce(
     if (!buffers[0] || !buffers[1]) {
         if (buffers[0] || buffers[1]) glDeleteBuffers(2, buffers);
         glDeleteProgram(program);
-        log::warn("DashCore 0.7.3 BISMUTH-CULL: SSBO allocation failed.");
+        log::warn("DashCore 0.7.5 BISMUTH-CULL: SSBO allocation failed.");
         return;
     }
 
@@ -190,9 +190,13 @@ void runGLESObjectCullingProbeOnce(
         viewportWidth * 0.75f, viewportHeight * 0.75f);
 
     GLuint const workGroups = static_cast<GLuint>((objects.size() + 63u) / 64u);
+    auto const dispatchStart = std::chrono::steady_clock::now();
     glDispatchCompute(workGroups, 1, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
+    auto const dispatchSubmitUs = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - dispatchStart).count();
 
+    auto const readbackStart = std::chrono::steady_clock::now();
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers[1]);
     auto const* mapped = static_cast<std::uint32_t const*>(
         glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, outputBytes, GL_MAP_READ_BIT));
@@ -219,6 +223,9 @@ void runGLESObjectCullingProbeOnce(
         readbackSucceeded = glUnmapBuffer(GL_SHADER_STORAGE_BUFFER) == GL_TRUE;
     }
 
+    auto const readbackUs = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - readbackStart).count();
+
     // Restore all GL state touched by the probe before returning to GD.
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kInputBinding,
         static_cast<GLuint>(previousInputBinding));
@@ -234,18 +241,19 @@ void runGLESObjectCullingProbeOnce(
         std::chrono::steady_clock::now() - started).count();
 
     if (!readbackSucceeded) {
-        log::warn("DashCore 0.7.3 BISMUTH-CULL: SSBO readback failed; no game rendering was changed.");
+        log::warn("DashCore 0.7.5 BISMUTH-CULL: SSBO readback failed; no game rendering was changed.");
         return;
     }
 
     log::info(
-        "DashCore 0.7.3 BISMUTH-CULL: {} objects processed; CPU-visible={}, GPU-visible={}, mismatches={}, dispatchGroups={}, total={}us. Diagnostic only; live culling remains disabled.",
-        objects.size(), cpuVisible, gpuVisible, mismatches, workGroups, elapsedUs
+        "DashCore 0.7.5 BISMUTH-CULL: {} objects processed; CPU-visible={}, GPU-visible={}, mismatches={}, dispatchGroups={}, dispatchSubmit={}us, barrierReadbackCompare={}us, total={}us. DispatchSubmit is CPU submission time, not GPU execution time. Diagnostic only; live culling remains disabled.",
+        objects.size(), cpuVisible, gpuVisible, mismatches, workGroups,
+        dispatchSubmitUs, readbackUs, elapsedUs
     );
     if (mismatches == 0) {
-        log::info("DashCore 0.7.3 BISMUTH-CULL: CPU/GPU parity PASS — compute output matches the CPU formula. This does not validate coordinate-space correctness or prove that off-screen objects were identified.");
+        log::info("DashCore 0.7.5 BISMUTH-CULL: CPU/GPU parity PASS — compute output matches the CPU formula. This does not validate coordinate-space correctness or prove that off-screen objects were identified.");
     } else {
-        log::warn("DashCore 0.7.3 BISMUTH-CULL: CPU/GPU parity FAIL — compute output differs from the CPU formula; live culling remains disabled.");
+        log::warn("DashCore 0.7.5 BISMUTH-CULL: CPU/GPU parity FAIL — compute output differs from the CPU formula; live culling remains disabled.");
     }
 }
 } // namespace dashcore::bismuth
