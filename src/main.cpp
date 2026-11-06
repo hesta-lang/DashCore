@@ -2,7 +2,6 @@
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/CCDirector.hpp>
 #include <Geode/modify/CCNode.hpp>
-#include <Geode/modify/GJBaseGameLayer.hpp>
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -41,10 +40,6 @@ namespace {
         Buckets drawGapBuckets{};
         Clock::time_point previousPostUpdate{};
         Clock::time_point previousDrawScene{};
-        std::uint32_t visibilityFrames = 0;
-        std::uint32_t slowVisibilityUpdates = 0;
-        std::int64_t totalVisibilityUs = 0;
-        std::int64_t maxVisibilityUs = 0;
         std::uint64_t visitedObjects = 0;
         std::uint64_t eligibleObjects = 0;
         std::uint64_t protectedEffectObjects = 0;
@@ -238,16 +233,6 @@ namespace {
         logGapBuckets("UPDATE frame-gap", g_profile.updateGapBuckets);
     }
 
-    void reportVisibilityProfile(char const* stage) {
-        if (g_profile.visibilityFrames == 0) return;
-        log::info(
-            "DashCore 0.6.1 VISIBILITY {}: frames={}, avg={}us, max={}us, over8ms={}.",
-            stage, g_profile.visibilityFrames,
-            g_profile.totalVisibilityUs / g_profile.visibilityFrames,
-            g_profile.maxVisibilityUs, g_profile.slowVisibilityUpdates
-        );
-    }
-
     void reportCullStats(char const* stage) {
         log::info(
             "DashCore 0.6.0 CULL {}: requested={}, active={}, frames={}, visited={}, eligible={}, protectedEffect={}, protectedGrouped={}, boundsChecks={}, culled={}.",
@@ -312,32 +297,6 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
         }
 
         CCNode::visit();
-    }
-};
-
-// Profile the engine's own visibility pass. This helps identify whether
-// recurring frame spikes come from visibility management rather than drawing.
-class $modify(OptGodBaseGameLayer, GJBaseGameLayer) {
-    void updateVisibility(float dt) {
-        bool const profiling = g_profile.layer != nullptr &&
-            g_profile.visibilityFrames < kFramesToMeasure;
-        auto const start = Clock::now();
-        GJBaseGameLayer::updateVisibility(dt);
-        if (!profiling) return;
-
-        auto const elapsedUs = static_cast<std::int64_t>(
-            std::chrono::duration_cast<std::chrono::microseconds>(
-                Clock::now() - start).count());
-        ++g_profile.visibilityFrames;
-        g_profile.totalVisibilityUs += elapsedUs;
-        g_profile.maxVisibilityUs = std::max(g_profile.maxVisibilityUs, elapsedUs);
-        if (elapsedUs > kSlowCallbackUs) ++g_profile.slowVisibilityUpdates;
-        if (g_profile.visibilityFrames % kReportEvery == 0 ||
-            g_profile.visibilityFrames == kFramesToMeasure) {
-            reportVisibilityProfile(
-                g_profile.visibilityFrames == kFramesToMeasure ? "FINAL" : "progress"
-            );
-        }
     }
 };
 
@@ -484,6 +443,6 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
 
 $on_mod(Loaded) {
     log::info(
-        "DashCore 0.6.1 loaded: experimental render culling is opt-in; visibility-pass profiling is enabled."
+        "DashCore 0.6.1 build fix: visibility-pass hook removed because Geode bindings define updateVisibility inline; frame and draw profiling remain enabled."
     );
 }
