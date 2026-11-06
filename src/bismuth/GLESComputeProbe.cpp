@@ -76,18 +76,18 @@ void runGLESComputeProbeOnce() {
     glGetIntegerv(GL_MAJOR_VERSION, &major);
     glGetIntegerv(GL_MINOR_VERSION, &minor);
 
-    log::info("DashCore 0.6.3 BISMUTH-GLES: context='{}', renderer='{}'.",
+    log::info("DashCore 0.7.3 BISMUTH-GLES: context='{}', renderer='{}'.",
         version, renderer);
 
     if (major < 3 || (major == 3 && minor < 1)) {
-        log::warn("DashCore 0.6.3 BISMUTH-GLES: compute backend unavailable; GLES 3.1 is required. Original GD renderer remains active.");
+        log::warn("DashCore 0.7.3 BISMUTH-GLES: compute backend unavailable; GLES 3.1 is required. Original GD renderer remains active.");
         return;
     }
 
     GLint maxBindings = 0;
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &maxBindings);
     if (maxBindings <= static_cast<GLint>(kProbeBinding)) {
-        log::warn("DashCore 0.6.3 BISMUTH-GLES: no usable SSBO binding; original GD renderer remains active.");
+        log::warn("DashCore 0.7.3 BISMUTH-GLES: no usable SSBO binding; original GD renderer remains active.");
         return;
     }
 
@@ -101,7 +101,7 @@ void runGLESComputeProbeOnce() {
 
     GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
     if (!shader) {
-        log::warn("DashCore 0.6.3 BISMUTH-GLES: glCreateShader failed.");
+        log::warn("DashCore 0.7.3 BISMUTH-GLES: glCreateShader failed.");
         return;
     }
 
@@ -111,7 +111,7 @@ void runGLESComputeProbeOnce() {
     glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
     if (compiled != GL_TRUE) {
         auto const details = shaderLog(shader);
-        log::warn("DashCore 0.6.3 BISMUTH-GLES: compute shader compilation failed: {}", details);
+        log::warn("DashCore 0.7.3 BISMUTH-GLES: compute shader compilation failed: {}", details);
         glDeleteShader(shader);
         return;
     }
@@ -119,7 +119,7 @@ void runGLESComputeProbeOnce() {
     GLuint program = glCreateProgram();
     if (!program) {
         glDeleteShader(shader);
-        log::warn("DashCore 0.6.3 BISMUTH-GLES: glCreateProgram failed.");
+        log::warn("DashCore 0.7.3 BISMUTH-GLES: glCreateProgram failed.");
         return;
     }
     glAttachShader(program, shader);
@@ -130,7 +130,7 @@ void runGLESComputeProbeOnce() {
 
     if (linked != GL_TRUE) {
         auto const details = programLog(program);
-        log::warn("DashCore 0.6.3 BISMUTH-GLES: compute program link failed: {}", details);
+        log::warn("DashCore 0.7.3 BISMUTH-GLES: compute program link failed: {}", details);
         glDeleteProgram(program);
         return;
     }
@@ -139,7 +139,7 @@ void runGLESComputeProbeOnce() {
     glGenBuffers(1, &buffer);
     if (!buffer) {
         glDeleteProgram(program);
-        log::warn("DashCore 0.6.3 BISMUTH-GLES: SSBO allocation failed.");
+        log::warn("DashCore 0.7.3 BISMUTH-GLES: SSBO allocation failed.");
         return;
     }
 
@@ -173,9 +173,9 @@ void runGLESComputeProbeOnce() {
     glDeleteProgram(program);
 
     if (success) {
-        log::info("DashCore 0.6.3 BISMUTH-GLES: PASS — GLES compute shader compiled, linked, dispatched, and wrote the expected SSBO value. No game objects or draw calls were modified.");
+        log::info("DashCore 0.7.3 BISMUTH-GLES: PASS — GLES compute shader compiled, linked, dispatched, and wrote the expected SSBO value. No game objects or draw calls were modified.");
     } else {
-        log::warn("DashCore 0.6.3 BISMUTH-GLES: FAIL — compute dispatch/SSBO readback did not match. Original GD renderer remains active.");
+        log::warn("DashCore 0.7.3 BISMUTH-GLES: FAIL — compute dispatch/SSBO readback did not match. Original GD renderer remains active.");
     }
 }
 } // namespace dashcore::bismuth
