@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "developer": "hesta-lang",
-  "description": "Android64 performance profiling. Experimental render culling is opt-in; visibility-pass timing is logged to identify frame bottlenecks.",
+  "description": "Android64 performance profiling with opt-in experimental render culling. Distant grouped objects may be culled; triggers, effects, and groups near the player are protected.",
   "tags": [
     "optimizations",
     "performance"
@@ -16,7 +16,7 @@
     "experimental-render-culling": {
       "type": "bool",
       "name": "Experimental render culling",
-      "description": "Optional experimental culling of distant, ungrouped, non-Effect GameObjects. Off by default; enable only for testing.",
+      "description": "Experimental off-screen render culling. Triggers and effects are always protected. Grouped objects are protected near the player and may be culled only when distant. Off by default; enable only for testing.",
       "default": false
     }
   }
