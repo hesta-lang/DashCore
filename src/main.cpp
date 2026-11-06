@@ -591,7 +591,7 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         g_cullingRequested = Mod::get()->getSettingValue<bool>("experimental-render-culling");
         // The experimental option controls the live CCNode::visit culling.
         // It remains opt-in while grouped-object behavior is validated.
-        g_cullingEnabled = false; // 0.7.2 safety lock: never alter live rendering.
+        g_cullingEnabled = false; // 0.7.3 safety lock: never alter live rendering.
         g_profile.engineInitFlag = g_lastEngineInitFlag;
         log::info(
             "DashCore 0.7.3: setupHasCompleted={}us ({}ms); culling-requested={}, culling-active={}, engineInitFlag={} (raw engine argument; not a gameplay-mode detector). Live render culling is hard-disabled in 0.7.2 while scene coverage and bounds are validated.",
@@ -707,8 +707,6 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
             reportDrawProfile("FINAL");
             reportSceneGraph("FINAL-REFRESHED");
         }
-        maybeFinishProfile();
-
         // Wait until the full 180-frame sample has completed before collecting
         // GPU inputs. The previous build collected on frame 1, before the
         // level's object graph had finished populating (only 2 objects seen).
@@ -736,6 +734,7 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
                 inputs, screen.width, screen.height
             );
         }
+        maybeFinishProfile();
     }
 };
 
