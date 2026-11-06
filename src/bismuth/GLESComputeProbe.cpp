@@ -1,6 +1,15 @@
 #include "GLESComputeProbe.hpp"
 
 #if defined(__ANDROID__)
+// Cocos2d/Geode may remap GLES vertex-array functions to OES aliases.
+// Clear those macros before parsing the GLES 3.1 core declarations.
+#undef glBindVertexArray
+#undef glDeleteVertexArrays
+#undef glGenVertexArrays
+#undef glBindVertexArrayOES
+#undef glDeleteVertexArraysOES
+#undef glGenVertexArraysOES
+
 #include <GLES3/gl31.h>
 #include <cstdint>
 #include <string>
