@@ -7,6 +7,8 @@
 #include <chrono>
 #include <cstdint>
 #include <limits>
+#include <utility>
+#include <vector>
 
 using namespace geode::prelude;
 
@@ -44,10 +46,22 @@ namespace {
         std::uint64_t protectedGroupedObjects = 0;
         std::uint64_t boundsChecks = 0;
         std::uint64_t culledObjects = 0;
+        std::uint64_t sceneNodes = 0;
+        std::uint64_t sceneGameObjects = 0;
+        std::uint64_t sceneEffectObjects = 0;
+        std::uint64_t sceneGroupedObjects = 0;
+        std::uint64_t sceneHiddenGameObjects = 0;
+        std::uint32_t sceneMaxChildren = 0;
+        std::uint32_t sceneMaxDepth = 0;
+        std::uint32_t sceneScans = 0;
+        std::int64_t sceneScanUs = 0;
+        bool dontCreateObjects = false;
     };
 
     StartupProfile g_profile;
     bool g_cullingEnabled = false;
+    bool g_cullingRequested = false;
+    bool g_lastDontCreateObjects = false;
 
     // First experimental stage: skip only the draw traversal of distant,
     // static, ungrouped GameObjects. Effect objects (including triggers) and
@@ -86,6 +100,72 @@ namespace {
         return maxX < -marginX || minX > screen.width + marginX ||
                maxY < -marginY || minY > screen.height + marginY;
     }
+    struct SceneScan {
+        std::uint64_t nodes = 0;
+        std::uint64_t gameObjects = 0;
+        std::uint64_t effectObjects = 0;
+        std::uint64_t groupedObjects = 0;
+        std::uint64_t hiddenGameObjects = 0;
+        std::uint32_t maxChildren = 0;
+        std::uint32_t maxDepth = 0;
+    };
+
+    // Read-only scene-graph inspection. This deliberately does not change
+    // visibility, transforms, scheduling, or object state.
+    SceneScan inspectSceneGraph(CCNode* root) {
+        SceneScan result;
+        if (!root) return result;
+
+        std::vector<std::pair<CCNode*, std::uint32_t>> pending;
+        pending.emplace_back(root, 0);
+
+        while (!pending.empty()) {
+            auto const entry = pending.back();
+            pending.pop_back();
+            auto* node = entry.first;
+            auto const depth = entry.second;
+            if (!node) continue;
+
+            ++result.nodes;
+            result.maxDepth = std::max(result.maxDepth, depth);
+
+            if (auto* object = typeinfo_cast<GameObject*>(node)) {
+                ++result.gameObjects;
+                if (object->m_classType == GameObjectClassType::Effect) {
+                    ++result.effectObjects;
+                }
+                if (object->m_groupCount > 0) {
+                    ++result.groupedObjects;
+                }
+                if (!object->isVisible()) {
+                    ++result.hiddenGameObjects;
+                }
+            }
+
+            auto const childCount = node->getChildrenCount();
+            result.maxChildren = std::max(
+                result.maxChildren, static_cast<std::uint32_t>(childCount)
+            );
+            if (childCount == 0 || !node->getChildren()) continue;
+
+            for (auto* child : CCArrayExt<CCNode*>(node->getChildren())) {
+                if (child) pending.emplace_back(child, depth + 1);
+            }
+        }
+        return result;
+    }
+
+    void reportSceneGraph(char const* stage) {
+        log::info(
+            "DashCore 0.5.3 SCENE-GRAPH {}: scans={}, nodes={}, gameObjects={}, effects={}, grouped={}, hiddenGameObjects={}, maxChildren={}, maxDepth={}, lastScan={}us, dontCreateObjects={}.",
+            stage, g_profile.sceneScans, g_profile.sceneNodes,
+            g_profile.sceneGameObjects, g_profile.sceneEffectObjects,
+            g_profile.sceneGroupedObjects, g_profile.sceneHiddenGameObjects,
+            g_profile.sceneMaxChildren, g_profile.sceneMaxDepth,
+            g_profile.sceneScanUs, g_profile.dontCreateObjects
+        );
+    }
+
     constexpr std::uint32_t kFramesToMeasure = 180;
     constexpr std::uint32_t kReportEvery = 30;
     constexpr std::int64_t kSlowCallbackUs = 8000;
@@ -119,7 +199,7 @@ namespace {
 
     void logBuckets(char const* label, Buckets const& b) {
         log::info(
-            "OptGod 0.5.2 {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
+            "DashCore 0.5.3 {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
             label, b[0], b[1], b[2], b[3], b[4], b[5]
         );
     }
@@ -198,16 +278,6 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
             }
         }
 
-        if (object && g_cullingEnabled &&
-            object->m_classType != GameObjectClassType::Effect &&
-            object->m_groupCount <= 0) {
-            if (profiling) ++g_profile.boundsChecks;
-            if (shouldCullStaticObject(object)) {
-                if (profiling) ++g_profile.culledObjects;
-                return;
-            }
-        }
-
         CCNode::visit();
     }
 };
@@ -215,6 +285,7 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
 class $modify(OptGodPlayLayer, PlayLayer) {
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
         g_profile = {};
+        g_lastDontCreateObjects = dontCreateObjects;
 
         auto const start = Clock::now();
         bool const result = PlayLayer::init(level, useReplay, dontCreateObjects);
@@ -243,7 +314,11 @@ class $modify(OptGodPlayLayer, PlayLayer) {
 
         g_profile = {};
         g_profile.layer = this;
-        g_cullingEnabled = Mod::get()->getSettingValue<bool>("experimental-render-culling");
+        g_cullingRequested = Mod::get()->getSettingValue<bool>("experimental-render-culling");
+        // Keep culling off until scene-graph inspection proves that every
+        // GameObject is represented by the visit hook on Android.
+        g_cullingEnabled = false;
+        g_profile.dontCreateObjects = g_lastDontCreateObjects;
         log::info(
             "OptGod 0.5.2: setupHasCompleted={}us ({}ms); experimental-render-culling={}; collecting 180 UPDATE and 180 DRAWSCENE samples plus object-culling counters.",
             elapsedUs, elapsedUs / 1000, g_cullingEnabled
@@ -296,6 +371,23 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
             g_profile.drawFrames < kFramesToMeasure;
         auto const start = Clock::now();
 
+        if (profiling && (g_profile.drawFrames % kReportEvery == 0)) {
+            auto const scanStart = Clock::now();
+            auto const scan = inspectSceneGraph(g_profile.layer);
+            g_profile.sceneScanUs = static_cast<std::int64_t>(
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    Clock::now() - scanStart).count());
+            ++g_profile.sceneScans;
+            g_profile.sceneNodes = scan.nodes;
+            g_profile.sceneGameObjects = scan.gameObjects;
+            g_profile.sceneEffectObjects = scan.effectObjects;
+            g_profile.sceneGroupedObjects = scan.groupedObjects;
+            g_profile.sceneHiddenGameObjects = scan.hiddenGameObjects;
+            g_profile.sceneMaxChildren = scan.maxChildren;
+            g_profile.sceneMaxDepth = scan.maxDepth;
+            reportSceneGraph("snapshot");
+        }
+
         if (profiling && g_profile.previousDrawScene.time_since_epoch().count() != 0) {
             auto const gapUs = static_cast<std::int64_t>(
                 std::chrono::duration_cast<std::chrono::microseconds>(
@@ -324,6 +416,7 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
         }
         if (g_profile.drawFrames == kFramesToMeasure) {
             reportDrawProfile("FINAL");
+            reportSceneGraph("FINAL");
         }
         maybeFinishProfile();
     }
