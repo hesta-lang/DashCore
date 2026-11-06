@@ -1,16 +1,19 @@
 # DashCore changelog
 
-## 0.7.1 — Render-visit diagnostics
+## 0.7.2
+- Fixed diagnostic counter consistency: visited, protected, eligible, and grouped-object counts now use the same 30-frame sample.
+- Delayed the GLES object visibility probe until the 180-frame level sample completes, allowing the scene graph to populate before collection.
+- Added a direct comparison between the scene inspector and GPU collector using the same PlayLayer root.
+- Hard-disabled live render culling for safety while object coverage and bounds are validated.
+- Kept the GLES compute/SSBO test diagnostic-only; no Geometry Dash draw calls, visibility, triggers, collisions, or updates are changed.
 
-- Count actual `GameObject` visits through `CCNode::visit` while experimental culling is disabled.
-- Sample visit counts once every 30 draw frames to keep diagnostic overhead low.
-- Clarify that `dontCreateObjects` is logged only as a raw Geometry Dash initialization argument; it is not used to classify a session as a preview or a normal level.
-- Harden the GLES compute probe by checking the SSBO readback result after unmapping.
-- Keep GPU visibility testing diagnostic-only. No live GPU culling, object hiding, trigger changes, or renderer replacement is enabled.
+## 0.7.1
+- Added sampled GameObject visit diagnostics and clarified the engine initialization flag.
+- Hardened GPU buffer readback validation.
+- Updated the mod description and diagnostic settings text.
+- Kept experimental live render culling disabled by default.
 
-## 0.7.0 — GLES compute visibility probe
-
-- Add an Android GLES 3.1+ compute-shader and SSBO capability test.
-- Collect real scene GameObjects and compare a GPU visibility mask against a CPU reference.
-- Preserve the original Geometry Dash renderer; the GPU test does not modify visibility or draw calls.
-- Keep experimental CPU render culling opt-in and disabled by default.
+## 0.7.0
+- Added an Android GLES 3.1+ compute-shader visibility-mask probe.
+- Compares the GPU visibility result with a CPU reference using scene-object bounds.
+- Preserves the original Geometry Dash renderer; the GPU pass is diagnostic only.
