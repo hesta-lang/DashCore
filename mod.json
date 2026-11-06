@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "developer": "hesta-lang",
-  "description": "Android64 profiler with read-only scene graph diagnostics; experimental culling is temporarily disabled.",
+  "description": "Experimental Android64 render culling. Effect objects (including triggers) and grouped objects are excluded; gameplay logic is unchanged.",
   "tags": [
     "optimizations",
     "performance"
@@ -16,8 +16,8 @@
     "experimental-render-culling": {
       "type": "bool",
       "name": "Experimental render culling",
-      "description": "Temporarily inactive: scene graph diagnostics are being used to validate GameObject traversal before culling is re-enabled.",
-      "default": false
+      "description": "Experimental: skips drawing distant, ungrouped, non-Effect GameObjects. Triggers and grouped objects are protected. Disable immediately if a level renders incorrectly.",
+      "default": true
     }
   }
 }
