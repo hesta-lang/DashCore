@@ -1,27 +1,44 @@
-# OptGod 0.5.0 — Android64 profiler + experimental render culling
+# OptGod 0.5.1 — Android64 profiler + render-culling instrumentation
 
 Target: Geometry Dash 2.2081 / Geode 5.11.2 / Android64 (arm64-v8a), minimum Android SDK 29.
 
+## What's new in 0.5.1
+
+This release adds counters to the experimental render-culling prototype so a test log can show whether it is enabled and how many GameObject visits are evaluated or skipped.
+
+During the first 180 drawScene samples after level setup, the log reports:
+
+- `enabled`: whether Experimental render culling was enabled when the level setup completed.
+- `visited`: GameObject::visit calls observed during the measurement window.
+- `eligible`: visited objects that are neither Effect-class nor grouped.
+- `protectedEffect`: Effect-class objects that are deliberately preserved.
+- `protectedGrouped`: objects with group membership that are deliberately preserved.
+- `boundsChecks`: eligible objects for which the distance/bounds test was attempted.
+- `culled`: draw traversals actually skipped by the prototype.
+
+The counters are cumulative across the measurement window, not unique-object counts. An object can be visited more than once, so these values must not be interpreted as the total number of distinct objects in a level.
+
 ## Experimental render-culling prototype
 
-This is the first cautious step toward chunk-style rendering. It does **not** unload level objects or change when gameplay logic runs. All level objects are still created and remain in the game.
+This is a cautious first step toward chunk-style rendering. It does **not** unload level objects or change when gameplay logic runs. All level objects are still created and remain in the game.
 
 When **Experimental render culling** is enabled in Geode mod settings, OptGod skips only the Cocos draw traversal for a GameObject when all of these conditions are true:
 
 - It is an ordinary non-Effect object.
-- It has no group membership (grouped objects can move, animate, or be linked to other objects).
+- It has no group membership.
 - Its transformed bounds are farther than a wide 0.75-screen guard band from the visible window.
 
-**Triggers are protected:** Effect-class objects are never culled. Their draw traversal and all trigger execution remain untouched. Grouped objects are also preserved. This version does not execute triggers early; pre-executing them could change gameplay and is not safe.
+Effect-class objects (including trigger-class objects) and grouped objects are never culled. Trigger execution is not advanced, delayed, or otherwise modified.
 
-The feature is **disabled by default**. Enable it only for testing, and turn it off if you notice missing objects, visual differences, or unusual behavior. This is a render-culling prototype, not yet true chunk loading. It is intended to test whether reducing distant static-object draw traversal improves frame pacing.
+The feature is **disabled by default**. Keep it disabled for the baseline test. Enable it only for the comparison test, and turn it off if you notice missing objects, pop-in, visual differences, or unusual behavior. This is render culling, not true chunk loading.
 
 Important limitations:
 - It does not reduce initial object creation or level parsing time.
 - It does not unload memory or texture resources.
-- It deliberately leaves triggers, Effect objects, and grouped objects alone.
+- It deliberately leaves Effect objects and grouped objects alone.
 - It may offer limited gains on levels where most objects are grouped or animated.
-- The wide guard band is intended to reduce pop-in, but needs testing on camera movement, zoom, and rotated gameplay.
+- The guard band needs testing with camera movement, zoom, rotated gameplay, and moving objects.
+- The counters count visits, not unique objects.
 
 ## Profiler
 
@@ -29,6 +46,7 @@ Important limitations:
 - First 180 `PlayLayer::postUpdate` calls after level setup: average/max CPU callback duration, calls over 8 ms, frame gaps over 25 ms, maximum gap, observed `dt` range, and duration/gap distributions.
 - First 180 `CCDirector::drawScene` calls after level setup: average/max CPU duration, calls over 8 ms, frame gaps over 25 ms, maximum gap, and duration/gap distributions.
 - Progress snapshots every 30 samples, plus final reports.
+- Render-culling state and object counters in `OptGod 0.5.1 CULL FINAL`.
 
 Duration buckets: <=2 ms, 2–4 ms, 4–8 ms, 8–16 ms, 16–25 ms, and >25 ms.
 
@@ -40,11 +58,14 @@ This times the CPU-side duration of Cocos2d's scene drawing function. It can inc
 
 ## Test procedure
 
-1. Install the 0.5.0 artifact.
-2. First test with **Experimental render culling disabled** to verify the profiler/build behaves normally.
-3. Enable the option in Geode settings and restart the level.
-4. Test the same normal level and a level with StartPos. Watch for missing objects, pop-in, trigger differences, or camera/zoom issues.
-5. Export and send the complete Geode log, especially the `OptGod 0.5.0` timing reports.
+1. Install the 0.5.1 artifact.
+2. Run a baseline test with **Experimental render culling disabled**. The log should say `experimental-render-culling=false` and `CULL FINAL enabled=false`.
+3. Restart the same level from the same position, enable the option, and run the same test again. The log should say `experimental-render-culling=true`.
+4. Compare `DRAWSCENE-CPU FINAL` and `CULL FINAL` between the two runs.
+5. Check for missing objects, pop-in, trigger differences, or camera/zoom issues. Disable culling immediately if anything behaves incorrectly.
+6. Send the complete Geode log, especially the `OptGod 0.5.1` lines.
+
+For a fair comparison, use the same level, StartPos, graphics settings, and approximate test duration. Avoid comparing a menu/transition-heavy run with a steady gameplay run.
 
 ## Build target
 
