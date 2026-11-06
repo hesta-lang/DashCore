@@ -1,5 +1,6 @@
 #include <Geode/Geode.hpp>
 #include "bismuth/GLESComputeProbe.hpp"
+#include "bismuth/GLESObjectCullingProbe.hpp"
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/CCDirector.hpp>
 #include <Geode/modify/CCNode.hpp>
@@ -66,6 +67,7 @@ namespace {
     bool g_cullingEnabled = false;
     bool g_cullingRequested = false;
     bool g_lastDontCreateObjects = false;
+    bool g_gpuObjectProbeStarted = false;
 
     // First experimental stage: skip only the draw traversal of distant,
     // off-screen GameObjects. Effects and triggers are always protected;
@@ -185,9 +187,63 @@ namespace {
         return result;
     }
 
+    // Build a one-shot GPU test batch from real GameObjects in the scene graph.
+    // This is read-only: the returned bounds are uploaded for diagnostics only.
+    std::vector<dashcore::bismuth::GpuCullInput> collectGpuCullInputs(CCNode* root) {
+        std::vector<dashcore::bismuth::GpuCullInput> result;
+        if (!root) return result;
+
+        std::vector<std::pair<CCNode*, std::uint32_t>> pending;
+        pending.emplace_back(root, 0);
+        while (!pending.empty()) {
+            auto const entry = pending.back();
+            pending.pop_back();
+            auto* node = entry.first;
+            if (!node) continue;
+
+            if (auto* object = typeinfo_cast<GameObject*>(node)) {
+                dashcore::bismuth::GpuCullInput input;
+                auto* parent = object->getParent();
+                auto const bounds = object->getBoundingRect();
+
+                bool const protectedObject =
+                    object->m_classType == GameObjectClassType::Effect ||
+                    object->isTrigger() ||
+                    (object->m_groupCount > 0 && isGroupedObjectNearPlayer(object));
+
+                if (!parent) {
+                    input.flags = 1u;
+                } else {
+                    auto const x1 = bounds.origin.x;
+                    auto const y1 = bounds.origin.y;
+                    auto const x2 = x1 + bounds.size.width;
+                    auto const y2 = y1 + bounds.size.height;
+                    auto const p1 = parent->convertToWorldSpace({ x1, y1 });
+                    auto const p2 = parent->convertToWorldSpace({ x2, y1 });
+                    auto const p3 = parent->convertToWorldSpace({ x1, y2 });
+                    auto const p4 = parent->convertToWorldSpace({ x2, y2 });
+                    input.minX = std::min({ p1.x, p2.x, p3.x, p4.x });
+                    input.maxX = std::max({ p1.x, p2.x, p3.x, p4.x });
+                    input.minY = std::min({ p1.y, p2.y, p3.y, p4.y });
+                    input.maxY = std::max({ p1.y, p2.y, p3.y, p4.y });
+                }
+
+                if (protectedObject) input.flags |= 1u;
+                result.push_back(input);
+            }
+
+            auto const childCount = node->getChildrenCount();
+            if (childCount == 0 || !node->getChildren()) continue;
+            for (auto* child : CCArrayExt<CCNode*>(node->getChildren())) {
+                if (child) pending.emplace_back(child, entry.second + 1);
+            }
+        }
+        return result;
+    }
+
     void reportSceneGraph(char const* stage) {
         log::info(
-            "DashCore 0.6.3 SCENE-GRAPH {}: scans={}, nodes={}, gameObjects={}, effects={}, grouped={}, hiddenGameObjects={}, maxChildren={}, maxDepth={}, lastScan={}us, dontCreateObjects={}.",
+            "DashCore 0.7.0 SCENE-GRAPH {}: scans={}, nodes={}, gameObjects={}, effects={}, grouped={}, hiddenGameObjects={}, maxChildren={}, maxDepth={}, lastScan={}us, dontCreateObjects={}.",
             stage, g_profile.sceneScans, g_profile.sceneNodes,
             g_profile.sceneGameObjects, g_profile.sceneEffectObjects,
             g_profile.sceneGroupedObjects, g_profile.sceneHiddenGameObjects,
@@ -229,14 +285,14 @@ namespace {
 
     void logBuckets(char const* label, Buckets const& b) {
         log::info(
-            "DashCore 0.6.3 {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
+            "DashCore 0.7.0 {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
             label, b[0], b[1], b[2], b[3], b[4], b[5]
         );
     }
 
     void logGapBuckets(char const* label, Buckets const& b) {
         log::info(
-            "DashCore 0.6.3 {} buckets: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}.",
+            "DashCore 0.7.0 {} buckets: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}.",
             label, b[0], b[1], b[2], b[3], b[4]
         );
     }
@@ -244,7 +300,7 @@ namespace {
     void maybeFinishProfile() {
         if (g_profile.updateFrames >= kFramesToMeasure &&
             g_profile.drawFrames >= kFramesToMeasure) {
-            log::info("DashCore 0.6.3: both 180-frame samples complete; diagnostic-only.");
+            log::info("DashCore 0.7.0: both 180-frame samples complete; diagnostic-only.");
             g_profile.layer = nullptr;
         }
     }
@@ -252,7 +308,7 @@ namespace {
     void reportUpdateProfile(char const* stage) {
         if (g_profile.updateFrames == 0) return;
         log::info(
-            "DashCore 0.6.3 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
+            "DashCore 0.7.0 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
             stage, g_profile.updateFrames,
             g_profile.totalPostUpdateUs / g_profile.updateFrames,
             g_profile.maxPostUpdateUs, g_profile.slowPostUpdates,
@@ -265,7 +321,7 @@ namespace {
 
     void reportCullStats(char const* stage) {
         log::info(
-            "DashCore 0.6.3 CULL {}: requested={}, active={}, frames={}, visited={}, eligible={}, protectedEffect={}, protectedTrigger={}, protectedGroupedNear={}, eligibleGroupedFar={}, culledGroupedFar={}, boundsChecks={}, culled={}.",
+            "DashCore 0.7.0 CULL {}: requested={}, active={}, frames={}, visited={}, eligible={}, protectedEffect={}, protectedTrigger={}, protectedGroupedNear={}, eligibleGroupedFar={}, culledGroupedFar={}, boundsChecks={}, culled={}.",
             stage, g_cullingRequested, g_cullingEnabled, g_profile.drawFrames,
             g_profile.visitedObjects, g_profile.eligibleObjects,
             g_profile.protectedEffectObjects, g_profile.protectedTriggerObjects,
@@ -277,7 +333,7 @@ namespace {
     void reportDrawProfile(char const* stage) {
         if (g_profile.drawFrames == 0) return;
         log::info(
-            "DashCore 0.6.3 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
+            "DashCore 0.7.0 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
             stage, g_profile.drawFrames,
             g_profile.totalDrawSceneUs / g_profile.drawFrames,
             g_profile.maxDrawSceneUs, g_profile.slowDrawScenes,
@@ -354,12 +410,12 @@ class $modify(OptGodPlayLayer, PlayLayer) {
 
         if (result) {
             log::info(
-                "DashCore 0.6.3: PlayLayer::init={}us ({}ms), levelID={}, replay={}, dontCreateObjects={}.",
+                "DashCore 0.7.0: PlayLayer::init={}us ({}ms), levelID={}, replay={}, dontCreateObjects={}.",
                 elapsedUs, elapsedUs / 1000, level ? level->m_levelID : 0,
                 useReplay, dontCreateObjects
             );
         } else {
-            log::warn("DashCore 0.6.3: PlayLayer::init failed after {}us.", elapsedUs);
+            log::warn("DashCore 0.7.0: PlayLayer::init failed after {}us.", elapsedUs);
         }
         return result;
     }
@@ -379,7 +435,7 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         g_cullingEnabled = g_cullingRequested;
         g_profile.dontCreateObjects = g_lastDontCreateObjects;
         log::info(
-            "DashCore 0.6.3: setupHasCompleted={}us ({}ms); culling-requested={}, culling-active={}, dontCreateObjects={}; grouped far-object culling protects triggers, effects, and groups within 1.25 screen dimensions of the player.",
+            "DashCore 0.7.0: setupHasCompleted={}us ({}ms); culling-requested={}, culling-active={}, dontCreateObjects={}; grouped far-object culling protects triggers, effects, and groups within 1.25 screen dimensions of the player.",
             elapsedUs, elapsedUs / 1000, g_cullingRequested, g_cullingEnabled,
             g_profile.dontCreateObjects
         );
@@ -482,11 +538,24 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
             reportSceneGraph("FINAL");
         }
         maybeFinishProfile();
+
+        // Run the real-object compute-mask comparison once per game session,
+        // after the first measured draw, so its one-off cost is not included
+        // in the frame-time sample. It never changes visibility or draw calls.
+        if (g_profile.layer && g_profile.drawFrames == 1 && !g_gpuObjectProbeStarted) {
+            g_gpuObjectProbeStarted = true;
+            auto const screen = cocos2d::CCDirector::sharedDirector()->getWinSize();
+            auto const inputs = collectGpuCullInputs(g_profile.layer);
+            log::info("DashCore 0.7.0 BISMUTH-CULL: collected {} GameObjects from the scene graph; effects, triggers, near-grouped objects, and objects without a parent are marked force-visible.", inputs.size());
+            dashcore::bismuth::runGLESObjectCullingProbeOnce(
+                inputs, screen.width, screen.height
+            );
+        }
     }
 };
 
 $on_mod(Loaded) {
     log::info(
-        "DashCore 0.6.3 build fix: visibility-pass hook removed because Geode bindings define updateVisibility inline; frame and draw profiling remain enabled."
+        "DashCore 0.7.0 build fix: visibility-pass hook removed because Geode bindings define updateVisibility inline; frame and draw profiling remain enabled."
     );
 }
