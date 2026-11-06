@@ -84,9 +84,40 @@ jobs:
           set -euo pipefail
           python3 scripts/autotest_geode.py --artifact-dir artifacts --report-dir reports/package
 
+      - name: Check launcher APK source
+        id: apk-source
+        env:
+          ANDROID_LAUNCHER_TOKEN: ${{ secrets.ANDROID_LAUNCHER_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports/runtime
+          if [ -n "$LAUNCHER_APK_URL" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "mode=url" >> "$GITHUB_OUTPUT"
+          elif [ -n "$ANDROID_LAUNCHER_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "mode=artifact" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+            cat > reports/runtime/skipped.md <<'EOF'
+          # DashCore AutoTest v2 — runtime test skipped
+
+          Package validation completed, but no launcher APK source is configured.
+
+          Add a fine-grained GitHub token as the DashCore repository secret
+          ANDROID_LAUNCHER_TOKEN with Actions: read permission on
+          hesta-lang/android-launcher, or manually dispatch AutoTest v2 with a
+          direct HTTPS URL to the universal Geode Launcher APK.
+
+          No installation or game launch test was performed.
+          EOF
+            echo "::warning::Runtime test skipped: configure ANDROID_LAUNCHER_TOKEN or provide a launcher APK URL."
+          fi
+
       - name: Find latest successful Android Launcher build
         id: launcher-build
-        if: ${{ !inputs.launcher_apk_url }}
+        if: ${{ steps.apk-source.outputs.mode == 'artifact' }}
         env:
           ANDROID_LAUNCHER_TOKEN: ${{ secrets.ANDROID_LAUNCHER_TOKEN }}
         run: |
@@ -115,7 +146,7 @@ jobs:
           PY
 
       - name: Download Android Launcher release APK artifact
-        if: ${{ !inputs.launcher_apk_url }}
+        if: ${{ steps.apk-source.outputs.mode == 'artifact' }}
         uses: actions/download-artifact@v4
         with:
           name: geode-launcher-release
@@ -125,6 +156,7 @@ jobs:
           run-id: ${{ steps.launcher-build.outputs.run_id }}
 
       - name: Prepare Geode Launcher APK
+        if: ${{ steps.apk-source.outputs.available == 'true' }}
         run: |
           set -euo pipefail
           mkdir -p test-input reports/runtime
@@ -148,6 +180,7 @@ jobs:
           file test-input/geode-launcher.apk
 
       - name: Run Android 15 emulator with ARM translation
+        if: ${{ steps.apk-source.outputs.available == 'true' }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
