@@ -38,9 +38,16 @@ namespace {
         Buckets drawGapBuckets{};
         Clock::time_point previousPostUpdate{};
         Clock::time_point previousDrawScene{};
+        std::uint64_t visitedObjects = 0;
+        std::uint64_t eligibleObjects = 0;
+        std::uint64_t protectedEffectObjects = 0;
+        std::uint64_t protectedGroupedObjects = 0;
+        std::uint64_t boundsChecks = 0;
+        std::uint64_t culledObjects = 0;
     };
 
     StartupProfile g_profile;
+    bool g_cullingEnabled = false;
 
     // First experimental stage: skip only the draw traversal of distant,
     // static, ungrouped GameObjects. Effect objects (including triggers) and
@@ -112,14 +119,14 @@ namespace {
 
     void logBuckets(char const* label, Buckets const& b) {
         log::info(
-            "OptGod 0.5.0 {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
+            "OptGod 0.5.1 {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
             label, b[0], b[1], b[2], b[3], b[4], b[5]
         );
     }
 
     void logGapBuckets(char const* label, Buckets const& b) {
         log::info(
-            "OptGod 0.5.0 {} buckets: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}.",
+            "OptGod 0.5.1 {} buckets: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}.",
             label, b[0], b[1], b[2], b[3], b[4]
         );
     }
@@ -127,7 +134,7 @@ namespace {
     void maybeFinishProfile() {
         if (g_profile.updateFrames >= kFramesToMeasure &&
             g_profile.drawFrames >= kFramesToMeasure) {
-            log::info("OptGod 0.5.0: both 180-frame samples complete; diagnostic-only.");
+            log::info("OptGod 0.5.1: both 180-frame samples complete; diagnostic-only.");
             g_profile.layer = nullptr;
         }
     }
@@ -135,7 +142,7 @@ namespace {
     void reportUpdateProfile(char const* stage) {
         if (g_profile.updateFrames == 0) return;
         log::info(
-            "OptGod 0.5.0 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
+            "OptGod 0.5.1 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
             stage, g_profile.updateFrames,
             g_profile.totalPostUpdateUs / g_profile.updateFrames,
             g_profile.maxPostUpdateUs, g_profile.slowPostUpdates,
@@ -146,26 +153,57 @@ namespace {
         logGapBuckets("UPDATE frame-gap", g_profile.updateGapBuckets);
     }
 
+    void reportCullStats(char const* stage) {
+        log::info(
+            "OptGod 0.5.1 CULL {}: enabled={}, frames={}, visited={}, eligible={}, protectedEffect={}, protectedGrouped={}, boundsChecks={}, culled={}.",
+            stage, g_cullingEnabled, g_profile.drawFrames,
+            g_profile.visitedObjects, g_profile.eligibleObjects,
+            g_profile.protectedEffectObjects, g_profile.protectedGroupedObjects,
+            g_profile.boundsChecks, g_profile.culledObjects
+        );
+    }
+
     void reportDrawProfile(char const* stage) {
         if (g_profile.drawFrames == 0) return;
         log::info(
-            "OptGod 0.5.0 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
+            "OptGod 0.5.1 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
             stage, g_profile.drawFrames,
             g_profile.totalDrawSceneUs / g_profile.drawFrames,
             g_profile.maxDrawSceneUs, g_profile.slowDrawScenes,
             g_profile.longDrawGaps, g_profile.maxDrawGapUs
         );
         logBuckets("DRAWSCENE duration", g_profile.drawDurationBuckets);
+        reportCullStats(stage);
         logGapBuckets("DRAWSCENE frame-gap", g_profile.drawGapBuckets);
     }
 }
 
 class $modify(OptGodGameObject, GameObject) {
     void visit() {
-        if (Mod::get()->getSettingValue<bool>("experimental-render-culling") &&
-            shouldCullStaticObject(this)) {
-            return;
+        bool const profiling = g_profile.layer != nullptr &&
+            g_profile.drawFrames < kFramesToMeasure;
+
+        if (profiling) {
+            ++g_profile.visitedObjects;
+            if (m_classType == GameObjectClassType::Effect) {
+                ++g_profile.protectedEffectObjects;
+            } else if (m_groupCount > 0) {
+                ++g_profile.protectedGroupedObjects;
+            } else {
+                ++g_profile.eligibleObjects;
+            }
         }
+
+        if (g_cullingEnabled &&
+            m_classType != GameObjectClassType::Effect &&
+            m_groupCount <= 0) {
+            if (profiling) ++g_profile.boundsChecks;
+            if (shouldCullStaticObject(this)) {
+                if (profiling) ++g_profile.culledObjects;
+                return;
+            }
+        }
+
         GameObject::visit();
     }
 };
@@ -182,12 +220,12 @@ class $modify(OptGodPlayLayer, PlayLayer) {
 
         if (result) {
             log::info(
-                "OptGod 0.5.0: PlayLayer::init={}us ({}ms), levelID={}, replay={}, dontCreateObjects={}.",
+                "OptGod 0.5.1: PlayLayer::init={}us ({}ms), levelID={}, replay={}, dontCreateObjects={}.",
                 elapsedUs, elapsedUs / 1000, level ? level->m_levelID : 0,
                 useReplay, dontCreateObjects
             );
         } else {
-            log::warn("OptGod 0.5.0: PlayLayer::init failed after {}us.", elapsedUs);
+            log::warn("OptGod 0.5.1: PlayLayer::init failed after {}us.", elapsedUs);
         }
         return result;
     }
@@ -201,9 +239,10 @@ class $modify(OptGodPlayLayer, PlayLayer) {
 
         g_profile = {};
         g_profile.layer = this;
+        g_cullingEnabled = Mod::get()->getSettingValue<bool>("experimental-render-culling");
         log::info(
-            "OptGod 0.5.0: setupHasCompleted={}us ({}ms); collecting 180 UPDATE and 180 DRAWSCENE samples with duration/gap distributions.",
-            elapsedUs, elapsedUs / 1000
+            "OptGod 0.5.1: setupHasCompleted={}us ({}ms); experimental-render-culling={}; collecting 180 UPDATE and 180 DRAWSCENE samples plus object-culling counters.",
+            elapsedUs, elapsedUs / 1000, g_cullingEnabled
         );
     }
 
@@ -288,6 +327,6 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
 
 $on_mod(Loaded) {
     log::info(
-        "OptGod 0.5.0 loaded: Android64 profiler plus an opt-in experimental render-culling prototype. The prototype only skips draw traversal for distant, static, ungrouped objects; Effect objects and grouped objects are always preserved."
+        "OptGod 0.5.1 loaded: Android64 profiler plus instrumented opt-in experimental render culling. Object visit, eligible, protected, bounds-check and culled counters are collected during the first 180 drawScene samples; Effect and grouped objects remain protected."
     );
 }
