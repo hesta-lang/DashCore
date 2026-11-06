@@ -20,7 +20,7 @@ struct GLCapabilities {
     std::vector<std::string> extensions;
 
     bool supportsFullBismuthPipeline() const {
-        return !isOpenGLES && majorVersion >= 4 && minorVersion >= 3 &&
+        return !isOpenGLES && (majorVersion > 4 || (majorVersion == 4 && minorVersion >= 3)) &&
                hasComputeShaders && hasShaderStorageBuffers &&
                hasMultiDrawIndirect && hasShaderInclude &&
                hasSpirvSpecialization;
