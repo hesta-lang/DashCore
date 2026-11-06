@@ -206,7 +206,7 @@ namespace {
 
     void logGapBuckets(char const* label, Buckets const& b) {
         log::info(
-            "OptGod 0.5.2 {} buckets: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}.",
+            "DashCore 0.5.3 {} buckets: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}.",
             label, b[0], b[1], b[2], b[3], b[4]
         );
     }
@@ -214,7 +214,7 @@ namespace {
     void maybeFinishProfile() {
         if (g_profile.updateFrames >= kFramesToMeasure &&
             g_profile.drawFrames >= kFramesToMeasure) {
-            log::info("OptGod 0.5.2: both 180-frame samples complete; diagnostic-only.");
+            log::info("DashCore 0.5.3: both 180-frame samples complete; diagnostic-only.");
             g_profile.layer = nullptr;
         }
     }
@@ -222,7 +222,7 @@ namespace {
     void reportUpdateProfile(char const* stage) {
         if (g_profile.updateFrames == 0) return;
         log::info(
-            "OptGod 0.5.2 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
+            "DashCore 0.5.3 UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
             stage, g_profile.updateFrames,
             g_profile.totalPostUpdateUs / g_profile.updateFrames,
             g_profile.maxPostUpdateUs, g_profile.slowPostUpdates,
@@ -235,8 +235,8 @@ namespace {
 
     void reportCullStats(char const* stage) {
         log::info(
-            "OptGod 0.5.2 CULL {}: enabled={}, frames={}, visited={}, eligible={}, protectedEffect={}, protectedGrouped={}, boundsChecks={}, culled={}.",
-            stage, g_cullingEnabled, g_profile.drawFrames,
+            "DashCore 0.5.3 CULL {}: requested={}, active={}, frames={}, visited={}, eligible={}, protectedEffect={}, protectedGrouped={}, boundsChecks={}, culled={}.",
+            stage, g_cullingRequested, g_cullingEnabled, g_profile.drawFrames,
             g_profile.visitedObjects, g_profile.eligibleObjects,
             g_profile.protectedEffectObjects, g_profile.protectedGroupedObjects,
             g_profile.boundsChecks, g_profile.culledObjects
@@ -246,7 +246,7 @@ namespace {
     void reportDrawProfile(char const* stage) {
         if (g_profile.drawFrames == 0) return;
         log::info(
-            "OptGod 0.5.2 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
+            "DashCore 0.5.3 DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, gaps>25ms={}, maxGap={}us. GPU execution time is not measured.",
             stage, g_profile.drawFrames,
             g_profile.totalDrawSceneUs / g_profile.drawFrames,
             g_profile.maxDrawSceneUs, g_profile.slowDrawScenes,
@@ -295,12 +295,12 @@ class $modify(OptGodPlayLayer, PlayLayer) {
 
         if (result) {
             log::info(
-                "OptGod 0.5.2: PlayLayer::init={}us ({}ms), levelID={}, replay={}, dontCreateObjects={}.",
+                "DashCore 0.5.3: PlayLayer::init={}us ({}ms), levelID={}, replay={}, dontCreateObjects={}.",
                 elapsedUs, elapsedUs / 1000, level ? level->m_levelID : 0,
                 useReplay, dontCreateObjects
             );
         } else {
-            log::warn("OptGod 0.5.2: PlayLayer::init failed after {}us.", elapsedUs);
+            log::warn("DashCore 0.5.3: PlayLayer::init failed after {}us.", elapsedUs);
         }
         return result;
     }
@@ -320,8 +320,8 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         g_cullingEnabled = false;
         g_profile.dontCreateObjects = g_lastDontCreateObjects;
         log::info(
-            "OptGod 0.5.2: setupHasCompleted={}us ({}ms); experimental-render-culling={}; collecting 180 UPDATE and 180 DRAWSCENE samples plus object-culling counters.",
-            elapsedUs, elapsedUs / 1000, g_cullingEnabled
+            "DashCore 0.5.3: setupHasCompleted={}us ({}ms); culling-requested={}, culling-active=false, dontCreateObjects={}; collecting frame, visit-hook, and read-only scene-graph diagnostics.",
+            elapsedUs, elapsedUs / 1000, g_cullingRequested, g_profile.dontCreateObjects
         );
     }
 
@@ -424,6 +424,6 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
 
 $on_mod(Loaded) {
     log::info(
-        "OptGod 0.5.2 loaded: Android64 profiler plus CCNode::visit-based experimental render culling. GameObjects are detected through Geode typeinfo; Effect and grouped objects remain protected."
+        "DashCore 0.5.3 loaded: Android64 profiler plus read-only PlayLayer scene-graph inspection. Experimental culling is forcibly inactive until GameObject traversal is validated."
     );
 }
