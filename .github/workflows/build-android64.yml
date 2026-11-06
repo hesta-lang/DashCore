@@ -23,6 +23,9 @@ jobs:
           sdk: given
           android-min-sdk: 29
           build-config: Release
+          # LTO increases link time; disable it for faster CI builds.
+          # Runtime behavior is unchanged; the resulting binary may be slightly larger.
+          use-lto: false
 
       - name: Upload .geode artifact
         uses: actions/upload-artifact@v4
