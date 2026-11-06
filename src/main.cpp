@@ -67,8 +67,8 @@ namespace {
     bool g_lastDontCreateObjects = false;
 
     // First experimental stage: skip only the draw traversal of distant,
-    // static, ungrouped GameObjects. Effect objects (including triggers) and
-    // grouped objects are deliberately never culled.
+    // off-screen GameObjects. Effects and triggers are always protected;
+    // grouped objects are protected near the player and eligible when far away.
     bool shouldCullObject(GameObject* object) {
         if (!object || object->m_classType == GameObjectClassType::Effect || object->isTrigger()) {
             return false;
