@@ -352,15 +352,17 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
     void visit() {
         bool const profiling = g_profile.layer != nullptr &&
             g_profile.drawFrames < kFramesToMeasure;
-        // Count real GameObject visits even with culling disabled. Previously
-        // the early return made the baseline visit counter stay at zero unless
-        // experimental culling was enabled, which made comparisons misleading.
-        if (!g_cullingEnabled && !profiling) {
+        bool const sampleVisit = profiling &&
+            (g_profile.drawFrames % kReportEvery == 0);
+        // Sample real GameObject visits every 30 draw frames even with culling
+        // disabled. The old early return hid this baseline; sampling avoids
+        // adding RTTI work to every node on every frame.
+        if (!g_cullingEnabled && !sampleVisit) {
             CCNode::visit();
             return;
         }
         auto* object = typeinfo_cast<GameObject*>(this);
-        if (object && profiling) ++g_profile.visitedObjects;
+        if (object && sampleVisit) ++g_profile.visitedObjects;
         if (!g_cullingEnabled) {
             CCNode::visit();
             return;
