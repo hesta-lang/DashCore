@@ -49,10 +49,8 @@ GLCapabilities queryGLCapabilities() {
 
     auto const es31OrNewer =
         result.majorVersion > 3 || (result.majorVersion == 3 && result.minorVersion >= 1);
-    result.hasComputeShaders = es31OrNewer ||
-        hasExtension(result.extensions, "GL_ARB_compute_shader");
-    result.hasShaderStorageBuffers = es31OrNewer ||
-        hasExtension(result.extensions, "GL_EXT_shader_io_blocks");
+    result.hasComputeShaders = es31OrNewer;
+    result.hasShaderStorageBuffers = es31OrNewer;
 
     result.hasIndirectDraw =
         hasExtension(result.extensions, "GL_EXT_draw_indirect") ||
