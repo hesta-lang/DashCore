@@ -1,5 +1,13 @@
 # DashCore changelog
 
+## 0.7.4
+- Adds object-geometry diagnostics for triggers, effects, grouped/ungrouped objects, parentless nodes, self-hidden objects, and objects under hidden ancestors.
+- Reports invalid, zero-sized, and negative bounding/content dimensions, plus scaled and rotated object counts.
+- Compares the transformed center of getBoundingRect() with each node's world-space anchor as a diagnostic signal; it does not assume either coordinate interpretation is correct.
+- Measures the CPU cost of scene scanning, GPU-input collection, bounds validation, and geometry inspection separately.
+- Keeps the same-frame scene traversal cross-check and all three bounds candidates.
+- Keeps the GLES compute and object visibility probes read-only; live render culling remains hard-disabled.
+
 ## 0.7.3
 - Refreshes the scene-graph snapshot at the end of the 180-frame sample so object counts are compared at the same gameplay stage as the GPU collector.
 - Adds read-only bounds diagnostics for three coordinate interpretations: parent-transformed bounding rectangle, raw bounding rectangle, and node-local content rectangle transformed to world space.
