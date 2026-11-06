@@ -5,7 +5,7 @@ REPORT_DIR="${REPORT_DIR:-reports/runtime}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-artifacts}"
 PACKAGE_NAME="${PACKAGE_NAME:-com.geode.launcher}"
 APK_PATH="${GITHUB_WORKSPACE:-.}/test-input/geode-launcher.apk"
-MOD_DIR="/sdcard/Android/data/${PACKAGE_NAME}/files/geode/mods"
+MOD_DIR="/sdcard/Android/media/${PACKAGE_NAME}/game/geode/mods"
 mkdir -p "$REPORT_DIR"
 
 capture_diagnostics() {
@@ -15,7 +15,8 @@ capture_diagnostics() {
   adb shell dumpsys activity activities > "$REPORT_DIR/activities.txt" 2>&1
   adb shell screencap -p /sdcard/dashcore-autotest.png >/dev/null 2>&1
   adb pull /sdcard/dashcore-autotest.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1
-  adb pull "/sdcard/Android/data/$PACKAGE_NAME/files/geode/logs" "$REPORT_DIR/geode-logs" >/dev/null 2>&1
+  adb pull "/sdcard/Android/data/$PACKAGE_NAME/files/geode/logs" "$REPORT_DIR/geode-logs-internal" >/dev/null 2>&1
+  adb pull "/sdcard/Android/media/$PACKAGE_NAME/game/geode/logs" "$REPORT_DIR/geode-logs-media" >/dev/null 2>&1
 }
 trap capture_diagnostics EXIT
 
@@ -69,6 +70,8 @@ adb shell ls -l "$MOD_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
 echo "Launching Geometry Dash / Geode Launcher..."
 adb shell am force-stop "$PACKAGE_NAME" || true
 adb shell monkey -p "$PACKAGE_NAME" -c android.intent.category.LAUNCHER 1 | tee "$REPORT_DIR/launch.txt"
+sleep 20
+adb shell am start -a android.intent.action.VIEW -d "geode-launcher://main/launch" -p "$PACKAGE_NAME" | tee -a "$REPORT_DIR/launch.txt"
 sleep 50
 
 PID="$(adb shell pidof "$PACKAGE_NAME" 2>/dev/null | tr -d '\r' || true)"
