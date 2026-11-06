@@ -19,3 +19,8 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
 
 setup_geode_mod(${PROJECT_NAME})
+
+if (ANDROID)
+    # Bismuth Android port: GLES 3.1 compute/SSBO capability validation.
+    target_link_libraries(${PROJECT_NAME} GLESv3)
+endif()
