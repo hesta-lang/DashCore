@@ -1,5 +1,13 @@
 # DashCore changelog
 
+## 0.7.3
+- Refreshes the scene-graph snapshot at the end of the 180-frame sample so object counts are compared at the same gameplay stage as the GPU collector.
+- Adds read-only bounds diagnostics for three coordinate interpretations: parent-transformed bounding rectangle, raw bounding rectangle, and node-local content rectangle transformed to world space.
+- Reports valid/invalid bounds, expanded-viewport visibility counts, and coordinate extents for each candidate.
+- Resets the one-shot GPU object probe for each new PlayLayer so subsequent level tests are measured too.
+- Clarifies that the GPU PASS proves CPU/GPU formula parity only, not correctness of the coordinate space or off-screen classification.
+- Keeps live render culling hard-disabled; no visibility, triggers, collisions, updates, or draw calls are changed.
+
 ## 0.7.2
 - Fixed diagnostic counter consistency: visited, protected, eligible, and grouped-object counts now use the same 30-frame sample.
 - Delayed the GLES object visibility probe until the 180-frame level sample completes, allowing the scene graph to populate before collection.
