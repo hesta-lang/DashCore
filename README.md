@@ -1,4 +1,4 @@
-# OptGod 0.5.2 — Android64 profiler + render-culling instrumentation
+# DashCore 0.5.2 — Android64 profiler + render-culling instrumentation
 
 Target: Geometry Dash 2.2081 / Geode 5.11.2 / Android64 (arm64-v8a), minimum Android SDK 29.
 
@@ -22,7 +22,7 @@ The counters are cumulative across the measurement window, not unique-object cou
 
 This is a cautious first step toward chunk-style rendering. It does **not** unload level objects or change when gameplay logic runs. All level objects are still created and remain in the game.
 
-When **Experimental render culling** is enabled in Geode mod settings, OptGod skips only the Cocos draw traversal for a GameObject when all of these conditions are true:
+When **Experimental render culling** is enabled in Geode mod settings, DashCore skips only the Cocos draw traversal for a GameObject when all of these conditions are true:
 
 - It is an ordinary non-Effect object.
 - It has no group membership.
@@ -46,7 +46,7 @@ Important limitations:
 - First 180 `PlayLayer::postUpdate` calls after level setup: average/max CPU callback duration, calls over 8 ms, frame gaps over 25 ms, maximum gap, observed `dt` range, and duration/gap distributions.
 - First 180 `CCDirector::drawScene` calls after level setup: average/max CPU duration, calls over 8 ms, frame gaps over 25 ms, maximum gap, and duration/gap distributions.
 - Progress snapshots every 30 samples, plus final reports.
-- Render-culling state and object counters in `OptGod 0.5.2 CULL FINAL`.
+- Render-culling state and object counters in `DashCore 0.5.2 CULL FINAL`.
 
 Duration buckets: <=2 ms, 2–4 ms, 4–8 ms, 8–16 ms, 16–25 ms, and >25 ms.
 
@@ -63,7 +63,7 @@ This times the CPU-side duration of Cocos2d's scene drawing function. It can inc
 3. Restart the same level from the same position, enable the option, and run the same test again. The log should say `experimental-render-culling=true`.
 4. Compare `DRAWSCENE-CPU FINAL` and `CULL FINAL` between the two runs.
 5. Check for missing objects, pop-in, trigger differences, or camera/zoom issues. Disable culling immediately if anything behaves incorrectly.
-6. Send the complete Geode log, especially the `OptGod 0.5.2` lines.
+6. Send the complete Geode log, especially the `DashCore 0.5.2` lines.
 
 For a fair comparison, use the same level, StartPos, graphics settings, and approximate test duration. Avoid comparing a menu/transition-heavy run with a steady gameplay run.
 
