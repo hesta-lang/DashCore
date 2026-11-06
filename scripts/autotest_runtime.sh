@@ -8,6 +8,35 @@ APK_PATH="${GITHUB_WORKSPACE:-.}/test-input/geode-launcher.apk"
 MOD_DIR="/sdcard/Android/media/${PACKAGE_NAME}/game/geode/mods"
 mkdir -p "$REPORT_DIR"
 
+# AVD/ADB can briefly report "offline" immediately after boot. Reconnect
+# without failing the whole test on the first transient transport error.
+adb_ready() {
+  local attempt
+  for attempt in $(seq 1 45); do
+    if adb get-state 2>/dev/null | grep -qx device; then
+      local boot
+      boot="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+      if [ "$boot" = "1" ]; then return 0; fi
+    fi
+    adb reconnect offline >/dev/null 2>&1 || true
+    sleep 2
+  done
+  echo "ADB did not become ready after retries." >&2
+  return 1
+}
+
+adb_retry() {
+  local attempt
+  for attempt in $(seq 1 8); do
+    if adb "$@"; then return 0; fi
+    echo "ADB command failed (attempt $attempt/8): adb $*" >&2
+    adb reconnect offline >/dev/null 2>&1 || true
+    sleep 2
+  done
+  echo "ADB command failed after 8 attempts: adb $*" >&2
+  return 1
+}
+
 capture_diagnostics() {
   set +e
   adb logcat -d -v threadtime > "$REPORT_DIR/logcat.txt" 2>&1
@@ -20,17 +49,9 @@ capture_diagnostics() {
 }
 trap capture_diagnostics EXIT
 
-echo "Waiting for Android emulator..."
-adb wait-for-device
-for attempt in $(seq 1 60); do
-  boot="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
-  [ "$boot" = "1" ] && break
-  sleep 2
-done
-[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] || {
-  echo "Android emulator did not finish booting." >&2
-  exit 1
-}
+echo "Waiting for Android emulator and recovering ADB if needed..."
+adb wait-for-device || true
+adb_ready
 
 {
   echo "SDK=$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
@@ -59,19 +80,31 @@ GEODE_PACKAGE="$(find "$ARTIFACT_DIR" -type f -name '*.geode' -print -quit)"
 cp "$GEODE_PACKAGE" "$REPORT_DIR/DashCore.geode"
 
 echo "Installing Geode Launcher..."
-adb install -r "$APK_PATH" | tee "$REPORT_DIR/install.txt"
-adb shell pm path "$PACKAGE_NAME" | tee -a "$REPORT_DIR/install.txt"
+adb_retry install -r "$APK_PATH" | tee "$REPORT_DIR/install.txt"
+adb_retry shell pm path "$PACKAGE_NAME" | tee -a "$REPORT_DIR/install.txt"
 
 echo "Preparing Geode mods directory..."
-adb shell mkdir -p "$MOD_DIR"
-adb push "$GEODE_PACKAGE" "$MOD_DIR/DashCore.geode" | tee "$REPORT_DIR/mod-push.txt"
-adb shell ls -l "$MOD_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
+# Android 15 may deny one external-storage location depending on the image.
+# Try the documented Geode media path first, then the app-specific external path.
+if adb_retry shell mkdir -p "$MOD_DIR"; then
+  if ! adb_retry push "$GEODE_PACKAGE" "$MOD_DIR/DashCore.geode" | tee "$REPORT_DIR/mod-push.txt"; then
+    MOD_DIR="/sdcard/Android/data/$PACKAGE_NAME/files/geode/mods"
+  fi
+else
+  MOD_DIR="/sdcard/Android/data/$PACKAGE_NAME/files/geode/mods"
+fi
+if [ "$MOD_DIR" = "/sdcard/Android/data/$PACKAGE_NAME/files/geode/mods" ]; then
+  adb_retry shell mkdir -p "$MOD_DIR"
+  adb_retry push "$GEODE_PACKAGE" "$MOD_DIR/DashCore.geode" | tee "$REPORT_DIR/mod-push.txt"
+fi
+adb_retry shell ls -l "$MOD_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
+echo "MOD_DIR=$MOD_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
 
 echo "Launching Geometry Dash / Geode Launcher..."
-adb shell am force-stop "$PACKAGE_NAME" || true
-adb shell monkey -p "$PACKAGE_NAME" -c android.intent.category.LAUNCHER 1 | tee "$REPORT_DIR/launch.txt"
-sleep 20
-adb shell am start -a android.intent.action.VIEW -d "geode-launcher://main/launch" -p "$PACKAGE_NAME" | tee -a "$REPORT_DIR/launch.txt"
+adb_retry shell am force-stop "$PACKAGE_NAME" || true
+adb_retry shell monkey -p "$PACKAGE_NAME" -c android.intent.category.LAUNCHER 1 | tee "$REPORT_DIR/launch.txt"
+sleep 15
+adb_retry shell am start -a android.intent.action.VIEW -d "geode-launcher://main/launch" -p "$PACKAGE_NAME" | tee -a "$REPORT_DIR/launch.txt"
 sleep 50
 
 PID="$(adb shell pidof "$PACKAGE_NAME" 2>/dev/null | tr -d '\r' || true)"
