@@ -326,7 +326,7 @@ namespace {
                 ++stats.objects;
                 if (object->isTrigger()) ++stats.triggers;
                 if (object->m_classType == GameObjectClassType::Effect) ++stats.effects;
-                auto const groupCount = static_cast<std::uint32_t>(std::max(0, object->m_groupCount));
+                auto const groupCount = object->m_groupCount > 0 ? static_cast<std::uint32_t>(object->m_groupCount) : 0u;
                 stats.minGroupCount = std::min(stats.minGroupCount, groupCount);
                 stats.maxGroupCount = std::max(stats.maxGroupCount, groupCount);
                 if (object->m_groupCount > 0) ++stats.grouped;
