@@ -192,7 +192,8 @@ jobs:
           heap-size: 1024M
           emulator-boot-timeout: 900
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
-          disable-animations: true
+          # Avoid the runner's post-boot input command; it caused ADB Broken pipe.
+          disable-animations: false
           script: bash scripts/autotest_runtime.sh
 
       - name: Publish runtime logs and screenshots
