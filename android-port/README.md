@@ -56,3 +56,24 @@ Bismuth is distributed under GNU GPL version 3 or later; preserve upstream
 copyright/license notices in any derived source files and include the full
 license text before redistributing a derived renderer.
 Upstream: https://github.com/IliasHDZ/Bismuth
+
+
+## 0.6.3: first executable GLES backend validation
+
+DashCore now includes a one-shot Android GLES compute probe that runs only after
+CCDirector has rendered a frame and a GL context is active. It checks the actual
+context version and SSBO binding availability, compiles and links a minimal
+GLSL ES 3.10 compute shader, dispatches one workgroup, and verifies an SSBO
+write by mapping the result back to the CPU.
+
+The probe saves and restores the current program and the generic/indexed SSBO
+bindings it touches. It does not alter Geometry Dash objects, visibility,
+draw calls, or the experimental culling setting. If GLES 3.1 compute or SSBO
+support is unavailable, or if any stage fails, the original game renderer
+continues unchanged.
+
+This is a real runtime validation of the Android compute foundation, not yet
+the port of Bismuth's full object-culling and sprite-rendering pipeline. The
+next stage is converting Bismuth's shared shader headers and object-culling
+kernel to GLSL ES 3.10, then validating buffer layouts and sprite/group data
+before any rendering integration.
