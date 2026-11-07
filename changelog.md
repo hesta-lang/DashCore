@@ -1,3 +1,10 @@
+## 0.8.2 — extended runtime sampling
+- Extends update and draw-scene timing samples from 180 to 600 frames (about 10 seconds at 60 FPS), providing a more representative window for intermittent stutters.
+- Reduces progress-log frequency from every 30 frames to every 120 frames to keep diagnostic output smaller while retaining periodic measurements.
+- Keeps the one-shot scene census, trigger detection (`GameObject::isTrigger()`), grouped-object samples, bounds comparisons, and GLES compute parity probe read-only.
+- Clarifies that zero detected triggers means none were present in the sampled level; it is not evidence that trigger detection failed.
+- Keeps live render culling hard-disabled. Camera transform/zoom is not yet validated; no object visibility, draw calls, transforms, updates, collisions, physics, trigger execution, or level data are modified.
+
 ## 0.8.1 — viewport-space validation
 - Adds runtime reporting for window size, visible origin/size, and content scale factor to investigate the 0.8.0 bounds-space discrepancy.
 - Explicitly records that camera translation/zoom is not yet applied to culling candidates; no candidate is considered safe for live culling.
