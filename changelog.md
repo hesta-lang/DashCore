@@ -4,7 +4,7 @@
 - Does not add speculative trigger-ID rules or call unverified classification methods.
 - Keeps all diagnostics read-only and live render culling hard-disabled. No visibility, draw calls, transforms, updates, collisions, physics, trigger execution, or level data are modified.
 
-## 0.8.5-alpha — object ID and trigger classification diagnostics
+## 0.8.4-alpha — object ID and trigger classification diagnostics
 - Starts the diagnostic alpha series: all builds before the first validated optimization are explicitly prerelease alpha builds.
 - Adds a census of GameObject `m_objectID` values and counts how many objects for each ID report `isTrigger() == true`.
 - Adds up to 24 bounded object-ID samples with object ID, trigger flag, class type, group count, and Effect classification.
