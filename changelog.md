@@ -1,3 +1,10 @@
+## 0.8.3 — trigger and object-type diagnostics
+- Adds a per-GameObject class-type census and counts how many objects of each class report `isTrigger() == true`.
+- Increases the bounded trigger sample cap from 8 to 16, preserving position, parent, bounds, scale, and rotation details.
+- Emits an explicit diagnostic when every sampled GameObject reports `isTrigger() == false`; this is not treated as proof that the level contains no triggers.
+- Retains the 600-frame performance sample, grouped/effect protection, bounds comparisons, and read-only GLES compute parity probe.
+- Keeps camera-space classification unvalidated and live render culling hard-disabled. No object visibility, draw calls, transforms, updates, collisions, physics, trigger execution, or level data are modified.
+
 ## 0.8.2 — extended runtime sampling
 - Extends update and draw-scene timing samples from 180 to 600 frames (about 10 seconds at 60 FPS), providing a more representative window for intermittent stutters.
 - Reduces progress-log frequency from every 30 frames to every 120 frames to keep diagnostic output smaller while retaining periodic measurements.
