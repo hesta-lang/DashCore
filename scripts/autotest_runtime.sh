@@ -85,6 +85,31 @@ GEODE_PACKAGE="$(find "$ARTIFACT_DIR" -type f -name '*.geode' -print -quit)"
 [ -n "$GEODE_PACKAGE" ] || { echo "No .geode package found." >&2; exit 1; }
 cp "$GEODE_PACKAGE" "$REPORT_DIR/DashCore.geode"
 
+# Wait until Android's PackageManager binder service is actually responsive.
+# sys.boot_completed=1 alone is insufficient: API 30's system_server was killed
+# by Watchdog while PackageManager was still reconciling installed packages.
+echo "Waiting for Android PackageManager service..."
+PACKAGE_MANAGER_READY="false"
+for attempt in $(seq 1 90); do
+  SERVICE_STATUS="$(adb shell service check package 2>/dev/null | tr -d '\r' || true)"
+  if printf '%s' "$SERVICE_STATUS" | grep -qi 'found'; then
+    if adb shell pm list packages >/dev/null 2>&1; then
+      PACKAGE_MANAGER_READY="true"
+      echo "PackageManager is responsive (attempt $attempt)." | tee "$REPORT_DIR/package-manager.txt"
+      break
+    fi
+  fi
+  if [ "$((attempt % 15))" -eq 0 ]; then
+    echo "PackageManager not ready after $((attempt * 2)) seconds: $SERVICE_STATUS" | tee -a "$REPORT_DIR/package-manager.txt"
+  fi
+  sleep 2
+done
+if [ "$PACKAGE_MANAGER_READY" != "true" ]; then
+  echo "Android PackageManager never became responsive; refusing to retry APK installation against a dead system_server." | tee -a "$REPORT_DIR/package-manager.txt"
+  adb logcat -d -v threadtime | grep -Ei 'Watchdog|system_server|PackageManager|FATAL|DeadSystemException' | tail -250 > "$REPORT_DIR/package-manager-failure.txt" || true
+  exit 1
+fi
+
 echo "Installing Geode Launcher..."
 adb_retry install -r "$APK_PATH" | tee "$REPORT_DIR/install.txt"
 adb_retry shell pm path "$PACKAGE_NAME" | tee -a "$REPORT_DIR/install.txt"
@@ -180,7 +205,7 @@ report = {
         "Android emulator booted",
         "Geode Launcher APK package ID verified",
         "Geode Launcher installed",
-        "DashCore .geode staged in app-private DashCore folder and copied to Geode mods directory",
+        "DashCore .geode staged in app-private DashCore folder and exposed through Geode mods-directory symlink",
         "Launcher started and remained alive through the startup check",
         "No launcher crash signature found in crash buffer",
     ],
