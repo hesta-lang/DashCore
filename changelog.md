@@ -1,4 +1,10 @@
-## 0.8.4-alpha — object ID and trigger classification diagnostics
+## 0.8.5-alpha — trigger ID sample selection correction
+- Fixes the bounded trigger-ID sample so it records up to 24 objects for which the native `isTrigger()` predicate returns true, instead of sampling only the first 24 arbitrary GameObjects in scene traversal.
+- Keeps the complete per-object-ID census, class-type census, and explicit zero-trigger warning; these remain observations of `isTrigger()` and are not an independent proof of trigger classification.
+- Does not add speculative trigger-ID rules or call unverified classification methods.
+- Keeps all diagnostics read-only and live render culling hard-disabled. No visibility, draw calls, transforms, updates, collisions, physics, trigger execution, or level data are modified.
+
+## 0.8.5-alpha — object ID and trigger classification diagnostics
 - Starts the diagnostic alpha series: all builds before the first validated optimization are explicitly prerelease alpha builds.
 - Adds a census of GameObject `m_objectID` values and counts how many objects for each ID report `isTrigger() == true`.
 - Adds up to 24 bounded object-ID samples with object ID, trigger flag, class type, group count, and Effect classification.
