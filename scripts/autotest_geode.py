@@ -12,7 +12,7 @@ import zipfile
 from pathlib import Path
 
 EXPECTED_ID = "hesta.optgod"
-EXPECTED_MOD_VERSION = "0.8.1"
+EXPECTED_MOD_VERSION = "0.8.2"
 EXPECTED_GEODE = "5.11.2"
 EXPECTED_GD_ANDROID = "2.2081"
 EXPECTED_ABI_MACHINE = 183  # ELF e_machine: EM_AARCH64
