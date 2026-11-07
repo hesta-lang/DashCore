@@ -27,7 +27,7 @@ jobs:
     # Android Emulator's Linux host package is x86_64-only. Use Apple's
     # native ARM64 macOS runner, which ships with the macOS ARM emulator tools,
     # to run an ARM64 Android image without Linux ARM host incompatibilities.
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 30
     env:
       LAUNCHER_APK_URL: ${{ inputs.launcher_apk_url }}
