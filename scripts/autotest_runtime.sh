@@ -74,10 +74,18 @@ fi
 [ -n "$AAPT" ] || { echo "Android aapt tool not found." >&2; exit 1; }
 
 APK_BADGING="$("$AAPT" dump badging "$APK_PATH")"
-APK_PACKAGE="$(printf '%s\n' "$APK_BADGING" | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -n 1)"
-echo "APK package: $APK_PACKAGE" | tee "$REPORT_DIR/apk.txt"
+APK_PACKAGE="$(printf '%s\n' "$APK_BADGING" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" | head -n 1)"
+APK_NATIVE_CODE="$(printf '%s\n' "$APK_BADGING" | sed -n "s/^native-code: //p" | head -n 1)"
+{
+  echo "APK package: $APK_PACKAGE"
+  echo "APK native ABIs: ${APK_NATIVE_CODE:-none declared}"
+} | tee "$REPORT_DIR/apk.txt"
 if [ "$APK_PACKAGE" != "$PACKAGE_NAME" ]; then
   echo "Expected package $PACKAGE_NAME, got $APK_PACKAGE." | tee -a "$REPORT_DIR/apk.txt"
+  exit 1
+fi
+if ! printf '%s' "$APK_NATIVE_CODE" | grep -q 'arm64-v8a'; then
+  echo "Launcher APK does not contain the required arm64-v8a native libraries." | tee -a "$REPORT_DIR/apk.txt"
   exit 1
 fi
 
@@ -211,7 +219,7 @@ report = {
     ],
     "limitations": [
         "This is an Android emulator smoke test, not a physical Huawei/Mali-G51 test.",
-        "The emulator uses Android 15 API 35 with software graphics.",
+        "The emulator uses Android 10 API 29 on native ARM64 with software graphics.",
         "DashCore load is only confirmed if its identifier appears in collected Geode logs.",
         "A successful launch does not validate gameplay rendering, trigger safety, frame pacing, or GPU performance.",
     ],
