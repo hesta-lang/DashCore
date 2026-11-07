@@ -376,10 +376,10 @@ namespace {
                         rect.size.height, object->getScaleX(), object->getScaleY(), object->getRotation());
                     ++stats.groupedSamples;
                 }
-                // A bounded ID sample allows trigger candidates to be identified without
-                // assuming that classType or isTrigger() alone is sufficient.
+                // Sample IDs only after the native trigger predicate identifies a trigger;
+                // this avoids spending the bounded sample on unrelated early objects.
                 if (object->isTrigger() && objectIdSamples < 24) {
-                    log::info("DashCore 0.8.5-alpha TRIGGER-ID-SAMPLE {}: objectID={}, isTrigger={}, classType={}, groups={}, effect={",
+                    log::info("DashCore 0.8.5-alpha TRIGGER-ID-SAMPLE {}: objectID={}, isTrigger={}, classType={}, groups={}, effect={}.",
                         objectIdSamples, objectID, object->isTrigger(), classType,
                         object->m_groupCount, object->m_classType == GameObjectClassType::Effect);
                     ++objectIdSamples;
