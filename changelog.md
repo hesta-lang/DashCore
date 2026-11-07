@@ -1,3 +1,10 @@
+## 0.8.1 — viewport-space validation
+- Adds runtime reporting for window size, visible origin/size, and content scale factor to investigate the 0.8.0 bounds-space discrepancy.
+- Explicitly records that camera translation/zoom is not yet applied to culling candidates; no candidate is considered safe for live culling.
+- Updates runtime diagnostic labels to 0.8.1.
+- Keeps triggers, effects, and grouped objects protected in the diagnostic mask and keeps live render culling hard-disabled.
+- No object visibility, draw calls, transforms, updates, collisions, physics, trigger execution, or level data are modified.
+
 # DashCore changelog
 
 ## 0.8.0 — Bismuth-inspired Android visibility classifier
