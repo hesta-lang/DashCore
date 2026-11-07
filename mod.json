@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "developer": "hesta-lang",
-  "description": "Android64 Bismuth-inspired rendering diagnostics for Geometry Dash. Adds viewport-space and camera-coordinate measurements to validate object bounds before any optimization. GPU visibility remains diagnostic only; live render culling is hard-disabled.",
+  "description": "Android64 Bismuth-inspired rendering diagnostics for Geometry Dash. Extends Android64 performance sampling to 600 frames and reduces report frequency. Adds clearer trigger/grouped-object census diagnostics; GPU visibility remains diagnostic only and live render culling is hard-disabled.",
   "tags": [
     "optimizations",
     "performance"
@@ -16,7 +16,7 @@
     "experimental-render-culling": {
       "type": "bool",
       "name": "Experimental render culling (locked off)",
-      "description": "Reserved for future testing. DashCore 0.8.1 hard-disables live object hiding; all grouped objects, triggers, and effects remain protected.",
+      "description": "Reserved for future testing. DashCore 0.8.2 hard-disables live object hiding; all grouped objects, triggers, and effects remain protected.",
       "default": false
     }
   }
