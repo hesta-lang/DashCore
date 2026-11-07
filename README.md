@@ -1,10 +1,10 @@
-# DashCore 0.8.4-alpha — Android64 Bismuth viewport-validation prototype
+# DashCore 0.8.5-alpha — Android64 Bismuth viewport-validation prototype
 
 Target: Geometry Dash 2.2081 / Geode 5.11.2 / Android64 (arm64-v8a), minimum Android SDK 29.
 
-## What 0.8.4-alpha adds
+## What 0.8.5-alpha adds
 
-Adds per-class GameObject counts, `m_objectID` counts, up to 24 bounded object-ID samples, and up to 16 trigger samples with transform and bounds details. This is a diagnostic alpha, not an optimization release. The 600-frame timing window and 120-frame progress cadence remain unchanged. Camera translation/zoom is not yet applied to candidate bounds, so no off-screen classification is considered valid for live rendering.
+Corrects the bounded trigger-ID sample selection: it now records up to 24 objects reporting `isTrigger() == true`, rather than the first 24 arbitrary GameObjects. Per-class and object-ID censuses remain unchanged. with transform and bounds details. This is a diagnostic alpha, not an optimization release. The 600-frame timing window and 120-frame progress cadence remain unchanged. Camera translation/zoom is not yet applied to candidate bounds, so no off-screen classification is considered valid for live rendering.
 
 DashCore now has the first Android-side Bismuth-inspired visibility-classification stage. It is still diagnostic: it does not replace Geometry Dash's renderer and does not hide objects.
 
@@ -31,7 +31,7 @@ A `BISMUTH-CULL ... CPU/GPU parity PASS` means only that the GLES compute shader
 
 ## Test procedure
 
-1. Install the Android64 0.8.4-alpha artifact from the successful `Build OptGod (Android64)` workflow.
+1. Install the Android64 0.8.5-alpha artifact from the successful `Build OptGod (Android64)` workflow.
 2. Leave `Experimental render culling (locked off)` disabled.
 3. Open an ordinary level and play until the 600-frame sample completes (about 10 seconds at 60 FPS).
 4. Use a level containing move, rotate, scale, alpha, toggle, color, and pulse triggers, plus grouped objects.
