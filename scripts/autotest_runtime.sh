@@ -37,11 +37,49 @@ adb_retry() {
   return 1
 }
 
+# Verify shared storage before creating Geode folders. The workflow provisions
+# an explicit 2 GB SD-card image for the emulator.
+storage_ready() {
+  local attempt
+  for attempt in $(seq 1 30); do
+    if adb shell 'test -d /sdcard && test -d /storage/emulated/0 && test -w /sdcard && touch /sdcard/.dashcore-storage-check && rm /sdcard/.dashcore-storage-check' >/dev/null 2>&1; then
+      {
+        echo "Shared storage is mounted and writable."
+        adb shell "df -h /sdcard"
+        adb shell "ls -ld /sdcard /storage/emulated/0"
+        adb shell "sm list-volumes all"
+      } | tee "$REPORT_DIR/storage-preflight.txt"
+      return 0
+    fi
+    echo "Waiting for writable emulated storage (attempt $attempt/30)..."
+    adb reconnect offline >/dev/null 2>&1 || true
+    sleep 3
+  done
+
+  {
+    echo "ERROR: Android shared storage never became writable."
+    echo "--- mount service ---"
+    adb shell dumpsys mount
+    echo "--- storage volumes ---"
+    adb shell sm list-volumes all
+    echo "--- filesystem ---"
+    adb shell df -h
+    echo "--- paths ---"
+    adb shell ls -la /sdcard /storage /storage/emulated /storage/emulated/0
+  } > "$REPORT_DIR/storage-preflight-failed.txt" 2>&1 || true
+  echo "Android shared storage is unavailable; see storage-preflight-failed.txt." >&2
+  return 1
+}
+
 capture_diagnostics() {
   set +e
   adb logcat -d -v threadtime > "$REPORT_DIR/logcat.txt" 2>&1
   adb logcat -b crash -d -v threadtime > "$REPORT_DIR/crash-buffer.txt" 2>&1
   adb shell dumpsys activity activities > "$REPORT_DIR/activities.txt" 2>&1
+  adb shell dumpsys mount > "$REPORT_DIR/mount-service.txt" 2>&1
+  adb shell sm list-volumes all > "$REPORT_DIR/storage-volumes.txt" 2>&1
+  adb shell df -h > "$REPORT_DIR/storage-df.txt" 2>&1
+  adb shell ls -la /sdcard /storage/emulated/0 /sdcard/Android > "$REPORT_DIR/storage-paths.txt" 2>&1
   adb shell screencap -p /sdcard/dashcore-autotest.png >/dev/null 2>&1
   adb pull /sdcard/dashcore-autotest.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1
   adb pull "/sdcard/Android/data/$PACKAGE_NAME/files/geode/logs" "$REPORT_DIR/geode-logs-internal" >/dev/null 2>&1
@@ -52,6 +90,7 @@ trap capture_diagnostics EXIT
 echo "Waiting for Android emulator and recovering ADB if needed..."
 adb wait-for-device || true
 adb_ready
+storage_ready
 
 {
   echo "SDK=$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
