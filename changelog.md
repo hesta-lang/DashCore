@@ -1,3 +1,11 @@
+## 0.8.4-alpha — object ID and trigger classification diagnostics
+- Starts the diagnostic alpha series: all builds before the first validated optimization are explicitly prerelease alpha builds.
+- Adds a census of GameObject `m_objectID` values and counts how many objects for each ID report `isTrigger() == true`.
+- Adds up to 24 bounded object-ID samples with object ID, trigger flag, class type, group count, and Effect classification.
+- Keeps class-type counts, trigger samples, bounds comparisons, 600-frame timing, and read-only GLES compute parity diagnostics.
+- Uses numeric object IDs as evidence only; it does not guess trigger semantics or change object behavior.
+- Keeps live render culling hard-disabled. No visibility, draw calls, transforms, updates, collisions, physics, trigger execution, or level data are modified.
+
 ## 0.8.3 — trigger and object-type diagnostics
 - Adds a per-GameObject class-type census and counts how many objects of each class report `isTrigger() == true`.
 - Increases the bounded trigger sample cap from 8 to 16, preserving position, parent, bounds, scale, and rotation details.
