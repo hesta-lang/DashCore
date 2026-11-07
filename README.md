@@ -1,40 +1,41 @@
-# DashCore 0.7.6 — Android64 Bismuth adaptation diagnostics
+# DashCore 0.8.0 — Android64 Bismuth visibility-classifier prototype
 
 Target: Geometry Dash 2.2081 / Geode 5.11.2 / Android64 (arm64-v8a), minimum Android SDK 29.
 
-## What 0.7.6 measures
+## What 0.8.0 adds
 
-DashCore is still a diagnostic build. It does not replace Geometry Dash's renderer or hide objects.
+DashCore now has the first Android-side Bismuth-inspired visibility-classification stage. It is still diagnostic: it does not replace Geometry Dash's renderer and does not hide objects.
 
-After the first 180 measured frames of a level, it performs a same-frame comparison of:
-- The scene-graph inspector's node and GameObject totals.
-- The GameObject collection uploaded to the GLES compute probe.
-- Three candidate interpretations of object bounds: parent-transformed, raw rectangle, and node-local content rectangle.
-- Object geometry and state: triggers, effects, grouped/ungrouped objects, missing parents, self-hidden objects, hidden ancestors, invalid/zero/negative bounds, scaled objects, and rotated objects.
-- The distance between the world-space center inferred from getBoundingRect() and the node's world-space anchor. This is a diagnostic comparison, not proof of the correct bounds.
-- CPU time spent in scene scanning, GPU-input collection, bounds validation, and geometry inspection.
-- Up to 12 generic object samples plus independent trigger and grouped-object samples, with class/group metadata, local and world anchors, raw rectangles, and transforms.
-- Group-count range and per-object GPU-input reason flags for triggers, effects, grouped objects, grouped-near protection, missing parents, and invalid bounds.
-- Counts of grouped objects classified near/far; parentless and invalid-bound records are forced visible in the diagnostic mask.
-- Separate CPU dispatch-submission and barrier/readback/comparison timings.
+After the first 180 measured frames of a level, the adapter:
+- Reuses the final scene-graph snapshot instead of repeatedly traversing the complete graph every 30 frames.
+- Collects GameObjects from the PlayLayer tree.
+- Builds each candidate rectangle from the GameObject's local content size and anchor, transformed by Cocos through the full node/ancestor hierarchy into world coordinates.
+- Forces objects visible when their parent is missing, content dimensions are invalid/zero, or transformed coordinates are non-finite.
+- Forces all triggers, Effect-class objects, and all grouped objects visible. Group transforms can be changed by triggers and are not yet mirrored by DashCore.
+- Uploads the candidate records to a GLES 3.1+ compute shader and compares the returned mask with the CPU reference.
+- Reports scene coverage, candidate-bounds alternatives, object categories, and CPU-side diagnostic costs.
 
-The GLES 3.1+ compute probe checks whether the Android GPU can process the collected visibility mask and match the CPU reference. A PASS proves formula parity only; it does not prove that the chosen coordinates are correct or that culling is safe. Dispatch submission time is CPU submission time, not GPU execution time; readback can include synchronization stalls.
+## What a PASS means
 
-## Safety
+A `BISMUTH-CULL ... CPU/GPU parity PASS` means only that the GLES compute shader returned the same result as the CPU formula for the supplied coordinates. It does **not** prove that the coordinates match the game's actual rendered geometry, that every renderable object was collected, or that culling is safe.
+
+## Safety guarantees
 
 - Live render culling is hard-disabled, even if the experimental setting is enabled.
-- Effects and triggers are never hidden.
-- No visibility flags, draw calls, transforms, updates, collisions, physics, or trigger execution are changed.
+- Every trigger, effect, and grouped object is forced visible in the diagnostic mask.
+- Missing-parent and invalid-bounds records are forced visible.
 - The original Geometry Dash renderer remains in control.
+- No object visibility, draw calls, transforms, updates, collisions, physics, trigger execution, or level data are modified.
 
 ## Test procedure
 
-1. Install the Android64 0.7.6 artifact.
-2. Leave the experimental render-culling setting disabled.
-3. Open a normal level and play for at least 30 seconds after the level appears.
-4. Prefer a trigger-heavy level containing color, move, pulse, rotate, and other triggers, plus grouped objects that move or rotate. Repeat with a second normal level if possible.
-5. Send the complete Geode log, especially `TRIGGER-SAMPLE`, `GROUPED-SAMPLE`, `GPU-INPUT-CLASSIFICATION`, `OBJECT-GEOMETRY`, `BOUNDS`, `DIAGNOSTIC-COST`, and `BISMUTH-CULL` lines.
-6. Report any visual issue, flicker, crash, or unusual stutter.
+1. Install the Android64 0.8.0 artifact from the successful `Build OptGod (Android64)` workflow.
+2. Leave `Experimental render culling (locked off)` disabled.
+3. Open an ordinary level and play for at least 30 seconds after it appears.
+4. Use a level containing move, rotate, scale, alpha, toggle, color, and pulse triggers, plus grouped objects.
+5. Repeat on a second level if possible.
+6. Send the complete Geode log. Important lines: `SCENE-GRAPH FINAL-REFRESHED`, `GPU-INPUT-CLASSIFICATION`, `OBJECT-GEOMETRY`, `BOUNDS`, `DIAGNOSTIC-COST`, and `BISMUTH-CULL`.
+7. Report any crash, flicker, missing object, late appearance, or unusual stutter.
 
 ## Build target
 
