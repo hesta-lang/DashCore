@@ -1,0 +1,40 @@
+name: DashCore Benchmark Validation
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "benchmarks/**"
+      - ".github/workflows/benchmark-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-and-validate:
+    name: Generate and structurally validate benchmark level
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate and validate Geometry Dash level
+        run: python benchmarks/generate_benchmark.py --output-dir dist
+
+      - name: Upload benchmark level and manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: DashCore-Benchmark
+          path: |
+            dist/DashCore-Benchmark.gmd
+            dist/DashCore-Benchmark.levelstring.txt
+            dist/DashCore-Benchmark.levelstring.b64
+            dist/benchmark-manifest.json
+          if-no-files-found: error
+          retention-days: 30
