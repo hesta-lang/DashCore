@@ -18,14 +18,14 @@ permissions:
 
 concurrency:
   group: dashcore-runtime-autotest
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   android-runtime:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     name: Install, launch and inspect DashCore on Android
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     env:
       LAUNCHER_APK_URL: ${{ inputs.launcher_apk_url }}
       PACKAGE_NAME: com.geode.launcher
@@ -194,8 +194,8 @@ jobs:
           # was missing/unmounted and both Geode mod paths failed with EACCES.
           sdcard-path-or-size: 2G
           disk-size: 8G
-          emulator-boot-timeout: 900
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           # Avoid the runner's post-boot input command; it caused ADB Broken pipe.
           disable-animations: false
           script: bash scripts/autotest_runtime.sh
