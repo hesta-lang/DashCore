@@ -95,9 +95,13 @@ echo "Preparing dedicated DashCore storage inside Geode Launcher app data..."
 # named DashCore there, then install the package into Geode's actual mods path.
 adb_retry shell mkdir -p "$STAGING_DIR"
 adb_retry push "$GEODE_PACKAGE" "$STAGING_DIR/DashCore.geode" | tee "$REPORT_DIR/mod-push.txt"
-adb_retry shell mkdir -p "$MOD_DIR"
-adb_retry shell cp "$STAGING_DIR/DashCore.geode" "$MOD_DIR/DashCore.geode"
-adb_retry shell ls -l "$STAGING_DIR" "$MOD_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
+# Point Geode's normal mods directory at the dedicated DashCore folder.
+# The relative symlink keeps both locations inside the launcher's app-specific storage.
+adb_retry shell rm -rf "$MOD_DIR"
+adb_retry shell ln -s "../../DashCore" "$MOD_DIR"
+adb_retry shell test -f "$MOD_DIR/DashCore.geode"
+adb_retry shell ls -ld "$MOD_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
+adb_retry shell ls -l "$STAGING_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
 echo "STAGING_DIR=$STAGING_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
 echo "MOD_DIR=$MOD_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
 
