@@ -201,7 +201,9 @@ jobs:
           sdcard-path-or-size: 3G
           disk-size: 8G
           emulator-boot-timeout: 600
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          # GitHub-hosted macOS runners do not expose nested virtualization.
+          # Force software CPU emulation instead of relying on HVF acceleration.
+          emulator-options: -no-window -accel off -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: bash scripts/autotest_runtime.sh
 
