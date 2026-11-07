@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "developer": "hesta-lang",
-  "description": "Android64 Bismuth-inspired GLES visibility-classifier prototype for Geometry Dash. Uses node-local content bounds transformed through the Cocos world-space hierarchy, protects all triggers, effects, and grouped objects, and reduces repeated scene scans. GPU visibility remains diagnostic only; live render culling is hard-disabled.",
+  "description": "Android64 Bismuth-inspired rendering diagnostics for Geometry Dash. Adds viewport-space and camera-coordinate measurements to validate object bounds before any optimization. GPU visibility remains diagnostic only; live render culling is hard-disabled.",
   "tags": [
     "optimizations",
     "performance"
@@ -16,7 +16,7 @@
     "experimental-render-culling": {
       "type": "bool",
       "name": "Experimental render culling (locked off)",
-      "description": "Reserved for future testing. DashCore 0.8.0 hard-disables live object hiding; all grouped objects, triggers, and effects remain protected.",
+      "description": "Reserved for future testing. DashCore 0.8.1 hard-disables live object hiding; all grouped objects, triggers, and effects remain protected.",
       "default": false
     }
   }
