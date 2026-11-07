@@ -1,48 +1,53 @@
-# DashCore 0.8.5-alpha — Android64 Bismuth viewport-validation prototype
+# DashCore — Android rendering diagnostics and optimization
 
-Target: Geometry Dash 2.2081 / Geode 5.11.2 / Android64 (arm64-v8a), minimum Android SDK 29.
+DashCore is an Android64 mod for Geometry Dash that investigates rendering performance and prepares a safer, Bismuth-inspired visibility optimization path. It measures frame and scene costs, inspects GameObjects and their bounds, and compares CPU visibility calculations with an OpenGL ES compute-shader implementation.
 
-## What 0.8.5-alpha adds
+The long-term goal is to reduce unnecessary rendering work and stuttering on Android while keeping Geometry Dash's original gameplay, physics, controls, menus, and visual behavior intact.
 
-Corrects the bounded trigger-ID sample selection: it now records up to 24 objects reporting `isTrigger() == true`, rather than the first 24 arbitrary GameObjects. Per-class and object-ID censuses remain unchanged. with transform and bounds details. This is a diagnostic alpha, not an optimization release. The 600-frame timing window and 120-frame progress cadence remain unchanged. Camera translation/zoom is not yet applied to candidate bounds, so no off-screen classification is considered valid for live rendering.
+**Current status:** DashCore is in diagnostic/validation development. Its visibility analysis is experimental and read-only; live object culling is hard-disabled. It does not currently claim or deliver an active rendering-performance optimization.
 
-DashCore now has the first Android-side Bismuth-inspired visibility-classification stage. It is still diagnostic: it does not replace Geometry Dash's renderer and does not hide objects.
+## Compatibility
 
-After the first 600 measured frames of a level, the adapter:
-- Reuses the final scene-graph snapshot instead of repeatedly traversing the complete graph every 30 frames.
-- Collects GameObjects from the PlayLayer tree.
-- Builds each candidate rectangle from the GameObject's local content size and anchor, transformed by Cocos through the full node/ancestor hierarchy into world coordinates.
-- Forces objects visible when their parent is missing, content dimensions are invalid/zero, or transformed coordinates are non-finite.
-- Forces all triggers, Effect-class objects, and all grouped objects visible. Group transforms can be changed by triggers and are not yet mirrored by DashCore.
-- Uploads the candidate records to a GLES 3.1+ compute shader and compares the returned mask with the CPU reference.
-- Reports scene coverage, candidate-bounds alternatives, object categories, and CPU-side diagnostic costs.
+- Geometry Dash 2.2081
+- Geode 5.11.2
+- Android64 (arm64-v8a)
+- Minimum Android SDK 29
 
-## What a PASS means
+## What DashCore does
 
-A `BISMUTH-CULL ... CPU/GPU parity PASS` means only that the GLES compute shader returned the same result as the CPU formula for the supplied coordinates. It does **not** prove that the coordinates match the game's actual rendered geometry, that every renderable object was collected, or that culling is safe.
+- Samples frame timing and reports rendering/update performance indicators.
+- Inspects the PlayLayer scene graph and counts GameObjects by class and object ID.
+- Examines object bounds using local content dimensions and Cocos node transforms through the parent hierarchy.
+- Treats objects with missing parents, invalid dimensions, or non-finite transformed coordinates conservatively.
+- Identifies trigger candidates using native GameObject predicates and records bounded diagnostic samples.
+- Keeps triggers, effects, and grouped objects protected in the diagnostic visibility mask because their behavior can depend on runtime changes.
+- Uses an OpenGL ES 3.1+ compute shader to compare GPU visibility calculations against a CPU reference.
+- Reports diagnostic coverage and timing so the data can be reviewed before any optimization is enabled.
 
-## Safety guarantees
+## What the diagnostics do — and do not — prove
 
-- Live render culling is hard-disabled, even if the experimental setting is enabled.
-- Every trigger, effect, and grouped object is forced visible in the diagnostic mask.
-- Missing-parent and invalid-bounds records are forced visible.
+A `BISMUTH-CULL ... CPU/GPU parity PASS` means only that the compute shader produced the same result as the CPU formula for the supplied coordinates. It does **not** prove that those coordinates match the game's actual rendered geometry, that every renderable object was collected, or that hiding objects would be safe.
+
+Scene bounds are not yet fully validated against the game's camera translation and zoom. Therefore, off-screen classification is not considered reliable enough to control rendering.
+
+## Safety
+
+- Live render culling is hard-disabled.
 - The original Geometry Dash renderer remains in control.
-- No object visibility, draw calls, transforms, updates, collisions, physics, trigger execution, or level data are modified.
+- Diagnostic code does not change object visibility, draw calls, transforms, updates, collisions, physics, trigger execution, or level data.
+- Trigger, effect, grouped, missing-parent, and invalid-bounds objects are handled conservatively in diagnostic classification.
 
-## Test procedure
+## Validation procedure
 
-1. Install the Android64 0.8.5-alpha artifact from the successful `Build OptGod (Android64)` workflow.
-2. Leave `Experimental render culling (locked off)` disabled.
-3. Open an ordinary level and play until the 600-frame sample completes (about 10 seconds at 60 FPS).
-4. Use a level containing move, rotate, scale, alpha, toggle, color, and pulse triggers, plus grouped objects.
-5. Repeat on a second level if possible.
-6. Send the complete Geode log. Important lines: `SCENE-GRAPH FINAL-REFRESHED`, `GPU-INPUT-CLASSIFICATION`, `OBJECT-GEOMETRY`, `OBJECT-TYPE`, `OBJECT-ID`, `OBJECT-ID-SAMPLE`, `TRIGGER-DIAGNOSTIC`, `TRIGGER-SAMPLE`, `BOUNDS`, `DIAGNOSTIC-COST`, and `BISMUTH-CULL`.
-7. Report any crash, flicker, missing object, late appearance, or unusual stutter.
+1. Install the Android64 diagnostic build from the successful GitHub Actions workflow.
+2. Keep any experimental render-culling option disabled.
+3. Open a normal level and play long enough for the frame-sampling window to complete (approximately 10 seconds at 60 FPS).
+4. Where possible, test a level containing move, rotate, scale, alpha, toggle, color, and pulse triggers, as well as grouped objects.
+5. Repeat on another level and provide the complete Geode log.
+6. Report crashes, flicker, missing objects, late appearances, or unusual stuttering.
+
+Useful log entries include `SCENE-GRAPH`, `GPU-INPUT-CLASSIFICATION`, `OBJECT-GEOMETRY`, `OBJECT-TYPE`, `OBJECT-ID`, `TRIGGER-DIAGNOSTIC`, `TRIGGER-SAMPLE`, `BOUNDS`, `DIAGNOSTIC-COST`, and `BISMUTH-CULL`.
 
 ## Build target
 
-- Android64 / arm64-v8a
-- Android minimum SDK 29
-- Geometry Dash 2.2081
-- Geode 5.11.2
-- Release build via GitHub Actions
+DashCore is built for Android64 / arm64-v8a through GitHub Actions, targeting Geometry Dash 2.2081 and Geode 5.11.2.
