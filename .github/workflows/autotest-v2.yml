@@ -28,7 +28,7 @@ jobs:
     # native ARM64 macOS runner, which ships with the macOS ARM emulator tools,
     # to run an ARM64 Android image without Linux ARM host incompatibilities.
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       LAUNCHER_APK_URL: ${{ inputs.launcher_apk_url }}
       PACKAGE_NAME: com.geode.launcher
@@ -40,6 +40,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
+
+      - name: Verify Apple Silicon runner
+        run: |
+          set -euo pipefail
+          echo "Runner: $(uname -a)"
+          echo "macOS: $(sw_vers -productVersion)"
+          ARCH="$(uname -m)"
+          echo "Host architecture: $ARCH"
+          if [ "$ARCH" != "arm64" ]; then
+            echo "::error::AutoTest requires an Apple Silicon ARM64 host; got $ARCH."
+            exit 1
+          fi
 
       - name: Select completed DashCore build
         id: triggered-build
