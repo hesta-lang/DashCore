@@ -1,5 +1,13 @@
 # DashCore changelog
 
+## 0.8.0 — Bismuth-inspired Android visibility classifier
+- Replaces the GPU-input bounds source with each GameObject's local content rectangle transformed through Cocos' complete world-space node hierarchy.
+- Treats missing parents, invalid/zero content dimensions, and non-finite transformed bounds as force-visible.
+- Protects every trigger, Effect object, and grouped object in the GPU visibility mask; grouped objects remain protected until their trigger-driven transform behavior is implemented and validated.
+- Keeps the GLES 3.1 compute visibility pass diagnostic-only; CPU/GPU parity does not certify coordinate correctness or authorize live culling.
+- Removes repeated scene-graph traversals every 30 frames and reuses the final 180-frame snapshot for the collector comparison.
+- Keeps live render culling hard-disabled. No object visibility, draw calls, transforms, updates, collisions, physics, or trigger execution are changed.
+
 ## 0.7.6 — trigger and grouped-object validation
 - Adds independent trigger and grouped-object samples so generic traversal samples cannot hide these categories.
 - Reports group-count range and dedicated sample totals.
