@@ -142,9 +142,31 @@ echo "MOD_DIR=$MOD_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
 echo "Launching Geometry Dash / Geode Launcher..."
 adb_retry shell am force-stop "$PACKAGE_NAME" || true
 adb_retry shell monkey -p "$PACKAGE_NAME" -c android.intent.category.LAUNCHER 1 | tee "$REPORT_DIR/launch.txt"
-sleep 15
+
+# Wait for the launcher process instead of sleeping for a fixed 15 seconds.
+PID=""
+for attempt in $(seq 1 20); do
+  PID="$(adb shell pidof "$PACKAGE_NAME" 2>/dev/null | tr -d '\r' || true)"
+  [ -n "$PID" ] && break
+  sleep 1
+done
+if [ -z "$PID" ]; then
+  echo "Launcher process did not appear after launch." | tee "$REPORT_DIR/result.txt"
+  exit 1
+fi
+
 adb_retry shell am start -a android.intent.action.VIEW -d "geode-launcher://main/launch" -p "$PACKAGE_NAME" | tee -a "$REPORT_DIR/launch.txt"
-sleep 50
+
+# Allow startup up to 35 seconds, stopping early as soon as DashCore appears in
+# either Geode log location. The final confirmation check below remains strict.
+for attempt in $(seq 1 35); do
+  for root in "/sdcard/Android/data/$PACKAGE_NAME/files/geode/logs" "/sdcard/Android/media/$PACKAGE_NAME/game/geode/logs"; do
+    if adb shell "grep -R -I -q -E 'hesta\\.optgod|DashCore' '$root' 2>/dev/null"; then
+      break 2
+    fi
+  done
+  sleep 1
+done
 
 PID="$(adb shell pidof "$PACKAGE_NAME" 2>/dev/null | tr -d '\r' || true)"
 if [ -z "$PID" ]; then
