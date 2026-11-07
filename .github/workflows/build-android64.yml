@@ -33,3 +33,19 @@ jobs:
           name: OptGod-Android64
           path: ${{ steps.build.outputs.build-output }}/*.geode
           if-no-files-found: error
+
+  analyze-logs:
+    name: Analyze build logs
+    runs-on: ubuntu-latest
+    needs: build
+    if: always()
+    permissions:
+      actions: read
+    steps:
+      - name: Summarize build logs and timings
+        uses: SKCloudOps/action-log-analyzer@353bafb5ab6b49dfbf47f9803d84a982603234a9
+        continue-on-error: true
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          post-comment: false
+          post-summary: true
