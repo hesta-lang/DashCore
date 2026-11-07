@@ -759,7 +759,7 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
 
         // Every diagnostic category is counted on exactly the same sampled
         // visits, so the totals are comparable instead of mixing one-frame
-        // samples with 180-frame accumulated counters.
+        // samples with 600-frame accumulated counters.
         if (sampleVisit) {
             if (isEffect) {
                 ++g_profile.protectedEffectObjects;
@@ -916,7 +916,7 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
             reportDrawProfile("progress");
         }
         if (g_profile.drawFrames == kFramesToMeasure) {
-            // Refresh the scene snapshot at the exact end of the 180-frame
+            // Refresh the scene snapshot at the exact end of the 600-frame
             // window. Geometry Dash may continue populating object nodes
             // during early gameplay, so older snapshots are not comparable.
             auto const scanStart = Clock::now();
