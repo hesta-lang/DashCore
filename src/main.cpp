@@ -319,6 +319,7 @@ namespace {
         if (!root) return stats;
 
         std::uint32_t detailedSamples = 0;
+        std::uint32_t objectIdSamples = 0;
         auto const screen = cocos2d::CCDirector::sharedDirector()->getWinSize();
         std::vector<CCNode*> pending{root};
         while (!pending.empty()) {
@@ -377,10 +378,11 @@ namespace {
                 }
                 // A bounded ID sample allows trigger candidates to be identified without
                 // assuming that classType or isTrigger() alone is sufficient.
-                if (detailedSamples < 24) {
+                if (objectIdSamples < 24) {
                     log::info("DashCore 0.8.4-alpha OBJECT-ID-SAMPLE {}: objectID={}, isTrigger={}, classType={}, groups={}, effect={}",
-                        detailedSamples, objectID, object->isTrigger(), classType,
+                        objectIdSamples, objectID, object->isTrigger(), classType,
                         object->m_groupCount, object->m_classType == GameObjectClassType::Effect);
+                    ++objectIdSamples;
                 }
                 // A bounded generic sample makes coordinate-space hypotheses testable.
                 if (detailedSamples < 12) {
