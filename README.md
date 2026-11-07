@@ -1,4 +1,4 @@
-# DashCore — Android rendering diagnostics and optimization
+# DashCore — Android rendering optimization
 
 DashCore is an Android64 mod for Geometry Dash that investigates rendering performance and prepares a safer, Bismuth-inspired visibility optimization path. It measures frame and scene costs, inspects GameObjects and their bounds, and compares CPU visibility calculations with an OpenGL ES compute-shader implementation.
 
