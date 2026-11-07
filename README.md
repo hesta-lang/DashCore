@@ -1,8 +1,10 @@
-# DashCore 0.8.0 — Android64 Bismuth visibility-classifier prototype
+# DashCore 0.8.1 — Android64 Bismuth viewport-validation prototype
 
 Target: Geometry Dash 2.2081 / Geode 5.11.2 / Android64 (arm64-v8a), minimum Android SDK 29.
 
-## What 0.8.0 adds
+## What 0.8.1 adds
+
+Adds viewport diagnostics for the director's window size, visible origin, visible size, and content scale factor. These values help determine whether the earlier object-bound candidates are being compared in the same coordinate space as the actual camera viewport. Camera translation/zoom is not yet applied to the candidate bounds, so no off-screen classification is considered valid for live rendering.
 
 DashCore now has the first Android-side Bismuth-inspired visibility-classification stage. It is still diagnostic: it does not replace Geometry Dash's renderer and does not hide objects.
 
@@ -29,7 +31,7 @@ A `BISMUTH-CULL ... CPU/GPU parity PASS` means only that the GLES compute shader
 
 ## Test procedure
 
-1. Install the Android64 0.8.0 artifact from the successful `Build OptGod (Android64)` workflow.
+1. Install the Android64 0.8.1 artifact from the successful `Build OptGod (Android64)` workflow.
 2. Leave `Experimental render culling (locked off)` disabled.
 3. Open an ordinary level and play for at least 30 seconds after it appears.
 4. Use a level containing move, rotate, scale, alpha, toggle, color, and pulse triggers, plus grouped objects.
