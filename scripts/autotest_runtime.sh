@@ -179,10 +179,15 @@ fi
 python3 - "$REPORT_DIR" "$PID" "$MOD_LOG_CONFIRMED" <<'PY'
 import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
+mod_log_confirmed = sys.argv[3] == "true"
 report = {
-    "result": "passed",
+    # Launcher startup and stability are a smoke test. DashCore loading is
+    # reported independently so a live launcher cannot falsely imply the mod loaded.
+    "result": "passed" if mod_log_confirmed else "inconclusive",
+    "launcher_smoke_test": "passed",
+    "mod_load": "confirmed" if mod_log_confirmed else "unconfirmed",
     "launcher_process": sys.argv[2],
-    "dashcore_log_identifier_found": sys.argv[3] == "true",
+    "dashcore_log_identifier_found": mod_log_confirmed,
     "checks": [
         "Android emulator booted",
         "Geode Launcher APK package ID verified",
@@ -206,7 +211,10 @@ else:
 lines = [
     "# DashCore AutoTest v2 — runtime report",
     "",
-    "**Result: PASSED — launcher smoke test**",
+    f"**Overall result: {'PASSED' if mod_log_confirmed else 'INCONCLUSIVE'}**",
+    "",
+    "**Launcher smoke test: PASSED**",
+    f"**DashCore load: {'CONFIRMED' if mod_log_confirmed else 'NOT CONFIRMED'}**",
     "",
     *[f"- {item}" for item in report["checks"]],
     "",
