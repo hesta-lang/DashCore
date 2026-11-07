@@ -179,22 +179,22 @@ jobs:
           test -s test-input/geode-launcher.apk
           file test-input/geode-launcher.apk
 
-      - name: Run Android 11 emulator with ARM translation
+      - name: Run Android 15 emulator with ARM translation
         if: ${{ steps.apk-source.outputs.available == 'true' }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          api-level: 35
           target: google_apis
           arch: x86_64
           profile: pixel_2
           cores: 4
-          ram-size: 3072M
-          heap-size: 512M
+          ram-size: 4096M
+          heap-size: 1024M
           # Explicitly provision writable shared storage; without this, /sdcard/Android
           # was missing/unmounted and both Geode mod paths failed with EACCES.
-          sdcard-path-or-size: 2G
-          disk-size: 6G
-          emulator-boot-timeout: 420
+          sdcard-path-or-size: 3G
+          disk-size: 8G
+          emulator-boot-timeout: 600
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: bash scripts/autotest_runtime.sh
