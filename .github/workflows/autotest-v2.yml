@@ -205,9 +205,9 @@ jobs:
           target: google_apis
           arch: arm64-v8a
           profile: pixel_2
-          cores: 4
-          ram-size: 4096M
-          heap-size: 1024M
+          cores: 3
+          ram-size: 3072M
+          heap-size: 512M
           # Explicitly provision writable shared storage; without this, /sdcard/Android
           # was missing/unmounted and both Geode mod paths failed with EACCES.
           sdcard-path-or-size: 3G
