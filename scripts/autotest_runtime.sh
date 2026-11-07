@@ -227,4 +227,10 @@ lines = [
 (root / "summary.md").write_text("\n".join(lines) + "\n")
 PY
 
-echo "Runtime smoke test completed."
+if [ "$MOD_LOG_CONFIRMED" != "true" ]; then
+  echo "::error::Launcher smoke test passed, but DashCore load was not confirmed in Geode logs."
+  echo "Runtime test is inconclusive; inspect the uploaded logs before treating this build as validated." >&2
+  exit 2
+fi
+
+echo "Runtime smoke test completed; DashCore load was confirmed."
