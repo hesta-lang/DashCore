@@ -179,11 +179,13 @@ jobs:
           test -s test-input/geode-launcher.apk
           file test-input/geode-launcher.apk
 
-      - name: Run Android 15 emulator with ARM translation
+      - name: Run Android 10 emulator with ARM translation
         if: ${{ steps.apk-source.outputs.available == 'true' }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          # Match the user's Android 10 / API 29 device and avoid Android 11+
+          # scoped-storage restrictions that block adb shell writes to Android/data.
+          api-level: 29
           target: google_apis
           arch: x86_64
           profile: pixel_2
