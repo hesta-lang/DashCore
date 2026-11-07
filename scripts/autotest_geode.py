@@ -12,6 +12,7 @@ import zipfile
 from pathlib import Path
 
 EXPECTED_ID = "hesta.optgod"
+EXPECTED_MOD_VERSION = "0.8.0"
 EXPECTED_GEODE = "5.11.2"
 EXPECTED_GD_ANDROID = "2.2081"
 EXPECTED_ABI_MACHINE = 183  # ELF e_machine: EM_AARCH64
@@ -105,6 +106,12 @@ def main() -> int:
         else:
             fail(f"Unexpected mod ID: {metadata.get('id')!r}", errors)
 
+        if metadata.get("version") == EXPECTED_MOD_VERSION:
+            checks.append(f"Mod version matches {EXPECTED_MOD_VERSION}")
+            print("[OK] Mod version")
+        else:
+            fail(f"Expected mod version {EXPECTED_MOD_VERSION}, got {metadata.get('version')!r}", errors)
+
         if metadata.get("geode") == EXPECTED_GEODE:
             checks.append(f"Geode loader target matches {EXPECTED_GEODE}")
             print("[OK] Geode version target")
@@ -146,6 +153,7 @@ def main() -> int:
         "sha256": package_sha256,
         "expected": {
             "mod_id": EXPECTED_ID,
+            "mod_version": EXPECTED_MOD_VERSION,
             "geode": EXPECTED_GEODE,
             "gd_android": EXPECTED_GD_ANDROID,
             "native_elf_machine": EXPECTED_ABI_MACHINE,
