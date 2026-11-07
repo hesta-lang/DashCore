@@ -5,7 +5,9 @@ REPORT_DIR="${REPORT_DIR:-reports/runtime}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-artifacts}"
 PACKAGE_NAME="${PACKAGE_NAME:-com.geode.launcher}"
 APK_PATH="${GITHUB_WORKSPACE:-.}/test-input/geode-launcher.apk"
-MOD_DIR="/sdcard/Android/media/${PACKAGE_NAME}/game/geode/mods"
+APP_FILES_DIR="/sdcard/Android/data/${PACKAGE_NAME}/files"
+STAGING_DIR="$APP_FILES_DIR/DashCore"
+MOD_DIR="$APP_FILES_DIR/game/geode/mods"
 mkdir -p "$REPORT_DIR"
 
 # AVD/ADB can briefly report "offline" immediately after boot. Reconnect
@@ -37,40 +39,6 @@ adb_retry() {
   return 1
 }
 
-# Verify shared storage before creating Geode folders. The workflow provisions
-# an explicit 2 GB SD-card image for the emulator.
-storage_ready() {
-  local attempt
-  for attempt in $(seq 1 30); do
-    if adb shell 'test -d /sdcard && test -d /storage/emulated/0 && test -w /sdcard && touch /sdcard/.dashcore-storage-check && rm /sdcard/.dashcore-storage-check' >/dev/null 2>&1; then
-      {
-        echo "Shared storage is mounted and writable."
-        adb shell "df -h /sdcard"
-        adb shell "ls -ld /sdcard /storage/emulated/0"
-        adb shell "sm list-volumes all"
-      } | tee "$REPORT_DIR/storage-preflight.txt"
-      return 0
-    fi
-    echo "Waiting for writable emulated storage (attempt $attempt/30)..."
-    adb reconnect offline >/dev/null 2>&1 || true
-    sleep 3
-  done
-
-  {
-    echo "ERROR: Android shared storage never became writable."
-    echo "--- mount service ---"
-    adb shell dumpsys mount
-    echo "--- storage volumes ---"
-    adb shell sm list-volumes all
-    echo "--- filesystem ---"
-    adb shell df -h
-    echo "--- paths ---"
-    adb shell ls -la /sdcard /storage /storage/emulated /storage/emulated/0
-  } > "$REPORT_DIR/storage-preflight-failed.txt" 2>&1 || true
-  echo "Android shared storage is unavailable; see storage-preflight-failed.txt." >&2
-  return 1
-}
-
 capture_diagnostics() {
   set +e
   adb logcat -d -v threadtime > "$REPORT_DIR/logcat.txt" 2>&1
@@ -82,7 +50,7 @@ capture_diagnostics() {
   adb shell ls -la /sdcard /storage/emulated/0 /sdcard/Android > "$REPORT_DIR/storage-paths.txt" 2>&1
   adb shell screencap -p /sdcard/dashcore-autotest.png >/dev/null 2>&1
   adb pull /sdcard/dashcore-autotest.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1
-  adb pull "/sdcard/Android/data/$PACKAGE_NAME/files/geode/logs" "$REPORT_DIR/geode-logs-internal" >/dev/null 2>&1
+  adb pull "/sdcard/Android/data/$PACKAGE_NAME/files/game/geode/logs" "$REPORT_DIR/geode-logs-app-files" >/dev/null 2>&1
   adb pull "/sdcard/Android/media/$PACKAGE_NAME/game/geode/logs" "$REPORT_DIR/geode-logs-media" >/dev/null 2>&1
 }
 trap capture_diagnostics EXIT
@@ -90,7 +58,6 @@ trap capture_diagnostics EXIT
 echo "Waiting for Android emulator and recovering ADB if needed..."
 adb wait-for-device || true
 adb_ready
-storage_ready
 
 {
   echo "SDK=$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
@@ -122,21 +89,16 @@ echo "Installing Geode Launcher..."
 adb_retry install -r "$APK_PATH" | tee "$REPORT_DIR/install.txt"
 adb_retry shell pm path "$PACKAGE_NAME" | tee -a "$REPORT_DIR/install.txt"
 
-echo "Preparing Geode mods directory..."
-# Android 15 may deny one external-storage location depending on the image.
-# Try the documented Geode media path first, then the app-specific external path.
-if adb_retry shell mkdir -p "$MOD_DIR"; then
-  if ! adb_retry push "$GEODE_PACKAGE" "$MOD_DIR/DashCore.geode" | tee "$REPORT_DIR/mod-push.txt"; then
-    MOD_DIR="/sdcard/Android/data/$PACKAGE_NAME/files/geode/mods"
-  fi
-else
-  MOD_DIR="/sdcard/Android/data/$PACKAGE_NAME/files/geode/mods"
-fi
-if [ "$MOD_DIR" = "/sdcard/Android/data/$PACKAGE_NAME/files/geode/mods" ]; then
-  adb_retry shell mkdir -p "$MOD_DIR"
-  adb_retry push "$GEODE_PACKAGE" "$MOD_DIR/DashCore.geode" | tee "$REPORT_DIR/mod-push.txt"
-fi
-adb_retry shell ls -l "$MOD_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
+echo "Preparing dedicated DashCore storage inside Geode Launcher app data..."
+# Geode Android stores its game and loader files under the launcher's
+# app-specific external files directory. Keep a dedicated staging folder
+# named DashCore there, then install the package into Geode's actual mods path.
+adb_retry shell mkdir -p "$STAGING_DIR"
+adb_retry push "$GEODE_PACKAGE" "$STAGING_DIR/DashCore.geode" | tee "$REPORT_DIR/mod-push.txt"
+adb_retry shell mkdir -p "$MOD_DIR"
+adb_retry shell cp "$STAGING_DIR/DashCore.geode" "$MOD_DIR/DashCore.geode"
+adb_retry shell ls -l "$STAGING_DIR" "$MOD_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
+echo "STAGING_DIR=$STAGING_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
 echo "MOD_DIR=$MOD_DIR" | tee -a "$REPORT_DIR/mod-push.txt"
 
 echo "Launching Geometry Dash / Geode Launcher..."
@@ -160,7 +122,7 @@ adb_retry shell am start -a android.intent.action.VIEW -d "geode-launcher://main
 # Allow startup up to 35 seconds, stopping early as soon as DashCore appears in
 # either Geode log location. The final confirmation check below remains strict.
 for attempt in $(seq 1 35); do
-  for root in "/sdcard/Android/data/$PACKAGE_NAME/files/geode/logs" "/sdcard/Android/media/$PACKAGE_NAME/game/geode/logs"; do
+  for root in "/sdcard/Android/data/$PACKAGE_NAME/files/game/geode/logs" "/sdcard/Android/media/$PACKAGE_NAME/game/geode/logs"; do
     if adb shell "grep -R -I -q -E 'hesta\\.optgod|DashCore' '$root' 2>/dev/null"; then
       break 2
     fi
@@ -184,10 +146,10 @@ else
   echo "No launcher crash signature found in Android crash buffer." | tee -a "$REPORT_DIR/result.txt"
 fi
 
-GEODE_LOG_ROOT_INTERNAL="/sdcard/Android/data/$PACKAGE_NAME/files/geode"
+GEODE_LOG_ROOT_APP="/sdcard/Android/data/$PACKAGE_NAME/files/game/geode"
 GEODE_LOG_ROOT_MEDIA="/sdcard/Android/media/$PACKAGE_NAME/game/geode"
-adb shell "find $GEODE_LOG_ROOT_INTERNAL $GEODE_LOG_ROOT_MEDIA -maxdepth 5 -type f 2>/dev/null | head -150" > "$REPORT_DIR/geode-files.txt" || true
-adb pull "$GEODE_LOG_ROOT_INTERNAL/logs" "$REPORT_DIR/geode-logs-internal" >/dev/null 2>&1 || true
+adb shell "find $GEODE_LOG_ROOT_APP $GEODE_LOG_ROOT_MEDIA -maxdepth 5 -type f 2>/dev/null | head -150" > "$REPORT_DIR/geode-files.txt" || true
+adb pull "$GEODE_LOG_ROOT_APP/logs" "$REPORT_DIR/geode-logs-app-files" >/dev/null 2>&1 || true
 adb pull "$GEODE_LOG_ROOT_MEDIA/logs" "$REPORT_DIR/geode-logs-media" >/dev/null 2>&1 || true
 
 if grep -R -I -E "hesta\.optgod|DashCore" "$REPORT_DIR"/geode-logs-* > "$REPORT_DIR/mod-log-matches.txt" 2>/dev/null; then
@@ -214,8 +176,8 @@ report = {
         "Android emulator booted",
         "Geode Launcher APK package ID verified",
         "Geode Launcher installed",
-        "DashCore .geode copied to Geode mods directory",
-        "Launcher started and remained alive for 50 seconds",
+        "DashCore .geode staged in app-private DashCore folder and copied to Geode mods directory",
+        "Launcher started and remained alive through the startup check",
         "No launcher crash signature found in crash buffer",
     ],
     "limitations": [
