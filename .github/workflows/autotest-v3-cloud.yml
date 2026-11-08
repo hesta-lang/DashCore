@@ -193,6 +193,9 @@ jobs:
             adb -s "$SERIAL" install -r test-input/geometry-dash.apk | tee "$REPORT_DIR/game-install.txt"
             if adb -s "$SERIAL" shell pm list packages | tr -d '\r' | grep -q 'com.robtopx.geometryjump'; then
               GAME_INSTALLED="true"
+            else
+              echo "::error::APK installed, but package com.robtopx.geometryjump was not found. Check that the supplied file is the official universal Geometry Dash APK."
+              exit 1
             fi
           fi
           echo "Geometry Dash installed: $GAME_INSTALLED" | tee "$REPORT_DIR/game-status.txt"
@@ -229,7 +232,7 @@ jobs:
           if [ -n "$PID" ] && grep -R -I -E 'hesta\.optgod|DashCore' "$REPORT_DIR"/geode-logs* >/dev/null 2>&1; then
             RESULT="PASS"
             MOD_LOAD="CONFIRMED"
-          elif [ -z "$PID" ] || grep -Ei 'FATAL EXCEPTION|Fatal signal|SIGABRT|SIGSEGV' "$REPORT_DIR/crash-buffer.txt" >/dev/null; then
+          elif [ -z "$PID" ] || grep -E 'com\.geode\.launcher|com\.robtopx\.geometryjump' "$REPORT_DIR/crash-buffer.txt" | grep -Ei 'FATAL EXCEPTION|Fatal signal|SIGABRT|SIGSEGV|has died' >/dev/null; then
             RESULT="FAIL"
             MOD_LOAD="NOT CONFIRMED"
           else
