@@ -12,9 +12,9 @@ concurrency:
 
 jobs:
   device-preflight:
-    name: Check cloud Android device and ABI
+    name: Check Android 11 ARM64 translation and launcher install
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,10 +23,9 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           # "tools" is a retired SDK package and sdkmanager exits with code 1.
-          # The hosted runner only needs platform-tools for ADB.
           packages: platform-tools
 
-      - name: Check emulator.wtf credentials
+      - name: Check cloud device credentials
         id: credentials
         env:
           EW_API_TOKEN: ${{ secrets.EW_API_TOKEN }}
@@ -37,7 +36,7 @@ jobs:
             cat > reports/cloud-device/preflight.md <<'EOF'
           # Cloud device preflight — NOT RUN
 
-          Add the repository Actions secret `EW_API_TOKEN` after creating an emulator.wtf account and API token.
+          Add the repository Actions secret `EW_API_TOKEN`.
           No cloud emulator was started.
           EOF
             echo "::warning::EW_API_TOKEN is not configured. Cloud device test was skipped."
@@ -45,19 +44,20 @@ jobs:
             echo "available=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Start Android 10 cloud device
+      - name: Start Android 11 cloud device
         id: cloud
         if: steps.credentials.outputs.available == 'true'
         uses: emulator-wtf/actions/use-emulator@v1.2.6
         with:
           api-token: ${{ secrets.EW_API_TOKEN }}
           devices: |
-            model=Pixel2,version=29
-          max-time-limit: 15m
+            model=Pixel2,version=30
+          max-time-limit: 20m
           record-video: true
           outputs-dir: reports/cloud-device/session
 
-      - name: Connect ADB and inspect device ABI
+      - name: Connect ADB and inspect native bridge
+        id: inspect
         if: steps.credentials.outputs.available == 'true'
         env:
           ADB_PORTS: ${{ steps.cloud.outputs.adb_attached }}
@@ -80,41 +80,173 @@ jobs:
             echo "::error::No online cloud Android device was attached."
             exit 1
           fi
+          echo "serial=$SERIAL" >> "$GITHUB_OUTPUT"
 
-          SDK="$(adb -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')"
-          RELEASE="$(adb -s "$SERIAL" shell getprop ro.build.version.release | tr -d '\r')"
-          ABI="$(adb -s "$SERIAL" shell getprop ro.product.cpu.abi | tr -d '\r')"
-          ABIS="$(adb -s "$SERIAL" shell getprop ro.product.cpu.abilist | tr -d '\r')"
+          getprop_value() {
+            adb -s "$SERIAL" shell getprop "$1" | tr -d '\r'
+          }
+
+          SDK="$(getprop_value ro.build.version.sdk)"
+          RELEASE="$(getprop_value ro.build.version.release)"
+          ABI="$(getprop_value ro.product.cpu.abi)"
+          ABIS="$(getprop_value ro.product.cpu.abilist)"
+          ABIS64="$(getprop_value ro.product.cpu.abilist64)"
+          ABIS32="$(getprop_value ro.product.cpu.abilist32)"
+          BRIDGE="$(getprop_value ro.dalvik.vm.native.bridge)"
+          BRIDGE_EXEC="$(getprop_value ro.enable.native.bridge.exec)"
+          ISA_ARM64="$(getprop_value ro.dalvik.vm.isa.arm64)"
+          ISA_ARM="$(getprop_value ro.dalvik.vm.isa.arm)"
           {
             echo "Device serial: $SERIAL"
             echo "Android release: $RELEASE"
             echo "Android SDK: $SDK"
             echo "Primary ABI: $ABI"
             echo "Supported ABIs: $ABIS"
+            echo "64-bit ABIs: $ABIS64"
+            echo "32-bit ABIs: $ABIS32"
+            echo "Native bridge: ${BRIDGE:-<empty>}"
+            echo "Native bridge execution: ${BRIDGE_EXEC:-<empty>}"
+            echo "ARM64 ISA mapping: ${ISA_ARM64:-<empty>}"
+            echo "ARM ISA mapping: ${ISA_ARM:-<empty>}"
           } | tee reports/cloud-device/device.txt
 
-          if [ "$SDK" != "29" ]; then
-            echo "::warning::Expected Android 10 / API 29; cloud device returned API $SDK."
+          # Record bridge-related properties and likely translation libraries.
+          adb -s "$SERIAL" shell getprop | tr -d '\r' | grep -Ei 'native.bridge|dalvik.vm.isa.(arm|arm64)' \
+            > reports/cloud-device/native-bridge-properties.txt || true
+          adb -s "$SERIAL" shell 'ls -l /system/lib64/libndk_translation.so /system/lib/libndk_translation.so /system/lib64/libhoudini.so /system/lib/libhoudini.so 2>&1' \
+            > reports/cloud-device/translation-libraries.txt || true
+
+          if [ "$SDK" != "30" ]; then
+            echo "::warning::Expected Android 11 / API 30; cloud device returned API $SDK."
           fi
 
-          if printf '%s' "$ABIS" | grep -q 'arm64-v8a'; then
-            RESULT="ARM64-compatible"
-            echo "The cloud device advertises arm64-v8a. A launcher APK ABI check is still required before installation."
+          if printf '%s' "$ABIS64" | grep -q 'arm64-v8a' || printf '%s' "$ABIS" | grep -q 'arm64-v8a'; then
+            echo "arm64_advertised=true" >> "$GITHUB_OUTPUT"
+            echo "ARM64 is advertised by the Android package manager ABI list."
           else
-            RESULT="INCONCLUSIVE-ABI"
-            echo "::warning::This cloud device does not advertise arm64-v8a. The current ARM64-only Geode Launcher APK must not be installed on it."
+            echo "arm64_advertised=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::The device does not advertise arm64-v8a. An ARM64-only APK cannot be installed."
           fi
 
+          if [ -n "$BRIDGE" ] && [ "$BRIDGE" != "0" ]; then
+            echo "bridge_configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "bridge_configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download latest Geode Launcher release artifact
+        id: launcher
+        if: steps.credentials.outputs.available == 'true'
+        env:
+          ANDROID_LAUNCHER_TOKEN: ${{ secrets.ANDROID_LAUNCHER_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports/cloud-device/launcher
+          if [ -z "$ANDROID_LAUNCHER_TOKEN" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "ANDROID_LAUNCHER_TOKEN is not configured; real launcher install test skipped." \
+              | tee reports/cloud-device/launcher/download-status.txt
+            exit 0
+          fi
+
+          API="https://api.github.com/repos/hesta-lang/android-launcher/actions/artifacts?name=geode-launcher-release&per_page=100"
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $ANDROID_LAUNCHER_TOKEN" \
+            -H "Accept: application/vnd.github+json" "$API" \
+            -o /tmp/launcher-artifacts.json
+
+          ARTIFACT_ID="$(python3 - <<'PY'
+          import json
+          d = json.load(open("/tmp/launcher-artifacts.json"))
+          items = [a for a in d.get("artifacts", []) if not a.get("expired")]
+          items.sort(key=lambda a: a.get("created_at", ""), reverse=True)
+          print(items[0]["id"] if items else "")
+          PY
+          )"
+          if [ -z "$ARTIFACT_ID" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "No unexpired geode-launcher-release artifact was found." \
+              | tee reports/cloud-device/launcher/download-status.txt
+            exit 0
+          fi
+
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $ANDROID_LAUNCHER_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/hesta-lang/android-launcher/actions/artifacts/$ARTIFACT_ID/zip" \
+            -o /tmp/geode-launcher-release.zip
+          unzip -q /tmp/geode-launcher-release.zip -d reports/cloud-device/launcher
+          APK="$(find reports/cloud-device/launcher -type f -name 'geode-launcher-release-*.apk' ! -name '*android32*' | head -1)"
+          if [ -z "$APK" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Artifact downloaded, but no universal release APK (excluding android32) was found." \
+              | tee reports/cloud-device/launcher/download-status.txt
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+          echo "apk=$APK" >> "$GITHUB_OUTPUT"
+          echo "Artifact ID: $ARTIFACT_ID" | tee reports/cloud-device/launcher/download-status.txt
+          echo "APK: $APK" | tee -a reports/cloud-device/launcher/download-status.txt
+
+      - name: Attempt actual ARM64 launcher installation
+        id: install
+        if: steps.credentials.outputs.available == 'true' && steps.launcher.outputs.available == 'true'
+        env:
+          SERIAL: ${{ steps.inspect.outputs.serial }}
+          APK: ${{ steps.launcher.outputs.apk }}
+        run: |
+          set -u
+          mkdir -p reports/cloud-device
+          APK_ABIS="$(unzip -Z1 "$APK" | awk -F/ '$1 == "lib" && $2 != "" {print $2}' | sort -u | paste -sd, -)"
+          echo "APK native ABIs: ${APK_ABIS:-<no native libraries>}" | tee reports/cloud-device/launcher-abi.txt
+
+          if ! printf '%s' "$APK_ABIS" | grep -q 'arm64-v8a'; then
+            echo "install_result=NOT-TESTED-APK-HAS-NO-ARM64" >> "$GITHUB_OUTPUT"
+            echo "APK does not contain arm64-v8a libraries; installation test not meaningful." \
+              | tee reports/cloud-device/launcher-install.txt
+            exit 0
+          fi
+
+          if adb -s "$SERIAL" install -r "$APK" > reports/cloud-device/launcher-install.txt 2>&1; then
+            echo "install_result=PASS" >> "$GITHUB_OUTPUT"
+            echo "Launcher APK installation: PASS" | tee -a reports/cloud-device/launcher-install.txt
+            adb -s "$SERIAL" shell monkey -p com.geode.launcher 1 \
+              > reports/cloud-device/launcher-launch.txt 2>&1 || true
+            sleep 8
+            adb -s "$SERIAL" shell pidof com.geode.launcher \
+              > reports/cloud-device/launcher-pid.txt 2>&1 || true
+            adb -s "$SERIAL" logcat -d -t 1500 \
+              > reports/cloud-device/launcher-logcat.txt 2>&1 || true
+          else
+            echo "install_result=FAIL" >> "$GITHUB_OUTPUT"
+            echo "::warning::The ARM64 launcher APK could not be installed. See launcher-install.txt."
+          fi
+
+      - name: Write final preflight summary
+        if: always() && steps.credentials.outputs.available == 'true'
+        env:
+          SDK: ${{ steps.inspect.outputs.serial }}
+          ARM64: ${{ steps.inspect.outputs.arm64_advertised }}
+          BRIDGE: ${{ steps.inspect.outputs.bridge_configured }}
+          APK_AVAILABLE: ${{ steps.launcher.outputs.available }}
+          INSTALL_RESULT: ${{ steps.install.outputs.install_result }}
+        run: |
           {
-            echo "# DashCore cloud device preflight"
+            echo "# DashCore Android 11 cloud-device preflight"
             echo ""
-            echo "- Android: $RELEASE (API $SDK)"
-            echo "- Primary ABI: $ABI"
-            echo "- Supported ABIs: $ABIS"
-            echo "- Result: $RESULT"
+            echo "- Target image: Pixel 2 / Android 11 (API 30)"
+            echo "- ARM64 advertised by ABI list: ${ARM64:-unknown}"
+            echo "- Native bridge property configured: ${BRIDGE:-unknown}"
+            echo "- Launcher release artifact downloaded: ${APK_AVAILABLE:-no}"
+            echo "- ARM64 launcher installation: ${INSTALL_RESULT:-not attempted}"
             echo ""
-            echo "This workflow only verifies cloud device connectivity and ABI. It does not install Geometry Dash, Geode, or DashCore and does not claim a runtime test."
+            echo "Interpretation:"
+            echo "- A configured native bridge alone is not proof that ARM64 execution works."
+            echo "- ARM64 in the package-manager ABI list plus a successful APK install is the practical compatibility check."
+            echo "- A successful launcher install does not mean Geometry Dash or DashCore was launched or runtime-tested."
+            echo "- This cloud emulator is not a substitute for the Huawei STK-LX3 / Mali-G51 device test."
           } > reports/cloud-device/preflight.md
+          cat reports/cloud-device/preflight.md
 
       - name: Upload cloud device report and recording
         if: always()
