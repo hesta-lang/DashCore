@@ -21,6 +21,10 @@ jobs:
 
       - name: Prepare Android platform tools
         uses: android-actions/setup-android@v3
+        with:
+          # "tools" is a retired SDK package and sdkmanager exits with code 1.
+          # The hosted runner only needs platform-tools for ADB.
+          packages: platform-tools
 
       - name: Check emulator.wtf credentials
         id: credentials
