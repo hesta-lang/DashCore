@@ -1,0 +1,122 @@
+name: DashCore Cloud Device Preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashcore-cloud-preflight
+  cancel-in-progress: true
+
+jobs:
+  device-preflight:
+    name: Check cloud Android device and ABI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare Android platform tools
+        uses: android-actions/setup-android@v3
+
+      - name: Check emulator.wtf credentials
+        id: credentials
+        env:
+          EW_API_TOKEN: ${{ secrets.EW_API_TOKEN }}
+        run: |
+          mkdir -p reports/cloud-device
+          if [ -z "$EW_API_TOKEN" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            cat > reports/cloud-device/preflight.md <<'EOF'
+          # Cloud device preflight — NOT RUN
+
+          Add the repository Actions secret `EW_API_TOKEN` after creating an emulator.wtf account and API token.
+          No cloud emulator was started.
+          EOF
+            echo "::warning::EW_API_TOKEN is not configured. Cloud device test was skipped."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Start Android 10 cloud device
+        id: cloud
+        if: steps.credentials.outputs.available == 'true'
+        uses: emulator-wtf/actions/use-emulator@v1.2.6
+        with:
+          api-token: ${{ secrets.EW_API_TOKEN }}
+          devices: |
+            model=Pixel2,version=29
+          max-time-limit: 15m
+          record-video: true
+          outputs-dir: reports/cloud-device/session
+
+      - name: Connect ADB and inspect device ABI
+        if: steps.credentials.outputs.available == 'true'
+        env:
+          ADB_PORTS: ${{ steps.cloud.outputs.adb_attached }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports/cloud-device
+          if [ -z "$ADB_PORTS" ]; then
+            echo "::error::emulator.wtf did not return an attached ADB port."
+            exit 1
+          fi
+
+          IFS=',' read -ra PORTS <<< "$ADB_PORTS"
+          for port in "${PORTS[@]}"; do
+            adb connect "127.0.0.1:$port"
+          done
+
+          adb devices -l | tee reports/cloud-device/adb-devices.txt
+          SERIAL="$(adb devices | awk '$2 == "device" {print $1; exit}')"
+          if [ -z "$SERIAL" ]; then
+            echo "::error::No online cloud Android device was attached."
+            exit 1
+          fi
+
+          SDK="$(adb -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')"
+          RELEASE="$(adb -s "$SERIAL" shell getprop ro.build.version.release | tr -d '\r')"
+          ABI="$(adb -s "$SERIAL" shell getprop ro.product.cpu.abi | tr -d '\r')"
+          ABIS="$(adb -s "$SERIAL" shell getprop ro.product.cpu.abilist | tr -d '\r')"
+          {
+            echo "Device serial: $SERIAL"
+            echo "Android release: $RELEASE"
+            echo "Android SDK: $SDK"
+            echo "Primary ABI: $ABI"
+            echo "Supported ABIs: $ABIS"
+          } | tee reports/cloud-device/device.txt
+
+          if [ "$SDK" != "29" ]; then
+            echo "::warning::Expected Android 10 / API 29; cloud device returned API $SDK."
+          fi
+
+          if printf '%s' "$ABIS" | grep -q 'arm64-v8a'; then
+            RESULT="ARM64-compatible"
+            echo "The cloud device advertises arm64-v8a. A launcher APK ABI check is still required before installation."
+          else
+            RESULT="INCONCLUSIVE-ABI"
+            echo "::warning::This cloud device does not advertise arm64-v8a. The current ARM64-only Geode Launcher APK must not be installed on it."
+          fi
+
+          {
+            echo "# DashCore cloud device preflight"
+            echo ""
+            echo "- Android: $RELEASE (API $SDK)"
+            echo "- Primary ABI: $ABI"
+            echo "- Supported ABIs: $ABIS"
+            echo "- Result: $RESULT"
+            echo ""
+            echo "This workflow only verifies cloud device connectivity and ABI. It does not install Geometry Dash, Geode, or DashCore and does not claim a runtime test."
+          } > reports/cloud-device/preflight.md
+
+      - name: Upload cloud device report and recording
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DashCore-Cloud-Device-Preflight-${{ github.run_number }}
+          path: reports/cloud-device/
+          if-no-files-found: warn
+          retention-days: 30
