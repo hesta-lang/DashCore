@@ -1,0 +1,276 @@
+name: DashCore AutoTest v3 - Cloud Android Runtime
+
+on:
+  workflow_run:
+    workflows: ["Build OptGod (Android64)"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      geometry_dash_apk_url:
+        description: "Optional HTTPS URL to your legitimate Geometry Dash universal APK (not a split APK). Leave empty for launcher-only smoke test."
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: dashcore-autotest-v3-cloud
+  cancel-in-progress: true
+
+jobs:
+  cloud-runtime:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    name: Install and inspect DashCore on ARM-translated Android 11
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GEOMETRY_DASH_APK_URL: ${{ inputs.geometry_dash_apk_url }}
+      PACKAGE_NAME: com.geode.launcher
+      REPORT_DIR: reports/autotest-v3
+    steps:
+      - name: Checkout DashCore
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Prepare Android platform tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Select DashCore build artifact
+        id: build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            echo "run_id=$BUILD_RUN_ID" >> "$GITHUB_OUTPUT"
+          else
+            python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, urllib.request
+          repo = os.environ["GITHUB_REPOSITORY"]
+          token = os.environ["GH_TOKEN"]
+          url = f"https://api.github.com/repos/{repo}/actions/workflows/build-android64.yml/runs?branch=main&status=success&per_page=1"
+          req = urllib.request.Request(url, headers={"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}"})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              runs = json.load(r).get("workflow_runs", [])
+          if not runs:
+              raise SystemExit("No successful Android64 build found on main.")
+          print(f"run_id={runs[0]['id']}")
+          PY
+          fi
+
+      - name: Download DashCore .geode artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: OptGod-Android64
+          path: artifacts/mod
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.build.outputs.run_id }}
+
+      - name: Validate .geode package
+        run: |
+          set -euo pipefail
+          python3 scripts/autotest_geode.py --artifact-dir artifacts/mod --report-dir reports/package
+
+      - name: Locate latest Geode Launcher build
+        id: launcher-build
+        env:
+          ANDROID_LAUNCHER_TOKEN: ${{ secrets.ANDROID_LAUNCHER_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ANDROID_LAUNCHER_TOKEN" ]; then
+            echo "::error::Missing ANDROID_LAUNCHER_TOKEN (Actions: read on hesta-lang/android-launcher)."
+            exit 1
+          fi
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, urllib.request
+          token = os.environ["ANDROID_LAUNCHER_TOKEN"]
+          url = "https://api.github.com/repos/hesta-lang/android-launcher/actions/workflows/build.yml/runs?branch=spotify-app-remote-integration&status=success&per_page=1"
+          req = urllib.request.Request(url, headers={"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}"})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              runs = json.load(r).get("workflow_runs", [])
+          if not runs:
+              raise SystemExit("No successful launcher build found on spotify-app-remote-integration.")
+          print(f"run_id={runs[0]['id']}")
+          PY
+
+      - name: Download Geode Launcher APK
+        uses: actions/download-artifact@v4
+        with:
+          name: geode-launcher-release
+          path: artifacts/launcher
+          github-token: ${{ secrets.ANDROID_LAUNCHER_TOKEN }}
+          repository: hesta-lang/android-launcher
+          run-id: ${{ steps.launcher-build.outputs.run_id }}
+
+      - name: Prepare APKs and start cloud device
+        id: apk
+        run: |
+          set -euo pipefail
+          mkdir -p test-input reports/autotest-v3
+          APK="$(find artifacts/launcher -type f -name 'geode-launcher-release-*.apk' ! -name '*android32*' -print -quit)"
+          if [ -z "$APK" ]; then
+            echo "::error::Universal Geode Launcher APK not found."
+            exit 1
+          fi
+          cp "$APK" test-input/geode-launcher.apk
+          if [ -n "$GEOMETRY_DASH_APK_URL" ]; then
+            case "$GEOMETRY_DASH_APK_URL" in https://*) ;; *) echo "::error::Geometry Dash APK URL must use HTTPS."; exit 1 ;; esac
+            curl --fail --location --retry 3 --retry-all-errors "$GEOMETRY_DASH_APK_URL" -o test-input/geometry-dash.apk
+            test -s test-input/geometry-dash.apk
+            echo "game_apk_available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "game_apk_available=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "launcher_apk=test-input/geode-launcher.apk" >> "$GITHUB_OUTPUT"
+
+      - name: Start Android 11 cloud device
+        id: cloud
+        uses: emulator-wtf/actions/use-emulator@v1.2.6
+        with:
+          api-token: ${{ secrets.EW_API_TOKEN }}
+          devices: |
+            model=Pixel2,version=30
+          max-time-limit: 25m
+          record-video: true
+          outputs-dir: reports/autotest-v3/cloud-session
+
+      - name: Install, stage mod and run runtime checks
+        id: runtime
+        env:
+          ADB_PORTS: ${{ steps.cloud.outputs.adb_attached }}
+          LAUNCHER_APK: ${{ steps.apk.outputs.launcher_apk }}
+          GAME_APK_AVAILABLE: ${{ steps.apk.outputs.game_apk_available }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$REPORT_DIR"
+          if [ -z "$ADB_PORTS" ]; then
+            echo "::error::Cloud device did not provide an ADB port."
+            exit 1
+          fi
+          IFS=',' read -ra PORTS <<< "$ADB_PORTS"
+          for port in "${PORTS[@]}"; do adb connect "127.0.0.1:$port"; done
+          SERIAL="$(adb devices | awk '$2=="device"{print $1;exit}')"
+          [ -n "$SERIAL" ] || { echo "::error::No connected Android device."; exit 1; }
+          adb -s "$SERIAL" wait-for-device
+
+          prop() { adb -s "$SERIAL" shell getprop "$1" | tr -d '\r'; }
+          SDK="$(prop ro.build.version.sdk)"
+          ABI="$(prop ro.product.cpu.abi)"
+          ABIS="$(prop ro.product.cpu.abilist)"
+          BRIDGE="$(prop ro.dalvik.vm.native.bridge)"
+          {
+            echo "Android SDK: $SDK"
+            echo "Primary ABI: $ABI"
+            echo "Supported ABIs: $ABIS"
+            echo "Native bridge: ${BRIDGE:-<empty>}"
+          } | tee "$REPORT_DIR/device.txt"
+          adb -s "$SERIAL" shell getprop | tr -d '\r' | grep -Ei 'native.bridge|dalvik.vm.isa.(arm|arm64)' > "$REPORT_DIR/native-bridge.txt" || true
+
+          # Validate the cloud image can execute the ARM64 launcher before testing the mod.
+          if ! printf '%s' "$ABIS" | grep -q 'arm64-v8a'; then
+            echo "::error::Cloud device does not advertise arm64-v8a."
+            exit 1
+          fi
+          if [ -z "$BRIDGE" ] || [ "$BRIDGE" = "0" ]; then
+            echo "::error::Expected ARM native-bridge configuration was not found."
+            exit 1
+          fi
+
+          adb -s "$SERIAL" install -r "$LAUNCHER_APK" | tee "$REPORT_DIR/launcher-install.txt"
+          adb -s "$SERIAL" shell pm path com.geode.launcher | tee -a "$REPORT_DIR/launcher-install.txt"
+
+          GAME_INSTALLED="false"
+          if [ "$GAME_APK_AVAILABLE" = "true" ]; then
+            adb -s "$SERIAL" install -r test-input/geometry-dash.apk | tee "$REPORT_DIR/game-install.txt"
+            if adb -s "$SERIAL" shell pm list packages | tr -d '\r' | grep -q 'com.robtopx.geometryjump'; then
+              GAME_INSTALLED="true"
+            fi
+          fi
+          echo "Geometry Dash installed: $GAME_INSTALLED" | tee "$REPORT_DIR/game-status.txt"
+
+          # Keep staging and Geode's mods path within the launcher's app-specific storage.
+          STAGING="/sdcard/Android/data/com.geode.launcher/files/game/DashCore"
+          MODS="/sdcard/Android/data/com.geode.launcher/files/game/geode/mods"
+          MOD="$(find artifacts/mod -type f -name '*.geode' -print -quit)"
+          [ -n "$MOD" ] || { echo "::error::DashCore .geode artifact missing."; exit 1; }
+          adb -s "$SERIAL" shell mkdir -p "$STAGING"
+          adb -s "$SERIAL" push "$MOD" "$STAGING/DashCore.geode" | tee "$REPORT_DIR/mod-stage.txt"
+          adb -s "$SERIAL" shell rm -rf "$MODS"
+          adb -s "$SERIAL" shell ln -s "../../DashCore" "$MODS"
+          adb -s "$SERIAL" shell test -f "$MODS/DashCore.geode"
+          adb -s "$SERIAL" shell ls -l "$MODS" | tee -a "$REPORT_DIR/mod-stage.txt"
+
+          adb -s "$SERIAL" logcat -c
+          adb -s "$SERIAL" shell monkey -p com.geode.launcher -c android.intent.category.LAUNCHER 1 | tee "$REPORT_DIR/launcher-launch.txt"
+          sleep 8
+          PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
+          echo "Launcher PID after startup: ${PID:-not-running}" | tee "$REPORT_DIR/process.txt"
+          adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "geode-launcher://main/launch" -p com.geode.launcher | tee -a "$REPORT_DIR/launcher-launch.txt" || true
+          sleep 25
+          PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
+          echo "Launcher PID after launch wait: ${PID:-not-running}" | tee -a "$REPORT_DIR/process.txt"
+          adb -s "$SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat.txt"
+          adb -s "$SERIAL" logcat -b crash -d -v threadtime > "$REPORT_DIR/crash-buffer.txt"
+          adb -s "$SERIAL" shell dumpsys activity activities > "$REPORT_DIR/activities.txt" 2>&1 || true
+          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-autotest-v3.png >/dev/null 2>&1 || true
+          adb -s "$SERIAL" pull /sdcard/dashcore-autotest-v3.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1 || true
+          adb -s "$SERIAL" pull /sdcard/Android/data/com.geode.launcher/files/game/geode/logs "$REPORT_DIR/geode-logs" >/dev/null 2>&1 || true
+          adb -s "$SERIAL" pull /sdcard/Android/media/com.geode.launcher/game/geode/logs "$REPORT_DIR/geode-logs-media" >/dev/null 2>&1 || true
+
+          if [ -n "$PID" ] && grep -R -I -E 'hesta\.optgod|DashCore' "$REPORT_DIR"/geode-logs* >/dev/null 2>&1; then
+            RESULT="PASS"
+            MOD_LOAD="CONFIRMED"
+          elif [ -z "$PID" ] || grep -Ei 'FATAL EXCEPTION|Fatal signal|SIGABRT|SIGSEGV' "$REPORT_DIR/crash-buffer.txt" >/dev/null; then
+            RESULT="FAIL"
+            MOD_LOAD="NOT CONFIRMED"
+          else
+            RESULT="INCONCLUSIVE"
+            MOD_LOAD="NOT CONFIRMED"
+          fi
+
+          {
+            echo "# DashCore AutoTest v3 — Cloud Android Runtime"
+            echo ""
+            echo "**Overall result: $RESULT**"
+            echo "- Android API: $SDK"
+            echo "- Device ABI: $ABI"
+            echo "- Native bridge: ${BRIDGE:-not reported}"
+            echo "- Launcher process: ${PID:-not running}"
+            echo "- Geometry Dash installed: $GAME_INSTALLED"
+            echo "- DashCore load in Geode logs: $MOD_LOAD"
+            echo ""
+            echo "## Scope and limits"
+            echo "- Static .geode validation ran before device startup."
+            echo "- ARM64 launcher installation and launch were attempted on Android 11/API 30."
+            echo "- A DashCore load is counted only when its identifier appears in collected Geode logs."
+            echo "- Without a user-supplied legitimate Geometry Dash APK, this is a launcher/mod-staging smoke test only; it cannot confirm mod loading."
+            echo "- Cloud x86_64 + ARM translation is not equivalent to the Huawei STK-LX3 / Mali-G51."
+            echo "- No gameplay, trigger execution, frame pacing, or GPU performance claim is made."
+          } | tee "$REPORT_DIR/summary.md"
+          echo "result=$RESULT" >> "$GITHUB_OUTPUT"
+          echo "mod_load=$MOD_LOAD" >> "$GITHUB_OUTPUT"
+          if [ "$RESULT" = "FAIL" ]; then
+            echo "::error::Launcher process failed or a crash signature was detected."
+            exit 1
+          fi
+
+      - name: Upload AutoTest v3 reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DashCore-AutoTest-v3-${{ github.run_number }}
+          path: |
+            reports/
+            artifacts/
+            test-input/
+          if-no-files-found: warn
+          retention-days: 30
