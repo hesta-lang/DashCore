@@ -205,14 +205,14 @@ jobs:
             fi
             echo "APK application ID: $GAME_PACKAGE" | tee "$REPORT_DIR/game-package.txt"
             echo "APK versionName: ${GAME_VERSION:-not declared}" | tee "$REPORT_DIR/game-version.txt"
-            # Android's build for the Geode/GD 2.2081 compatibility target
-            # reports versionName 2.2.144 (Android package versioning differs
-            # from the desktop/Geode target label 2.2081).
+            # This APK reports Android versionName 2.2.144, commonly identified
+            # as the Android 2.208 release. Do not mislabel it as desktop 2.2081:
+            # this smoke test records the mobile build's actual version string.
             if [ "$GAME_VERSION" != "2.2.144" ]; then
               echo "::error::Expected Android Geometry Dash 2.2.144 (the mobile build used with the 2.2081 target); found: ${GAME_VERSION:-empty}."
               exit 1
             fi
-            echo "Compatibility target: Geometry Dash 2.2081 (Android versionName 2.2.144)" | tee -a "$REPORT_DIR/game-version.txt"
+            echo "Mobile release mapping: Android 2.2.144 / 2.208; this does not independently prove desktop patch 2.2081 parity." | tee -a "$REPORT_DIR/game-version.txt"
             adb -s "$SERIAL" install -r test-input/geometry-dash.apk | tee "$REPORT_DIR/game-install.txt"
             if adb -s "$SERIAL" shell pm path "$GAME_PACKAGE" | grep -q '^package:'; then
               GAME_INSTALLED="true"
@@ -289,6 +289,9 @@ jobs:
             echo "- Native bridge: ${BRIDGE:-not reported}"
             echo "- Launcher process: ${PID:-not running}"
             echo "- Geometry Dash installed: $GAME_INSTALLED"
+            if [ "$GAME_INSTALLED" = "true" ]; then
+              echo "- Android APK versionName: $GAME_VERSION (mobile 2.2.144 / 2.208; exact desktop 2.2081 parity not asserted)"
+            fi
             echo "- DashCore load in Geode logs: $MOD_LOAD"
             echo ""
             echo "## Scope and limits"
