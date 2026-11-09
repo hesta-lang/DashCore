@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.8.5-alpha",
+  "version": "0.8.6-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.8.5-alpha: Android64 diagnostic build for Geometry Dash. Corrects trigger ID sample selection so trigger samples are not limited to the first 24 arbitrary GameObjects. No rendering optimization is enabled; live culling remains hard-disabled.",
+  "description": "DashCore 0.8.6-alpha: Android64 diagnostic build for Geometry Dash. Defers the GLES compute probe until after the 600-frame gameplay timing window so GPU validation does not contaminate DrawScene measurements. No rendering optimization is enabled; live culling remains hard-disabled.",
   "tags": [
     "optimizations",
     "performance"
