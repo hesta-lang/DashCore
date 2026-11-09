@@ -48,6 +48,12 @@ Scene bounds are not yet fully validated against the game's camera translation a
 
 Useful log entries include `SCENE-GRAPH`, `GPU-INPUT-CLASSIFICATION`, `OBJECT-GEOMETRY`, `OBJECT-TYPE`, `OBJECT-ID`, `TRIGGER-ID-SAMPLE`, `TRIGGER-DIAGNOSTIC`, `TRIGGER-SAMPLE`, `BOUNDS`, `DIAGNOSTIC-COST`, and `BISMUTH-CULL`.
 
+## 0.8.6-alpha validation change
+
+- Defers the one-time GLES compute/SSBO probe until after the 600-frame gameplay timing window and its object diagnostics. This prevents the probe's CPU/GPU work from inflating a measured `DrawScene` duration.
+- The probe remains read-only and still requires an active GL context. Its result is diagnostic only; it does not enable object culling.
+- Live culling remains hard-disabled, and no gameplay, rendering, or UI behavior is intentionally changed.
+
 ## Build target
 
 DashCore is built for Android64 / arm64-v8a through GitHub Actions, targeting Geometry Dash 2.2081 and Geode 5.11.2.
