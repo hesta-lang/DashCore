@@ -275,12 +275,12 @@ jobs:
           print(*struct.unpack(">II", header[16:24]))
           PY
           )"
-            if [ -z "\${display_w:-}" ] || [ -z "\${display_h:-}" ]; then
+            if [ -z "${display_w:-}" ] || [ -z "${display_h:-}" ]; then
               display_w="$image_w"; display_h="$image_h"
             fi
             tap_x="$(python3 -c 'import sys; print(round(int(sys.argv[1])*int(sys.argv[2])/int(sys.argv[3])))' "$image_x" "$display_w" "$image_w")"
             tap_y="$(python3 -c 'import sys; print(round(int(sys.argv[1])*int(sys.argv[2])/int(sys.argv[3])))' "$image_y" "$display_h" "$image_h")"
-            echo "Tap screenshot=($image_x,$image_y) display=($tap_x,$tap_y) size=\${image_w}x\${image_h}->\${display_w}x\${display_h}" | tee -a "$REPORT_DIR/gameplay-input.txt"
+            echo "Tap screenshot=($image_x,$image_y) display=($tap_x,$tap_y) size=${image_w}x${image_h}->${display_w}x${display_h}" | tee -a "$REPORT_DIR/gameplay-input.txt"
             adb -s "$SERIAL" shell input tap "$tap_x" "$tap_y"
           }
 
