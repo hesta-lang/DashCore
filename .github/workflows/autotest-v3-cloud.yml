@@ -1,4 +1,4 @@
-name: DashCore AutoTest v3.3 - Gameplay Smoke Test
+name: DashCore AutoTest v3.4 - Gameplay Smoke Test
 
 on:
   workflow_run:
@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dashcore-autotest-v3.3-cloud
+  group: dashcore-autotest-v3.4-cloud
   cancel-in-progress: true
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
     env:
       GEOMETRY_DASH_MEDIAFIRE_URL: ${{ inputs.mediafire_url || secrets.GEOMETRY_DASH_MEDIAFIRE_URL || 'https://www.mediafire.com/file/o9rk5i69nmu0nci/Geometry+Dash_2.2081.apk/file' }}
       PACKAGE_NAME: com.geode.launcher
-      REPORT_DIR: reports/autotest-v3.3
+      REPORT_DIR: reports/autotest-v3.4
     steps:
       - name: Checkout DashCore
         uses: actions/checkout@v4
@@ -116,7 +116,7 @@ jobs:
         id: apk
         run: |
           set -euo pipefail
-          mkdir -p test-input reports/autotest-v3.3
+          mkdir -p test-input reports/autotest-v3.4
           APK="$(find artifacts/launcher -type f -name 'geode-launcher-release-*.apk' ! -name '*android32*' -print -quit)"
           if [ -z "$APK" ]; then
             echo "::error::Universal Geode Launcher APK not found."
@@ -127,7 +127,7 @@ jobs:
             python3 scripts/download_mediafire_apk.py \
               --url "$GEOMETRY_DASH_MEDIAFIRE_URL" \
               --output test-input/geometry-dash.apk \
-              --report reports/autotest-v3.3/mediafire-download.json
+              --report reports/autotest-v3.4/mediafire-download.json
             echo "game_apk_available=true" >> "$GITHUB_OUTPUT"
           else
             echo "game_apk_available=false" >> "$GITHUB_OUTPUT"
@@ -143,7 +143,7 @@ jobs:
             model=Pixel2,version=30
           max-time-limit: 25m
           record-video: true
-          outputs-dir: reports/autotest-v3.3/cloud-session
+          outputs-dir: reports/autotest-v3.4/cloud-session
 
       - name: Install, stage mod and run runtime checks
         id: runtime
@@ -258,29 +258,56 @@ jobs:
           adb -s "$SERIAL" shell test -s "$MODS/DashCore.geode"
           adb -s "$SERIAL" shell ls -l "$MODS" | tee -a "$REPORT_DIR/mod-stage.txt"
           adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "geode-launcher://main/launch" -p com.geode.launcher | tee -a "$REPORT_DIR/launcher-launch.txt" || true
-          # The first-run game build may show the Terms of Use notice. Dismiss
-          # its centered OK button, then open the built-in level browser.
+          # Emulator screenshots are downscaled (1648x927 in the last run),
+          # while Android input uses physical display coordinates (1920x1080).
+          # Convert screenshot pixels to input pixels from live dimensions.
+          tap_image_xy() {
+            local image_path="$1" image_x="$2" image_y="$3"
+            local display_size display_w display_h image_w image_h tap_x tap_y
+            display_size="$(adb -s "$SERIAL" shell wm size | awk -F': ' '/size:/{value=$2} END{gsub(/\r/,"",value); print value}')"
+            read -r display_w display_h <<< "$(printf '%s' "$display_size" | tr 'x' ' ')"
+            read -r image_w image_h <<< "$(python3 - "$image_path" <<'PY'
+          import struct, sys
+          with open(sys.argv[1], "rb") as f:
+              header = f.read(24)
+          if header[:8] != b"\x89PNG\r\n\x1a\n":
+              raise SystemExit("Invalid screenshot PNG")
+          print(*struct.unpack(">II", header[16:24]))
+          PY
+          )"
+            if [ -z "\${display_w:-}" ] || [ -z "\${display_h:-}" ]; then
+              display_w="$image_w"; display_h="$image_h"
+            fi
+            tap_x="$(python3 -c 'import sys; print(round(int(sys.argv[1])*int(sys.argv[2])/int(sys.argv[3])))' "$image_x" "$display_w" "$image_w")"
+            tap_y="$(python3 -c 'import sys; print(round(int(sys.argv[1])*int(sys.argv[2])/int(sys.argv[3])))' "$image_y" "$display_h" "$image_h")"
+            echo "Tap screenshot=($image_x,$image_y) display=($tap_x,$tap_y) size=\${image_w}x\${image_h}->\${display_w}x\${display_h}" | tee -a "$REPORT_DIR/gameplay-input.txt"
+            adb -s "$SERIAL" shell input tap "$tap_x" "$tap_y"
+          }
+
+          # Capture the notice before tapping; OK is near 50% width / 73.5% height.
           sleep 8
-          adb -s "$SERIAL" shell input tap 824 680
+          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-notice-before.png
+          adb -s "$SERIAL" pull /sdcard/dashcore-notice-before.png "$REPORT_DIR/notice-before.png" >/dev/null
+          tap_image_xy "$REPORT_DIR/notice-before.png" 824 681
           sleep 8
-          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-main-menu.png >/dev/null 2>&1 || true
-          adb -s "$SERIAL" pull /sdcard/dashcore-main-menu.png "$REPORT_DIR/main-menu-after-notice.png" >/dev/null 2>&1 || true
-          # Geometry Dash's central main-menu Play button at the emulator's
-          # 1920x1080 resolution; then press the selected level's Play button.
-          adb -s "$SERIAL" shell input tap 820 800
+          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-main-menu.png
+          adb -s "$SERIAL" pull /sdcard/dashcore-main-menu.png "$REPORT_DIR/main-menu-after-notice.png" >/dev/null
+          # Main-menu Play is near 50% width / 86% height.
+          tap_image_xy "$REPORT_DIR/main-menu-after-notice.png" 824 800
           sleep 6
-          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-level-select.png >/dev/null 2>&1 || true
-          adb -s "$SERIAL" pull /sdcard/dashcore-level-select.png "$REPORT_DIR/level-select.png" >/dev/null 2>&1 || true
-          adb -s "$SERIAL" shell input tap 960 540
-          echo "Automated first-level launch taps sent; no gameplay controls or level data were modified." | tee "$REPORT_DIR/gameplay-input.txt"
+          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-level-select.png
+          adb -s "$SERIAL" pull /sdcard/dashcore-level-select.png "$REPORT_DIR/level-select.png" >/dev/null
+          # Attempt the selected level's centered Play control; retain screenshot for audit.
+          tap_image_xy "$REPORT_DIR/level-select.png" 824 463
+          echo "Automated first-level launch taps sent using screenshot-to-display scaling; no gameplay controls or level data were modified." | tee -a "$REPORT_DIR/gameplay-input.txt"
           sleep 30
           PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
           echo "Launcher PID after launch wait: ${PID:-not-running}" | tee -a "$REPORT_DIR/process.txt"
           adb -s "$SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat.txt"
           adb -s "$SERIAL" logcat -b crash -d -v threadtime > "$REPORT_DIR/crash-buffer.txt"
           adb -s "$SERIAL" shell dumpsys activity activities > "$REPORT_DIR/activities.txt" 2>&1 || true
-          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-autotest-v3.3.png >/dev/null 2>&1 || true
-          adb -s "$SERIAL" pull /sdcard/dashcore-autotest-v3.3.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1 || true
+          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-autotest-v3.4.png >/dev/null 2>&1 || true
+          adb -s "$SERIAL" pull /sdcard/dashcore-autotest-v3.4.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1 || true
           adb -s "$SERIAL" pull /sdcard/Android/media/com.geode.launcher/game/geode/logs "$REPORT_DIR/geode-logs" >/dev/null 2>&1 || true
           adb -s "$SERIAL" pull /sdcard/Android/media/com.geode.launcher/game/geode/logs "$REPORT_DIR/geode-logs-media" >/dev/null 2>&1 || true
 
@@ -301,7 +328,7 @@ jobs:
           fi
 
           {
-            echo "# DashCore AutoTest v3.3 — Gameplay Smoke Test"
+            echo "# DashCore AutoTest v3.4 — Gameplay Smoke Test"
             echo ""
             echo "**Overall result: $RESULT**"
             echo "- Android API: $SDK"
@@ -314,7 +341,7 @@ jobs:
             fi
             echo "- DashCore load in Geode logs: $MOD_LOAD"
             echo "- DashCore PlayLayer hooks: $GAMEPLAY_LAYER"
-            echo "- First-level launch: attempted via fixed emulator taps; verify screenshots and PlayLayer log markers."
+            echo "- First-level launch: attempted via screenshot-scaled emulator taps; verify screenshots and PlayLayer log markers."
             echo ""
             echo "## Scope and limits"
             echo "- Static .geode validation ran before device startup."
@@ -334,11 +361,11 @@ jobs:
             exit 1
           fi
 
-      - name: Upload AutoTest v3.3 reports
+      - name: Upload AutoTest v3.4 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-AutoTest-v3.3-${{ github.run_number }}
+          name: DashCore-AutoTest-v3.4-${{ github.run_number }}
           path: |
             reports/
             artifacts/
