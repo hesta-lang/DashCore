@@ -195,7 +195,7 @@ jobs:
           if [ "$GAME_APK_AVAILABLE" = "true" ]; then
             # Read the actual application ID and version from the APK itself.
             # Do not assume every authorized non-Play build uses the same package ID.
-            BADGING="$(aapt dump badging test-input/geometry-dash.apk)"
+            BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging test-input/geometry-dash.apk)"
             printf '%s\n' "$BADGING" > "$REPORT_DIR/game-apk-badging.txt"
             GAME_PACKAGE="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" | head -n 1)"
             GAME_VERSION="$(printf '%s\n' "$BADGING" | sed -n "s/^package:.*versionName='\\([^']*\\)'.*/\\1/p" | head -n 1)"
