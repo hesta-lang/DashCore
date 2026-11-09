@@ -54,7 +54,7 @@ Useful log entries include `SCENE-GRAPH`, `GPU-INPUT-CLASSIFICATION`, `OBJECT-GE
 - The probe remains read-only and still requires an active GL context. Its result is diagnostic only; it does not enable object culling.
 - Live culling remains hard-disabled, and no gameplay, rendering, or UI behavior is intentionally changed.
 
-## AutoTest v3.7 — gameplay smoke test
+## AutoTest v3.8 — gameplay smoke test
 
 - Installs the authorized Android Geometry Dash APK and the Geode launcher in an ARM-translated cloud emulator.
 - Stages DashCore in the launcher's actual Geode mods directory and confirms the mod appears in Geode's log.
@@ -67,4 +67,7 @@ Useful log entries include `SCENE-GRAPH`, `GPU-INPUT-CLASSIFICATION`, `OBJECT-GE
 DashCore is built for Android64 / arm64-v8a through GitHub Actions, targeting Geometry Dash 2.2081 and Geode 5.11.2.
 
 
-AutoTest v3.7 corrige el parser de PNG de v3.6: las secuencias de escape del encabezado PNG estaban duplicadas, lo que impedía validar las dimensiones de las capturas y bloqueaba los toques automatizados. La prueba vuelve a usar coordenadas de píxel de la captura, validadas antes de enviar cada toque.
+AutoTest v3.8 corrige el parser de PNG de v3.6: las secuencias de escape del encabezado PNG estaban duplicadas, lo que impedía validar las dimensiones de las capturas y bloqueaba los toques automatizados. La prueba vuelve a usar coordenadas de píxel de la captura, validadas antes de enviar cada toque.
+
+
+AutoTest v3.8 corrige las coordenadas de interacción en capturas 1920×1080. El artefacto v3.7 confirmó que el parser PNG ya funcionaba, pero las coordenadas usadas (824,681) y (824,800) correspondían a la vista reducida de la imagen, no a sus píxeles reales. Ahora se usan las coordenadas de captura (960,793) para el botón OK y (960,500) para Play.
