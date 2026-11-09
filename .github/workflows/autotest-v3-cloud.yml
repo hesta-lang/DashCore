@@ -1,4 +1,4 @@
-name: DashCore AutoTest v3.1 - Cloud Android Runtime
+name: DashCore AutoTest v3.2 - MediaFire APK Runtime
 
 on:
   workflow_run:
@@ -7,8 +7,8 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      geometry_dash_apk_url:
-        description: "HTTPS URL to your legitimate universal Geometry Dash APK. Can also be supplied as the GEOMETRY_DASH_APK_URL repository secret."
+      mediafire_url:
+        description: "MediaFire file-page URL for your authorized Geometry Dash APK. Can also be supplied as GEOMETRY_DASH_MEDIAFIRE_URL secret."
         required: false
         type: string
 
@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dashcore-autotest-v3.1-cloud
+  group: dashcore-autotest-v3.2-cloud
   cancel-in-progress: true
 
 jobs:
@@ -27,9 +27,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      GEOMETRY_DASH_APK_URL: ${{ inputs.geometry_dash_apk_url || secrets.GEOMETRY_DASH_APK_URL }}
+      GEOMETRY_DASH_MEDIAFIRE_URL: ${{ inputs.mediafire_url || secrets.GEOMETRY_DASH_MEDIAFIRE_URL }}
       PACKAGE_NAME: com.geode.launcher
-      REPORT_DIR: reports/autotest-v3.1
+      REPORT_DIR: reports/autotest-v3.2
     steps:
       - name: Checkout DashCore
         uses: actions/checkout@v4
@@ -115,17 +115,18 @@ jobs:
         id: apk
         run: |
           set -euo pipefail
-          mkdir -p test-input reports/autotest-v3.1
+          mkdir -p test-input reports/autotest-v3.2
           APK="$(find artifacts/launcher -type f -name 'geode-launcher-release-*.apk' ! -name '*android32*' -print -quit)"
           if [ -z "$APK" ]; then
             echo "::error::Universal Geode Launcher APK not found."
             exit 1
           fi
           cp "$APK" test-input/geode-launcher.apk
-          if [ -n "$GEOMETRY_DASH_APK_URL" ]; then
-            case "$GEOMETRY_DASH_APK_URL" in https://*) ;; *) echo "::error::Geometry Dash APK URL must use HTTPS."; exit 1 ;; esac
-            curl --fail --location --retry 3 --retry-all-errors "$GEOMETRY_DASH_APK_URL" -o test-input/geometry-dash.apk
-            test -s test-input/geometry-dash.apk
+          if [ -n "$GEOMETRY_DASH_MEDIAFIRE_URL" ]; then
+            python3 scripts/download_mediafire_apk.py \
+              --url "$GEOMETRY_DASH_MEDIAFIRE_URL" \
+              --output test-input/geometry-dash.apk \
+              --report reports/autotest-v3.2/mediafire-download.json
             echo "game_apk_available=true" >> "$GITHUB_OUTPUT"
           else
             echo "game_apk_available=false" >> "$GITHUB_OUTPUT"
@@ -141,7 +142,7 @@ jobs:
             model=Pixel2,version=30
           max-time-limit: 25m
           record-video: true
-          outputs-dir: reports/autotest-v3.1/cloud-session
+          outputs-dir: reports/autotest-v3.2/cloud-session
 
       - name: Install, stage mod and run runtime checks
         id: runtime
@@ -193,8 +194,13 @@ jobs:
             adb -s "$SERIAL" install -r test-input/geometry-dash.apk | tee "$REPORT_DIR/game-install.txt"
             if adb -s "$SERIAL" shell pm list packages | tr -d '\r' | grep -q 'com.robtopx.geometryjump'; then
               GAME_INSTALLED="true"
+              adb -s "$SERIAL" shell dumpsys package com.robtopx.geometryjump | grep -E 'versionName=|versionCode=' | tee "$REPORT_DIR/game-version.txt" || true
+              if ! grep -q 'versionName=2.2081' "$REPORT_DIR/game-version.txt"; then
+                echo "::error::Installed package is not confirmed as Geometry Dash 2.2081."
+                exit 1
+              fi
             else
-              echo "::error::APK installed, but package com.robtopx.geometryjump was not found. Check that the supplied file is the official universal Geometry Dash APK."
+              echo "::error::APK installed, but package com.robtopx.geometryjump was not found."
               exit 1
             fi
           fi
@@ -240,8 +246,8 @@ jobs:
           adb -s "$SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat.txt"
           adb -s "$SERIAL" logcat -b crash -d -v threadtime > "$REPORT_DIR/crash-buffer.txt"
           adb -s "$SERIAL" shell dumpsys activity activities > "$REPORT_DIR/activities.txt" 2>&1 || true
-          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-autotest-v3.1.png >/dev/null 2>&1 || true
-          adb -s "$SERIAL" pull /sdcard/dashcore-autotest-v3.1.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1 || true
+          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-autotest-v3.2.png >/dev/null 2>&1 || true
+          adb -s "$SERIAL" pull /sdcard/dashcore-autotest-v3.2.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1 || true
           adb -s "$SERIAL" pull /sdcard/Android/media/com.geode.launcher/game/geode/logs "$REPORT_DIR/geode-logs" >/dev/null 2>&1 || true
           adb -s "$SERIAL" pull /sdcard/Android/media/com.geode.launcher/game/geode/logs "$REPORT_DIR/geode-logs-media" >/dev/null 2>&1 || true
 
@@ -257,7 +263,7 @@ jobs:
           fi
 
           {
-            echo "# DashCore AutoTest v3.1 — Cloud Android Runtime"
+            echo "# DashCore AutoTest v3.2 — Cloud Android Runtime"
             echo ""
             echo "**Overall result: $RESULT**"
             echo "- Android API: $SDK"
@@ -271,7 +277,7 @@ jobs:
             echo "- Static .geode validation ran before device startup."
             echo "- Standard launcher base directory was resolved from source to Android/media; DashCore was staged directly in game/geode/mods."
             echo "- A DashCore load is counted only when its identifier appears in collected Geode logs."
-            echo "- Geometry Dash is installed only when a legitimate universal APK is supplied through workflow input or GEOMETRY_DASH_APK_URL secret."
+            echo "- Geometry Dash is installed only when a legitimate universal APK is supplied through workflow input or GEOMETRY_DASH_MEDIAFIRE_URL secret."
             echo "- Cloud x86_64 + ARM translation is not equivalent to the Huawei STK-LX3 / Mali-G51."
             echo "- No gameplay, trigger execution, frame pacing, or GPU performance claim is made."
           } | tee "$REPORT_DIR/summary.md"
@@ -282,11 +288,11 @@ jobs:
             exit 1
           fi
 
-      - name: Upload AutoTest v3.1 reports
+      - name: Upload AutoTest v3.2 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-AutoTest-v3.1-${{ github.run_number }}
+          name: DashCore-AutoTest-v3.2-${{ github.run_number }}
           path: |
             reports/
             artifacts/
