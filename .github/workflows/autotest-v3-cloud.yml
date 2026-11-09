@@ -1,4 +1,4 @@
-name: DashCore AutoTest v3.2 - MediaFire APK Runtime
+name: DashCore AutoTest v3.3 - Gameplay Smoke Test
 
 on:
   workflow_run:
@@ -18,19 +18,19 @@ permissions:
   contents: read
 
 concurrency:
-  group: dashcore-autotest-v3.2-cloud
+  group: dashcore-autotest-v3.3-cloud
   cancel-in-progress: true
 
 jobs:
   cloud-runtime:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
-    name: Install and inspect DashCore on ARM-translated Android 11
+    name: Launch Geometry Dash and verify DashCore gameplay hooks on ARM-translated Android
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
       GEOMETRY_DASH_MEDIAFIRE_URL: ${{ inputs.mediafire_url || secrets.GEOMETRY_DASH_MEDIAFIRE_URL || 'https://www.mediafire.com/file/o9rk5i69nmu0nci/Geometry+Dash_2.2081.apk/file' }}
       PACKAGE_NAME: com.geode.launcher
-      REPORT_DIR: reports/autotest-v3.2
+      REPORT_DIR: reports/autotest-v3.3
     steps:
       - name: Checkout DashCore
         uses: actions/checkout@v4
@@ -116,7 +116,7 @@ jobs:
         id: apk
         run: |
           set -euo pipefail
-          mkdir -p test-input reports/autotest-v3.2
+          mkdir -p test-input reports/autotest-v3.3
           APK="$(find artifacts/launcher -type f -name 'geode-launcher-release-*.apk' ! -name '*android32*' -print -quit)"
           if [ -z "$APK" ]; then
             echo "::error::Universal Geode Launcher APK not found."
@@ -127,7 +127,7 @@ jobs:
             python3 scripts/download_mediafire_apk.py \
               --url "$GEOMETRY_DASH_MEDIAFIRE_URL" \
               --output test-input/geometry-dash.apk \
-              --report reports/autotest-v3.2/mediafire-download.json
+              --report reports/autotest-v3.3/mediafire-download.json
             echo "game_apk_available=true" >> "$GITHUB_OUTPUT"
           else
             echo "game_apk_available=false" >> "$GITHUB_OUTPUT"
@@ -143,7 +143,7 @@ jobs:
             model=Pixel2,version=30
           max-time-limit: 25m
           record-video: true
-          outputs-dir: reports/autotest-v3.2/cloud-session
+          outputs-dir: reports/autotest-v3.3/cloud-session
 
       - name: Install, stage mod and run runtime checks
         id: runtime
@@ -258,30 +258,50 @@ jobs:
           adb -s "$SERIAL" shell test -s "$MODS/DashCore.geode"
           adb -s "$SERIAL" shell ls -l "$MODS" | tee -a "$REPORT_DIR/mod-stage.txt"
           adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "geode-launcher://main/launch" -p com.geode.launcher | tee -a "$REPORT_DIR/launcher-launch.txt" || true
-          sleep 25
+          # The first-run game build may show the Terms of Use notice. Dismiss
+          # its centered OK button, then open the built-in level browser.
+          sleep 8
+          adb -s "$SERIAL" shell input tap 960 680
+          sleep 8
+          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-main-menu.png >/dev/null 2>&1 || true
+          adb -s "$SERIAL" pull /sdcard/dashcore-main-menu.png "$REPORT_DIR/main-menu-after-notice.png" >/dev/null 2>&1 || true
+          # Geometry Dash's central main-menu Play button at the emulator's
+          # 1920x1080 resolution; then press the selected level's Play button.
+          adb -s "$SERIAL" shell input tap 820 800
+          sleep 6
+          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-level-select.png >/dev/null 2>&1 || true
+          adb -s "$SERIAL" pull /sdcard/dashcore-level-select.png "$REPORT_DIR/level-select.png" >/dev/null 2>&1 || true
+          adb -s "$SERIAL" shell input tap 960 540
+          echo "Automated first-level launch taps sent; no gameplay controls or level data were modified." | tee "$REPORT_DIR/gameplay-input.txt"
+          sleep 30
           PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
           echo "Launcher PID after launch wait: ${PID:-not-running}" | tee -a "$REPORT_DIR/process.txt"
           adb -s "$SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat.txt"
           adb -s "$SERIAL" logcat -b crash -d -v threadtime > "$REPORT_DIR/crash-buffer.txt"
           adb -s "$SERIAL" shell dumpsys activity activities > "$REPORT_DIR/activities.txt" 2>&1 || true
-          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-autotest-v3.2.png >/dev/null 2>&1 || true
-          adb -s "$SERIAL" pull /sdcard/dashcore-autotest-v3.2.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1 || true
+          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-autotest-v3.3.png >/dev/null 2>&1 || true
+          adb -s "$SERIAL" pull /sdcard/dashcore-autotest-v3.3.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1 || true
           adb -s "$SERIAL" pull /sdcard/Android/media/com.geode.launcher/game/geode/logs "$REPORT_DIR/geode-logs" >/dev/null 2>&1 || true
           adb -s "$SERIAL" pull /sdcard/Android/media/com.geode.launcher/game/geode/logs "$REPORT_DIR/geode-logs-media" >/dev/null 2>&1 || true
 
-          if [ -n "$PID" ] && grep -R -I -E 'hesta\.optgod|DashCore' "$REPORT_DIR"/geode-logs* >/dev/null 2>&1; then
-            RESULT="PASS"
+          MOD_LOAD="NOT CONFIRMED"
+          GAMEPLAY_LAYER="NOT CONFIRMED"
+          if grep -R -I -E 'hesta\.optgod|DashCore' "$REPORT_DIR"/geode-logs* >/dev/null 2>&1; then
             MOD_LOAD="CONFIRMED"
-          elif [ -z "$PID" ] || grep -E 'com\.geode\.launcher|com\.robtopx\.geometryjump' "$REPORT_DIR/crash-buffer.txt" | grep -Ei 'FATAL EXCEPTION|Fatal signal|SIGABRT|SIGSEGV|has died' >/dev/null; then
+          fi
+          if grep -R -I -E 'DashCore.*PlayLayer::init|DashCore.*setupHasCompleted' "$REPORT_DIR"/geode-logs* >/dev/null 2>&1; then
+            GAMEPLAY_LAYER="CONFIRMED"
+          fi
+          if [ -z "$PID" ] || grep -E 'com\.geode\.launcher|com\.robtopx\.geometryjump' "$REPORT_DIR/crash-buffer.txt" | grep -Ei 'FATAL EXCEPTION|Fatal signal|SIGABRT|SIGSEGV|has died' >/dev/null; then
             RESULT="FAIL"
-            MOD_LOAD="NOT CONFIRMED"
+          elif [ "$MOD_LOAD" = "CONFIRMED" ] && [ "$GAMEPLAY_LAYER" = "CONFIRMED" ]; then
+            RESULT="PASS"
           else
             RESULT="INCONCLUSIVE"
-            MOD_LOAD="NOT CONFIRMED"
           fi
 
           {
-            echo "# DashCore AutoTest v3.2 — Cloud Android Runtime"
+            echo "# DashCore AutoTest v3.3 — Gameplay Smoke Test"
             echo ""
             echo "**Overall result: $RESULT**"
             echo "- Android API: $SDK"
@@ -293,6 +313,8 @@ jobs:
               echo "- Android APK versionName: $GAME_VERSION (mobile 2.2.144 / 2.208; exact desktop 2.2081 parity not asserted)"
             fi
             echo "- DashCore load in Geode logs: $MOD_LOAD"
+            echo "- DashCore PlayLayer hooks: $GAMEPLAY_LAYER"
+            echo "- First-level launch: attempted via fixed emulator taps; verify screenshots and PlayLayer log markers."
             echo ""
             echo "## Scope and limits"
             echo "- Static .geode validation ran before device startup."
@@ -300,20 +322,23 @@ jobs:
             echo "- A DashCore load is counted only when its identifier appears in collected Geode logs."
             echo "- Geometry Dash is installed only when a legitimate universal APK is supplied through workflow input or GEOMETRY_DASH_MEDIAFIRE_URL secret."
             echo "- Cloud x86_64 + ARM translation is not equivalent to the Huawei STK-LX3 / Mali-G51."
-            echo "- No gameplay, trigger execution, frame pacing, or GPU performance claim is made."
+            echo "- A PASS requires DashCore's PlayLayer::init or setupHasCompleted hook to appear in the Geode log."
+            echo "- Automated taps only dismiss the first-run notice and attempt to open the first built-in level; they do not validate full gameplay or trigger behavior."
+            echo "- No frame-pacing or GPU-performance claim is made."
           } | tee "$REPORT_DIR/summary.md"
           echo "result=$RESULT" >> "$GITHUB_OUTPUT"
           echo "mod_load=$MOD_LOAD" >> "$GITHUB_OUTPUT"
+          echo "gameplay_layer=$GAMEPLAY_LAYER" >> "$GITHUB_OUTPUT"
           if [ "$RESULT" = "FAIL" ]; then
             echo "::error::Launcher process failed or a crash signature was detected."
             exit 1
           fi
 
-      - name: Upload AutoTest v3.2 reports
+      - name: Upload AutoTest v3.3 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-AutoTest-v3.2-${{ github.run_number }}
+          name: DashCore-AutoTest-v3.3-${{ github.run_number }}
           path: |
             reports/
             artifacts/
