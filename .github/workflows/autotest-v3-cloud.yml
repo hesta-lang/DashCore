@@ -297,6 +297,5 @@ jobs:
           path: |
             reports/
             artifacts/
-            test-input/
           if-no-files-found: warn
           retention-days: 30
