@@ -12,7 +12,6 @@ import zipfile
 from pathlib import Path
 
 EXPECTED_ID = "hesta.optgod"
-EXPECTED_MOD_VERSION = "0.8.5-alpha"
 EXPECTED_GEODE = "5.11.2"
 EXPECTED_GD_ANDROID = "2.2081"
 EXPECTED_ABI_MACHINE = 183  # ELF e_machine: EM_AARCH64
@@ -44,6 +43,16 @@ def main() -> int:
 
     metadata: dict = {}
     elf_files: list[dict] = []
+    expected_manifest: dict = {}
+    source_manifest = Path("mod.json")
+    if source_manifest.is_file():
+        try:
+            expected_manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
+            print(f"[OK] Source manifest loaded: version {expected_manifest.get('version', '<missing>')}")
+        except Exception as exc:
+            fail(f"Could not parse repository mod.json: {exc}", errors)
+    else:
+        fail("Repository mod.json not found; cannot verify package version against source", errors)
     package_sha256 = None
 
     if package is not None:
@@ -106,11 +115,17 @@ def main() -> int:
         else:
             fail(f"Unexpected mod ID: {metadata.get('id')!r}", errors)
 
-        if metadata.get("version") == EXPECTED_MOD_VERSION:
-            checks.append(f"Mod version matches {EXPECTED_MOD_VERSION}")
-            print("[OK] Mod version")
+        expected_version = expected_manifest.get("version")
+        package_version = metadata.get("version")
+        if expected_version and package_version == expected_version:
+            checks.append(f"Mod version matches repository manifest ({expected_version})")
+            print(f"[OK] Mod version matches source: {expected_version}")
         else:
-            fail(f"Expected mod version {EXPECTED_MOD_VERSION}, got {metadata.get('version')!r}", errors)
+            fail(
+                "Package version does not match repository mod.json: "
+                f"expected {expected_version!r}, got {package_version!r}",
+                errors,
+            )
 
         if metadata.get("geode") == EXPECTED_GEODE:
             checks.append(f"Geode loader target matches {EXPECTED_GEODE}")
@@ -153,7 +168,7 @@ def main() -> int:
         "sha256": package_sha256,
         "expected": {
             "mod_id": EXPECTED_ID,
-            "mod_version": EXPECTED_MOD_VERSION,
+            "mod_version": expected_manifest.get("version"),
             "geode": EXPECTED_GEODE,
             "gd_android": EXPECTED_GD_ANDROID,
             "native_elf_machine": EXPECTED_ABI_MACHINE,
