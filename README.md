@@ -54,6 +54,14 @@ Useful log entries include `SCENE-GRAPH`, `GPU-INPUT-CLASSIFICATION`, `OBJECT-GE
 - The probe remains read-only and still requires an active GL context. Its result is diagnostic only; it does not enable object culling.
 - Live culling remains hard-disabled, and no gameplay, rendering, or UI behavior is intentionally changed.
 
+## AutoTest v3.3 — gameplay smoke test
+
+- Installs the authorized Android Geometry Dash APK and the Geode launcher in an ARM-translated cloud emulator.
+- Stages DashCore in the launcher's actual Geode mods directory and confirms the mod appears in Geode's log.
+- Dismisses the first-run Terms notice, attempts to open the built-in first level, and captures the main-menu, level-select, and final screenshots.
+- A runtime PASS requires DashCore's `PlayLayer::init` or `setupHasCompleted` hook to appear in the collected Geode log. If the game remains open but no gameplay hook appears, the result is INCONCLUSIVE rather than a false PASS.
+- This is a cloud smoke test, not a substitute for physical-device playtesting on the Huawei STK-LX3 / Mali-G51. Live culling remains hard-disabled.
+
 ## Build target
 
 DashCore is built for Android64 / arm64-v8a through GitHub Actions, targeting Geometry Dash 2.2081 and Geode 5.11.2.
