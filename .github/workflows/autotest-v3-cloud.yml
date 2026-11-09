@@ -1,4 +1,4 @@
-name: DashCore AutoTest v3 - Cloud Android Runtime
+name: DashCore AutoTest v3.1 - Cloud Android Runtime
 
 on:
   workflow_run:
@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dashcore-autotest-v3-cloud
+  group: dashcore-autotest-v3.1-cloud
   cancel-in-progress: true
 
 jobs:
@@ -29,7 +29,7 @@ jobs:
     env:
       GEOMETRY_DASH_APK_URL: ${{ inputs.geometry_dash_apk_url }}
       PACKAGE_NAME: com.geode.launcher
-      REPORT_DIR: reports/autotest-v3
+      REPORT_DIR: reports/autotest-v3.1
     steps:
       - name: Checkout DashCore
         uses: actions/checkout@v4
@@ -115,7 +115,7 @@ jobs:
         id: apk
         run: |
           set -euo pipefail
-          mkdir -p test-input reports/autotest-v3
+          mkdir -p test-input reports/autotest-v3.1
           APK="$(find artifacts/launcher -type f -name 'geode-launcher-release-*.apk' ! -name '*android32*' -print -quit)"
           if [ -z "$APK" ]; then
             echo "::error::Universal Geode Launcher APK not found."
@@ -141,7 +141,7 @@ jobs:
             model=Pixel2,version=30
           max-time-limit: 25m
           record-video: true
-          outputs-dir: reports/autotest-v3/cloud-session
+          outputs-dir: reports/autotest-v3.1/cloud-session
 
       - name: Install, stage mod and run runtime checks
         id: runtime
@@ -240,8 +240,8 @@ jobs:
           adb -s "$SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat.txt"
           adb -s "$SERIAL" logcat -b crash -d -v threadtime > "$REPORT_DIR/crash-buffer.txt"
           adb -s "$SERIAL" shell dumpsys activity activities > "$REPORT_DIR/activities.txt" 2>&1 || true
-          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-autotest-v3.png >/dev/null 2>&1 || true
-          adb -s "$SERIAL" pull /sdcard/dashcore-autotest-v3.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1 || true
+          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-autotest-v3.1.png >/dev/null 2>&1 || true
+          adb -s "$SERIAL" pull /sdcard/dashcore-autotest-v3.1.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1 || true
           adb -s "$SERIAL" pull /sdcard/Android/media/com.geode.launcher/game/geode/logs "$REPORT_DIR/geode-logs" >/dev/null 2>&1 || true
           adb -s "$SERIAL" pull /sdcard/Android/media/com.geode.launcher/game/geode/logs "$REPORT_DIR/geode-logs-media" >/dev/null 2>&1 || true
 
@@ -257,7 +257,7 @@ jobs:
           fi
 
           {
-            echo "# DashCore AutoTest v3 — Cloud Android Runtime"
+            echo "# DashCore AutoTest v3.1 — Cloud Android Runtime"
             echo ""
             echo "**Overall result: $RESULT**"
             echo "- Android API: $SDK"
@@ -282,11 +282,11 @@ jobs:
             exit 1
           fi
 
-      - name: Upload AutoTest v3 reports
+      - name: Upload AutoTest v3.1 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-AutoTest-v3-${{ github.run_number }}
+          name: DashCore-AutoTest-v3.1-${{ github.run_number }}
           path: |
             reports/
             artifacts/
