@@ -40,9 +40,7 @@ jobs:
       - name: Prepare Android platform tools
         uses: android-actions/setup-android@v3
         with:
-          packages: |
-            platform-tools
-            build-tools;35.0.0
+          packages: 'platform-tools build-tools;35.0.0'
 
       - name: Select DashCore build artifact
         id: build
