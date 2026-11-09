@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       geometry_dash_apk_url:
-        description: "Optional HTTPS URL to your legitimate Geometry Dash universal APK (not a split APK). Leave empty for launcher-only smoke test."
+        description: "HTTPS URL to your legitimate universal Geometry Dash APK. Can also be supplied as the GEOMETRY_DASH_APK_URL repository secret."
         required: false
         type: string
 
@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      GEOMETRY_DASH_APK_URL: ${{ inputs.geometry_dash_apk_url }}
+      GEOMETRY_DASH_APK_URL: ${{ inputs.geometry_dash_apk_url || secrets.GEOMETRY_DASH_APK_URL }}
       PACKAGE_NAME: com.geode.launcher
       REPORT_DIR: reports/autotest-v3.1
     steps:
@@ -271,7 +271,7 @@ jobs:
             echo "- Static .geode validation ran before device startup."
             echo "- Standard launcher base directory was resolved from source to Android/media; DashCore was staged directly in game/geode/mods."
             echo "- A DashCore load is counted only when its identifier appears in collected Geode logs."
-            echo "- Without a user-supplied legitimate Geometry Dash APK, this is a launcher/mod-staging smoke test only; it cannot confirm mod loading."
+            echo "- Geometry Dash is installed only when a legitimate universal APK is supplied through workflow input or GEOMETRY_DASH_APK_URL secret."
             echo "- Cloud x86_64 + ARM translation is not equivalent to the Huawei STK-LX3 / Mali-G51."
             echo "- No gameplay, trigger execution, frame pacing, or GPU performance claim is made."
           } | tee "$REPORT_DIR/summary.md"
