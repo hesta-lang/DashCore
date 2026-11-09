@@ -40,7 +40,7 @@ jobs:
       - name: Prepare Android platform tools
         uses: android-actions/setup-android@v3
         with:
-          packages: platform-tools
+          packages: platform-tools, build-tools;35.0.0
 
       - name: Select DashCore build artifact
         id: build
@@ -191,17 +191,30 @@ jobs:
           adb -s "$SERIAL" shell pm path com.geode.launcher | tee -a "$REPORT_DIR/launcher-install.txt"
 
           GAME_INSTALLED="false"
+          GAME_PACKAGE=""
           if [ "$GAME_APK_AVAILABLE" = "true" ]; then
+            # Read the actual application ID and version from the APK itself.
+            # Do not assume every authorized non-Play build uses the same package ID.
+            BADGING="$(aapt dump badging test-input/geometry-dash.apk)"
+            printf '%s\n' "$BADGING" > "$REPORT_DIR/game-apk-badging.txt"
+            GAME_PACKAGE="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" | head -n 1)"
+            GAME_VERSION="$(printf '%s\n' "$BADGING" | sed -n "s/^package:.*versionName='\\([^']*\\)'.*/\\1/p" | head -n 1)"
+            if [ -z "$GAME_PACKAGE" ]; then
+              echo "::error::Could not read the APK application ID."
+              exit 1
+            fi
+            echo "APK application ID: $GAME_PACKAGE" | tee "$REPORT_DIR/game-package.txt"
+            echo "APK versionName: ${GAME_VERSION:-not declared}" | tee "$REPORT_DIR/game-version.txt"
+            if [ "$GAME_VERSION" != "2.2081" ]; then
+              echo "::error::APK versionName is not 2.2081 (found: ${GAME_VERSION:-empty})."
+              exit 1
+            fi
             adb -s "$SERIAL" install -r test-input/geometry-dash.apk | tee "$REPORT_DIR/game-install.txt"
-            if adb -s "$SERIAL" shell pm list packages | tr -d '\r' | grep -q 'com.robtopx.geometryjump'; then
+            if adb -s "$SERIAL" shell pm path "$GAME_PACKAGE" | grep -q '^package:'; then
               GAME_INSTALLED="true"
-              adb -s "$SERIAL" shell dumpsys package com.robtopx.geometryjump | grep -E 'versionName=|versionCode=' | tee "$REPORT_DIR/game-version.txt" || true
-              if ! grep -q 'versionName=2.2081' "$REPORT_DIR/game-version.txt"; then
-                echo "::error::Installed package is not confirmed as Geometry Dash 2.2081."
-                exit 1
-              fi
+              adb -s "$SERIAL" shell dumpsys package "$GAME_PACKAGE" | grep -E 'versionName=|versionCode=' | tee -a "$REPORT_DIR/game-version.txt" || true
             else
-              echo "::error::APK installed, but package com.robtopx.geometryjump was not found."
+              echo "::error::APK installation completed but Package Manager cannot resolve $GAME_PACKAGE."
               exit 1
             fi
           fi
