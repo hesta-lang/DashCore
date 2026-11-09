@@ -200,35 +200,38 @@ jobs:
           fi
           echo "Geometry Dash installed: $GAME_INSTALLED" | tee "$REPORT_DIR/game-status.txt"
 
-          # Launch once first: Android 11 app-specific external directories must be
-          # initialized by the owning app before any test-side staging attempt.
-          adb -s "$SERIAL" logcat -c
-          adb -s "$SERIAL" shell monkey -p com.geode.launcher -c android.intent.category.LAUNCHER 1 | tee "$REPORT_DIR/launcher-first-run.txt"
-          sleep 10
-          PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
-          echo "Launcher PID after first run: ${PID:-not-running}" | tee "$REPORT_DIR/process.txt"
+          # The standard launcher build does NOT use Android/data. Its
+          # LaunchUtils.getBaseDirectory() resolves to context.externalMediaDirs.first(),
+          # which is /sdcard/Android/media/<package> on this device. Stage directly
+          # into Geode's real mods directory; do not create a symlink.
+          PID_BEFORE="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\\r' || true)"
+          if [ -z "$PID_BEFORE" ]; then
+            adb -s "$SERIAL" shell monkey -p com.geode.launcher -c android.intent.category.LAUNCHER 1 | tee "$REPORT_DIR/launcher-first-run.txt"
+            sleep 10
+          fi
+          PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\\r' || true)"
+          echo "Launcher PID before staging: ${PID:-not-running}" | tee "$REPORT_DIR/process.txt"
           adb -s "$SERIAL" shell dumpsys package com.geode.launcher | grep -E 'flags=|pkgFlags=' > "$REPORT_DIR/launcher-package-flags.txt" || true
 
-          # Keep staging inside the launcher's app-specific storage. If Android 11
-          # still denies shell access, fail with a precise diagnostic instead of
-          # misclassifying it as a DashCore or APK failure.
-          STAGING="/sdcard/Android/data/com.geode.launcher/files/game/DashCore"
-          MODS="/sdcard/Android/data/com.geode.launcher/files/game/geode/mods"
+          # The downloaded APK is the standard (non-Google-Play) universal release.
+          # Source: LaunchUtils.getBaseDirectory(): context.externalMediaDirs.first().
+          BASE_DIR="/sdcard/Android/media/com.geode.launcher"
+          MODS="$BASE_DIR/game/geode/mods"
           MOD="$(find artifacts/mod -type f -name '*.geode' -print -quit)"
           [ -n "$MOD" ] || { echo "::error::DashCore .geode artifact missing."; exit 1; }
-          if ! adb -s "$SERIAL" shell mkdir -p "$STAGING" 2> "$REPORT_DIR/storage-error.txt"; then
+          mkdir -p "$REPORT_DIR"
+          if ! adb -s "$SERIAL" shell mkdir -p "$MODS" 2> "$REPORT_DIR/storage-error.txt"; then
             {
-              echo "Android 11 blocked adb shell from creating the launcher's app-specific external directory."
-              echo "The launcher was started first to initialize its own getExternalFilesDir()."
-              echo "This is a device/storage boundary; no mod installation or runtime load was attempted."
+              echo "Unable to create Geode mods directory under Android/media."
+              echo "Expected launcher base directory: $BASE_DIR"
+              echo "Launcher standard build uses externalMediaDirs.first(), not Android/data."
+              echo "No mod load was attempted."
             } | tee "$REPORT_DIR/storage-blocked.txt"
-            echo "::error::Cannot stage DashCore: adb shell lacks access to Android/data/com.geode.launcher."
+            echo "::error::Cannot stage DashCore in the launcher's Android/media Geode mods directory."
             exit 1
           fi
-          adb -s "$SERIAL" push "$MOD" "$STAGING/DashCore.geode" | tee "$REPORT_DIR/mod-stage.txt"
-          adb -s "$SERIAL" shell rm -rf "$MODS"
-          adb -s "$SERIAL" shell ln -s "../../DashCore" "$MODS"
-          adb -s "$SERIAL" shell test -f "$MODS/DashCore.geode"
+          adb -s "$SERIAL" push "$MOD" "$MODS/DashCore.geode" | tee "$REPORT_DIR/mod-stage.txt"
+          adb -s "$SERIAL" shell test -s "$MODS/DashCore.geode"
           adb -s "$SERIAL" shell ls -l "$MODS" | tee -a "$REPORT_DIR/mod-stage.txt"
           adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "geode-launcher://main/launch" -p com.geode.launcher | tee -a "$REPORT_DIR/launcher-launch.txt" || true
           sleep 25
@@ -239,7 +242,7 @@ jobs:
           adb -s "$SERIAL" shell dumpsys activity activities > "$REPORT_DIR/activities.txt" 2>&1 || true
           adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-autotest-v3.png >/dev/null 2>&1 || true
           adb -s "$SERIAL" pull /sdcard/dashcore-autotest-v3.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1 || true
-          adb -s "$SERIAL" pull /sdcard/Android/data/com.geode.launcher/files/game/geode/logs "$REPORT_DIR/geode-logs" >/dev/null 2>&1 || true
+          adb -s "$SERIAL" pull /sdcard/Android/media/com.geode.launcher/game/geode/logs "$REPORT_DIR/geode-logs" >/dev/null 2>&1 || true
           adb -s "$SERIAL" pull /sdcard/Android/media/com.geode.launcher/game/geode/logs "$REPORT_DIR/geode-logs-media" >/dev/null 2>&1 || true
 
           if [ -n "$PID" ] && grep -R -I -E 'hesta\.optgod|DashCore' "$REPORT_DIR"/geode-logs* >/dev/null 2>&1; then
@@ -266,7 +269,7 @@ jobs:
             echo ""
             echo "## Scope and limits"
             echo "- Static .geode validation ran before device startup."
-            echo "- ARM64 launcher installation and launch were attempted on Android 11/API 30."
+            echo "- Standard launcher base directory was resolved from source to Android/media; DashCore was staged directly in game/geode/mods."
             echo "- A DashCore load is counted only when its identifier appears in collected Geode logs."
             echo "- Without a user-supplied legitimate Geometry Dash APK, this is a launcher/mod-staging smoke test only; it cannot confirm mod loading."
             echo "- Cloud x86_64 + ARM translation is not equivalent to the Huawei STK-LX3 / Mali-G51."
