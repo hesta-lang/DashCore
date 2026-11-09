@@ -10,6 +10,7 @@ on:
       mediafire_url:
         description: "MediaFire file-page URL for your authorized Geometry Dash APK. Can also be supplied as GEOMETRY_DASH_MEDIAFIRE_URL secret."
         required: false
+        default: "https://www.mediafire.com/file/o9rk5i69nmu0nci/Geometry+Dash_2.2081.apk/file"
         type: string
 
 permissions:
