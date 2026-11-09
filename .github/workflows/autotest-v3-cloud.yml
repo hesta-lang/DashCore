@@ -200,23 +200,36 @@ jobs:
           fi
           echo "Geometry Dash installed: $GAME_INSTALLED" | tee "$REPORT_DIR/game-status.txt"
 
-          # Keep staging and Geode's mods path within the launcher's app-specific storage.
+          # Launch once first: Android 11 app-specific external directories must be
+          # initialized by the owning app before any test-side staging attempt.
+          adb -s "$SERIAL" logcat -c
+          adb -s "$SERIAL" shell monkey -p com.geode.launcher -c android.intent.category.LAUNCHER 1 | tee "$REPORT_DIR/launcher-first-run.txt"
+          sleep 10
+          PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
+          echo "Launcher PID after first run: ${PID:-not-running}" | tee "$REPORT_DIR/process.txt"
+          adb -s "$SERIAL" shell dumpsys package com.geode.launcher | grep -E 'flags=|pkgFlags=' > "$REPORT_DIR/launcher-package-flags.txt" || true
+
+          # Keep staging inside the launcher's app-specific storage. If Android 11
+          # still denies shell access, fail with a precise diagnostic instead of
+          # misclassifying it as a DashCore or APK failure.
           STAGING="/sdcard/Android/data/com.geode.launcher/files/game/DashCore"
           MODS="/sdcard/Android/data/com.geode.launcher/files/game/geode/mods"
           MOD="$(find artifacts/mod -type f -name '*.geode' -print -quit)"
           [ -n "$MOD" ] || { echo "::error::DashCore .geode artifact missing."; exit 1; }
-          adb -s "$SERIAL" shell mkdir -p "$STAGING"
+          if ! adb -s "$SERIAL" shell mkdir -p "$STAGING" 2> "$REPORT_DIR/storage-error.txt"; then
+            {
+              echo "Android 11 blocked adb shell from creating the launcher's app-specific external directory."
+              echo "The launcher was started first to initialize its own getExternalFilesDir()."
+              echo "This is a device/storage boundary; no mod installation or runtime load was attempted."
+            } | tee "$REPORT_DIR/storage-blocked.txt"
+            echo "::error::Cannot stage DashCore: adb shell lacks access to Android/data/com.geode.launcher."
+            exit 1
+          fi
           adb -s "$SERIAL" push "$MOD" "$STAGING/DashCore.geode" | tee "$REPORT_DIR/mod-stage.txt"
           adb -s "$SERIAL" shell rm -rf "$MODS"
           adb -s "$SERIAL" shell ln -s "../../DashCore" "$MODS"
           adb -s "$SERIAL" shell test -f "$MODS/DashCore.geode"
           adb -s "$SERIAL" shell ls -l "$MODS" | tee -a "$REPORT_DIR/mod-stage.txt"
-
-          adb -s "$SERIAL" logcat -c
-          adb -s "$SERIAL" shell monkey -p com.geode.launcher -c android.intent.category.LAUNCHER 1 | tee "$REPORT_DIR/launcher-launch.txt"
-          sleep 8
-          PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
-          echo "Launcher PID after startup: ${PID:-not-running}" | tee "$REPORT_DIR/process.txt"
           adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "geode-launcher://main/launch" -p com.geode.launcher | tee -a "$REPORT_DIR/launcher-launch.txt" || true
           sleep 25
           PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
