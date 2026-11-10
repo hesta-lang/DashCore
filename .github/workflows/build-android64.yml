@@ -3,7 +3,18 @@ name: Build OptGod (Android64)
 on:
   push:
     branches: ["**"]
+    # The .geode artifact is unchanged by documentation-only edits.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
   workflow_dispatch:
+
+# Avoid spending free Actions minutes on obsolete builds from the same branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
