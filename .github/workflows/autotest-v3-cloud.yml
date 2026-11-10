@@ -1,5 +1,5 @@
 
-name: DashCore AutoTest v4.3 - Fast-Path A/B Comparison
+name: DashCore AutoTest - FPS Without Mod vs With DashCore
 
 on:
   workflow_run:
@@ -19,18 +19,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: dashcore-autotest-v4.3-ab
+  group: dashcore-autotest-fps
   cancel-in-progress: true
 
 jobs:
   cloud-runtime:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
-    name: Compare DashCore fast path OFF vs ON on the same Android device
+    name: Measure FPS without DashCore and with DashCore on the same Android device
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       GEOMETRY_DASH_MEDIAFIRE_URL: ${{ inputs.mediafire_url || secrets.GEOMETRY_DASH_MEDIAFIRE_URL || 'https://www.mediafire.com/file/o9rk5i69nmu0nci/Geometry+Dash_2.2081.apk/file' }}
-      REPORT_DIR: reports/autotest-v4.3
+      REPORT_DIR: reports/autotest-fps
     steps:
       - name: Select DashCore build artifact and exact source revision
         id: build
@@ -148,7 +148,7 @@ jobs:
             model=Pixel2,version=30
           max-time-limit: 25m
           record-video: true
-          outputs-dir: reports/autotest-v4.3/cloud-session
+          outputs-dir: reports/autotest-fps/cloud-session
 
       - name: Install APKs and prepare the test device
         id: device
@@ -197,7 +197,7 @@ jobs:
       - name: Install benchmark image reader
         run: python3 -m pip install --disable-pip-version-check pillow
 
-      - name: Run paired fast-path OFF/ON benchmark
+      - name: Run baseline vs DashCore FPS benchmark
         env:
           SERIAL: ${{ steps.device.outputs.serial }}
         run: |
@@ -214,7 +214,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-AutoTest-v4.3-${{ github.run_number }}
+          name: DashCore-FPS-Benchmark-${{ github.run_number }}
           path: |
             reports/
             artifacts/
