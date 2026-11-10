@@ -233,7 +233,7 @@ def tap_notice_confirmation(serial: str, screenshot_path: pathlib.Path) -> tuple
     # the NOTICE dialog's green OK button is centered at 50% width and 76% height.
     with Image.open(screenshot_path) as frame:
         width, height = frame.size
-    x, y = round(width * 0.50), round(height * 0.76)
+    x, y = round(width * 0.50), round(height * 0.63)
     shell(serial, f"input tap {x} {y}", check=False)
     return x, y
 
