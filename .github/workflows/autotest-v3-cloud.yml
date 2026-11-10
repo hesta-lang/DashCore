@@ -226,8 +226,14 @@ jobs:
           ImageDraw.Draw(notice).rectangle((880, 752, 1040, 832), fill=(89, 220, 29))
           center = module.detect_notice_ok_button(notice)
           assert center is not None and abs(center[0] - 960) <= 3 and abs(center[1] - 792) <= 3, center
+          landscape_tap = module.map_screenshot_point_to_input(960, 792, 1920, 1080, 1080, 1920)
+          assert landscape_tap == (960, 792, 1920, 1080), landscape_tap
+          portrait_tap = module.map_screenshot_point_to_input(540, 960, 1080, 1920, 1080, 1920)
+          assert portrait_tap == (540, 960, 1080, 1920), portrait_tap
           print("SurfaceFlinger timestamp parser self-test passed.")
           print(f"Geometry Dash NOTICE button detector self-test passed: {center}.")
+          print(f"Landscape ADB input coordinate mapping self-test passed: {landscape_tap}.")
+          print(f"Portrait ADB input coordinate mapping self-test passed: {portrait_tap}.")
           PY
 
       - name: Run baseline vs DashCore FPS benchmark
