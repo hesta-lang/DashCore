@@ -226,6 +226,8 @@ jobs:
           ImageDraw.Draw(notice).rectangle((880, 752, 1040, 832), fill=(89, 220, 29))
           center = module.detect_notice_ok_button(notice)
           assert center is not None and abs(center[0] - 960) <= 3 and abs(center[1] - 792) <= 3, center
+          assert module.is_main_menu_text("character select level editor\\nDownload mods here!") is True
+          assert module.is_main_menu_text("geomenrs) drs\\nales\\nsone oe\\n©googod &.") is False
           wm_size = module.parse_wm_size("Physical size: 1080x1920\\n", 1920, 1080)
           assert wm_size == (1080, 1920), wm_size
           landscape_tap = module.map_screenshot_point_to_input(960, 792, 1920, 1080, *wm_size)
