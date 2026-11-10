@@ -206,6 +206,7 @@ jobs:
           python3 -m py_compile scripts/autotest_ab.py
           python3 - <<'PY'
           import importlib.util
+          from PIL import Image, ImageDraw
           spec = importlib.util.spec_from_file_location("autotest_ab", "scripts/autotest_ab.py")
           module = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(module)
@@ -221,7 +222,12 @@ jobs:
               "16666667\\n" + "\n".join([f"{2**63-1} {2**63-1} {2**63-1}"] * 20)
           )
           assert invalid.get("available") is False, invalid
+          notice = Image.new("RGB", (1920, 1080), (12, 40, 10))
+          ImageDraw.Draw(notice).rectangle((880, 752, 1040, 832), fill=(89, 220, 29))
+          center = module.detect_notice_ok_button(notice)
+          assert center is not None and abs(center[0] - 960) <= 3 and abs(center[1] - 792) <= 3, center
           print("SurfaceFlinger timestamp parser self-test passed.")
+          print(f"Geometry Dash NOTICE button detector self-test passed: {center}.")
           PY
 
       - name: Run baseline vs DashCore FPS benchmark
