@@ -96,9 +96,11 @@ def parse_surfaceflinger_latency(text: str) -> dict[str, Any]:
             stamp = int(fields[1])
         except ValueError:
             continue
-        if stamp > 0: present_ns.append(stamp)
+        # SurfaceFlinger uses INT64_MAX as an invalid/unavailable timestamp.
+        if 0 < stamp < (2**63 - 1): present_ns.append(stamp)
     present_ns = sorted(set(present_ns))
-    intervals = [(b-a)/1_000_000.0 for a, b in zip(present_ns, present_ns[1:]) if b > a]
+    intervals = [(b-a)/1_000_000.0 for a, b in zip(present_ns, present_ns[1:])
+                 if b > a and 0.1 <= (b-a)/1_000_000.0 <= 1000.0]
     if len(intervals) < 10:
         return {"available": False, "reason": f"Insufficient SurfaceFlinger frames ({len(intervals)} intervals)",
                 "frame_count": len(present_ns), "refresh_period_ns": refresh_ns}
@@ -195,19 +197,49 @@ echo "STAT_AFTER=$STAT_AFTER"
                 "tap_count": int(markers.get("TAP_COUNT", "0"))}
     except (KeyError, ValueError): return {"available": False, "reason": "Could not parse device process samples"}
 
-def notice_is_visible(path: pathlib.Path) -> bool:
-    image = Image.open(path).convert("RGB")
-    width, height = image.size
-    # The initial consent dialog has a bright green OK button centered at ~50% x, 73% y.
-    x0, x1 = int(width * 0.44), int(width * 0.56)
-    y0, y1 = int(height * 0.69), int(height * 0.79)
-    green = 0
-    for y in range(y0, y1, 2):
-        for x in range(x0, x1, 2):
-            r, g, b = image.getpixel((x, y))
-            if g > 150 and r < 155 and b < 120:
-                green += 1
-    return green > 80
+def screenshot_text(path: pathlib.Path) -> str:
+    """OCR a screenshot; tesseract is installed by the workflow."""
+    try:
+        proc = subprocess.run(["tesseract", str(path), "stdout", "--psm", "6"],
+                              text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              timeout=20)
+        return proc.stdout.casefold() if proc.returncode == 0 else ""
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return ""
+
+def take_state_screenshot(serial: str, mode: str, label: str, destination: pathlib.Path) -> str:
+    screenshot(serial, f"dashcore-{mode.lower()}-{label}.png", destination)
+    text = screenshot_text(destination)
+    (destination.parent / f"{label}-ocr.txt").write_text(text + "\n")
+    return text
+
+def wait_for_state(serial: str, mode: str, label: str, destination: pathlib.Path,
+                   predicate, timeout_s: int = 60, interval_s: float = 2.0) -> str:
+    deadline = time.monotonic() + timeout_s
+    last_text = ""
+    attempt = 0
+    while time.monotonic() < deadline:
+        attempt += 1
+        last_text = take_state_screenshot(serial, mode, f"{label}-{attempt}", destination)
+        if predicate(last_text):
+            screenshot(serial, f"dashcore-{mode.lower()}-{label}-confirmed.png", destination)
+            (destination.parent / f"{label}-confirmed-ocr.txt").write_text(last_text + "\n")
+            return last_text
+        time.sleep(interval_s)
+    raise RuntimeError(f"{mode}: timed out waiting for {label}; last OCR text: {last_text[:500]!r}")
+
+def wait_for_notice_dismissal(serial: str, mode: str, variant_dir: pathlib.Path) -> None:
+    deadline = time.monotonic() + 45
+    attempt = 0
+    while time.monotonic() < deadline:
+        attempt += 1
+        path = variant_dir / f"notice-poll-{attempt}.png"
+        text = take_state_screenshot(serial, mode, f"notice-poll-{attempt}", path)
+        if "notice" not in text and "terms of use" not in text:
+            return
+        shell(serial, "input tap 960 790", check=False)
+        time.sleep(1.5)
+    raise RuntimeError(f"{mode}: NOTICE / Terms of Use dialog did not close.")
 
 def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[str, Any]:
     serial, base = args.serial, args.base_dir.rstrip("/")
@@ -226,21 +258,45 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[
     shell(serial, f"mkdir -p {shlex.quote(log_dir)} && rm -f {shlex.quote(log_dir)}/*")
     shell(serial, "logcat -c", check=False)
     shell(serial, "am start -a android.intent.action.VIEW -d geode-launcher://main/launch -p com.geode.launcher", check=False)
-    time.sleep(9)
 
-    notice_path = variant_dir / "notice-check.png"
-    for attempt in range(4):
-        screenshot(serial, f"dashcore-{mode.lower()}-notice-{attempt}.png", notice_path)
-        if not notice_is_visible(notice_path): break
-        shell(serial, "input tap 960 792", check=False); time.sleep(1.5)
-    screenshot(serial, f"dashcore-{mode.lower()}-main.png", variant_dir / "main-menu.png")
-    if notice_is_visible(variant_dir / "main-menu.png"):
-        raise RuntimeError(f"{mode}: consent dialog remained visible; refusing an invalid FPS measurement.")
+    startup_text = wait_for_state(
+        serial, mode, "startup", variant_dir / "startup.png",
+        lambda t: bool(t.strip()), timeout_s=75
+    )
+    if "notice" in startup_text or "terms of use" in startup_text:
+        wait_for_notice_dismissal(serial, mode, variant_dir)
 
-    shell(serial, "input tap 960 925"); time.sleep(7)
-    screenshot(serial, f"dashcore-{mode.lower()}-level.png", variant_dir / "level-select.png")
-    shell(serial, "input tap 960 500"); time.sleep(7)
-    screenshot(serial, f"dashcore-{mode.lower()}-gameplay-start.png", variant_dir / "gameplay-start.png")
+    gameplay_pattern = re.compile(r"\b\d{1,3}\s*%")
+    current_text = take_state_screenshot(serial, mode, "startup-current", variant_dir / "startup-current.png")
+    gameplay_ready = bool(gameplay_pattern.search(current_text))
+    if not gameplay_ready:
+        wait_for_state(
+            serial, mode, "main-menu", variant_dir / "main-menu.png",
+            lambda t: "play" in t and ("geometry dash" in t or "settings" in t or "editor" in t),
+            timeout_s=60
+        )
+        # The central Play button is used; bottom navigation icons are never tapped.
+        shell(serial, "input tap 960 540")
+        wait_for_state(
+            serial, mode, "level-select", variant_dir / "level-select.png",
+            lambda t: ("stereo madness" in t or "normal mode" in t or "practice mode" in t)
+                      and "notice" not in t,
+            timeout_s=60
+        )
+        shell(serial, "input tap 960 500")
+        wait_for_state(
+            serial, mode, "gameplay-start", variant_dir / "gameplay-start.png",
+            lambda t: bool(gameplay_pattern.search(t)),
+            timeout_s=75
+        )
+    else:
+        screenshot(serial, f"dashcore-{mode.lower()}-gameplay-start-confirmed.png",
+                   variant_dir / "gameplay-start.png")
+
+    gameplay_ocr = screenshot_text(variant_dir / "gameplay-start.png")
+    gameplay_verified = bool(gameplay_pattern.search(gameplay_ocr))
+    if not gameplay_verified:
+        raise RuntimeError(f"{mode}: gameplay HUD percentage was not verified; benchmark aborted.")
 
     pids = shell(serial, "pidof com.geode.launcher", check=False).strip().split()
     pid = pids[0] if pids else ""
@@ -256,8 +312,6 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[
         gfx_text = shell(serial, "dumpsys gfxinfo com.geode.launcher framestats", check=False, timeout=90)
         (variant_dir / "gfxinfo-framestats.txt").write_text(gfx_text)
         gfx = parse_gfxinfo(variant_dir / "gfxinfo-framestats.txt")
-        # gfxinfo is retained as a diagnostic fallback, but SurfaceFlinger is preferred
-        # for the game's native OpenGL SurfaceView frames.
         if surface_metrics.get("available"):
             gfx = surface_metrics
         elif not gfx.get("available"):
@@ -275,6 +329,7 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[
     data = {"mode": mode, "mod_enabled": mod_enabled, "gfxinfo": gfx,
             "surfaceflinger": surface_metrics, "surfaceflinger_candidate_count": len(surface_layers),
             "cpu_observation": observation, "crash_detected": crash,
+            "gameplay_verified": gameplay_verified, "gameplay_ocr": gameplay_ocr[:1000],
             "launcher_pid_after_test": pid or None}
     (variant_dir / "metrics.json").write_text(json.dumps(data, indent=2) + "\n")
     shell(serial, "am force-stop com.geode.launcher", check=False)
@@ -293,7 +348,9 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
     base_min, mod_min = fps(base_gfx, "min_fps"), fps(mod_gfx, "min_fps")
     max_delta = (mod_max-base_max) if base_max is not None and mod_max is not None else None
     avg_delta = (mod_avg-base_avg) if base_avg is not None and mod_avg is not None else None
-    valid = all(item["gfxinfo"].get("available") and item["cpu_observation"].get("available")
+    valid = all(item.get("gameplay_verified") is True
+                and item["gfxinfo"].get("available")
+                and item["cpu_observation"].get("available")
                 and not item["crash_detected"] for item in (baseline, enabled))
     lines = [
         "# DashCore AutoTest — FPS baseline vs mod", "",
@@ -313,6 +370,7 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
     for item in (baseline, enabled):
         lines += [f"### {item['mode']}",
                   f"- DashCore loaded: {item['mod_enabled']}",
+                  f"- Gameplay positively verified: {item.get('gameplay_verified', False)}",
                   f"- Frame timing data available: {item['gfxinfo'].get('available')}",
                   f"- Process CPU sample available: {item['cpu_observation'].get('available')}",
                   f"- Crash signature detected: {item['crash_detected']}"]
@@ -330,7 +388,7 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
         "- CPU utilization is process CPU time divided by device-measured elapsed time, expressed relative to one CPU core.",
         "- This cloud emulator is x86_64 with ARM translation; it is not a physical Huawei STK-LX3 / Mali-G51 measurement.",
         "- Geometry Dash cloud APK version is recorded separately; cloud results are comparative signals, not a guarantee of physical-device performance.", "",
-        "A result is VALID only when both passes provide at least 10 real presentation intervals and CPU samples and neither pass reports a crash. Raw layer listings and latency dumps are included for diagnosis."
+        "A result is VALID only when both passes positively verify the in-game percentage HUD, provide at least 10 plausible presentation intervals and CPU samples, and neither pass reports a crash. INT64_MAX sentinel timestamps and intervals outside 0.1–1000 ms are rejected. Raw layer listings and latency dumps are included for diagnosis."
     ]
     (out / "fps-comparison.md").write_text("\n".join(lines) + "\n")
     (out / "fps-comparison.json").write_text(json.dumps({
