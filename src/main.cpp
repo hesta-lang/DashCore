@@ -802,12 +802,28 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
             g_profile.drawFrames < kFramesToMeasure;
         bool const sampleVisit = profiling &&
             (g_profile.drawFrames % kReportEvery == 0);
+        auto visitBase = [&]() {
+            auto const visitStart = Clock::now();
+            CCNode::visit();
+            auto const visitUs = static_cast<std::int64_t>(
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    Clock::now() - visitStart).count());
+            ++g_profile.sampledVisitCalls;
+            g_profile.sampledVisitTotalUs += visitUs;
+            g_profile.sampledVisitMaxUs = std::max(g_profile.sampledVisitMaxUs, visitUs);
+            if (typeinfo_cast<GameObject*>(this)) {
+                ++g_profile.sampledGameObjectVisits;
+                g_profile.sampledGameObjectVisitTotalUs += visitUs;
+                g_profile.sampledGameObjectVisitMaxUs =
+                    std::max(g_profile.sampledGameObjectVisitMaxUs, visitUs);
+            }
+        };
 
         // With live culling disabled, perform RTTI and classification only on
         // diagnostic sample frames. If culling is ever enabled in a future
         // validated build, classification still runs each frame as required.
         if (!g_cullingEnabled && !sampleVisit) {
-            visitBase();
+            CCNode::visit();
             return;
         }
 
