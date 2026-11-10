@@ -399,6 +399,11 @@ def wait_for_notice_dismissal(serial: str, mode: str, variant_dir: pathlib.Path)
         time.sleep(2.0)
     raise RuntimeError(f"{mode}: NOTICE / Terms of Use dialog did not close after automatic button-detection taps.")
 
+def is_gameplay_text(ocr_text: str) -> bool:
+    """Recognize active gameplay by its ATTEMPT HUD, not level-select percentages."""
+    return bool(re.search(r"\\battempt\\s*#?\\s*\\d+\\b", ocr_text, re.IGNORECASE))
+
+
 def is_main_menu_text(ocr_text: str) -> bool:
     """Recognize the GD main menu without depending on OCR of its logo."""
     normalized = " ".join(ocr_text.lower().split())
@@ -482,7 +487,7 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[
         shell(serial, "input tap 960 500")
         wait_for_state(
             serial, mode, "gameplay-start", variant_dir / "gameplay-start.png",
-            lambda t: bool(gameplay_pattern.search(t)),
+            is_gameplay_text,
             timeout_s=75
         )
     else:
@@ -490,7 +495,7 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[
                    variant_dir / "gameplay-start.png")
 
     gameplay_ocr = screenshot_text(variant_dir / "gameplay-start.png")
-    gameplay_verified = bool(gameplay_pattern.search(gameplay_ocr))
+    gameplay_verified = is_gameplay_text(gameplay_ocr)
     if not gameplay_verified:
         raise RuntimeError(f"{mode}: gameplay HUD percentage was not verified; benchmark aborted.")
 
