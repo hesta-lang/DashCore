@@ -194,11 +194,35 @@ jobs:
           echo "Game package: $GAME_PACKAGE; versionName: $GAME_VERSION" | tee "$REPORT_DIR/game-version.txt"
           echo "serial=$SERIAL" >> "$GITHUB_OUTPUT"
 
-      - name: Install benchmark image reader
-        run: python3 -m pip install --disable-pip-version-check pillow
+      - name: Install benchmark image reader and OCR engine
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr
+          python3 -m pip install --disable-pip-version-check pillow
 
-      - name: Validate FPS benchmark script syntax
-        run: python3 -m py_compile scripts/autotest_ab.py
+      - name: Validate FPS benchmark script and timestamp parser
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/autotest_ab.py
+          python3 - <<'PY'
+          import importlib.util
+          spec = importlib.util.spec_from_file_location("autotest_ab", "scripts/autotest_ab.py")
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          period = 16_666_667
+          rows = ["16666667"]
+          rows += [f"{i*period} {i*period} {i*period}" for i in range(1, 20)]
+          rows += [f"{2**63-1} {2**63-1} {2**63-1}"]
+          parsed = module.parse_surfaceflinger_latency("\\n".join(rows))
+          assert parsed.get("available") is True, parsed
+          assert parsed["frame_count"] == 19, parsed
+          assert 59.0 <= parsed["average_fps"] <= 61.0, parsed
+          invalid = module.parse_surfaceflinger_latency(
+              "16666667\\n" + "\\n".join([f"{2**63-1} {2**63-1} {2**63-1}"] * 20)
+          )
+          assert invalid.get("available") is False, invalid
+          print("SurfaceFlinger timestamp parser self-test passed.")
+          PY
 
       - name: Run baseline vs DashCore FPS benchmark
         env:
