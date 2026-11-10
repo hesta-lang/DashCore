@@ -1,5 +1,5 @@
 
-name: DashCore AutoTest v4.2 - Fast-Path A/B Comparison
+name: DashCore AutoTest v4.3 - Fast-Path A/B Comparison
 
 on:
   workflow_run:
@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dashcore-autotest-v4.2-ab
+  group: dashcore-autotest-v4.3-ab
   cancel-in-progress: true
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 45
     env:
       GEOMETRY_DASH_MEDIAFIRE_URL: ${{ inputs.mediafire_url || secrets.GEOMETRY_DASH_MEDIAFIRE_URL || 'https://www.mediafire.com/file/o9rk5i69nmu0nci/Geometry+Dash_2.2081.apk/file' }}
-      REPORT_DIR: reports/autotest-v4.2
+      REPORT_DIR: reports/autotest-v4.3
     steps:
       - name: Select DashCore build artifact and exact source revision
         id: build
@@ -148,7 +148,7 @@ jobs:
             model=Pixel2,version=30
           max-time-limit: 25m
           record-video: true
-          outputs-dir: reports/autotest-v4.2/cloud-session
+          outputs-dir: reports/autotest-v4.3/cloud-session
 
       - name: Install APKs and prepare the test device
         id: device
@@ -194,6 +194,9 @@ jobs:
           echo "Game package: $GAME_PACKAGE; versionName: $GAME_VERSION" | tee "$REPORT_DIR/game-version.txt"
           echo "serial=$SERIAL" >> "$GITHUB_OUTPUT"
 
+      - name: Install benchmark image reader
+        run: python3 -m pip install --disable-pip-version-check pillow
+
       - name: Run paired fast-path OFF/ON benchmark
         env:
           SERIAL: ${{ steps.device.outputs.serial }}
@@ -207,11 +210,11 @@ jobs:
             --base-dir /sdcard/Android/media/com.geode.launcher \
             --report-dir "$REPORT_DIR"
 
-      - name: Upload AutoTest v4.2 reports
+      - name: Upload AutoTest v4.3 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-AutoTest-v4.2-${{ github.run_number }}
+          name: DashCore-AutoTest-v4.3-${{ github.run_number }}
           path: |
             reports/
             artifacts/

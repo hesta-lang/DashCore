@@ -2,6 +2,7 @@
 """Run a paired DashCore fast-path OFF/ON benchmark on one Android cloud device."""
 from __future__ import annotations
 import argparse, csv, json, math, pathlib, re, shlex, statistics, subprocess, sys, time
+from PIL import Image
 from typing import Any
 
 def run_adb(serial: str, *args: str, input_text: str | None = None, timeout: int = 90, check: bool = True) -> str:
@@ -125,6 +126,20 @@ def summarize_logs(text: str, mode: str) -> dict[str, Any]:
         "culling_active_false": "culling-active=false" in text,
     }
 
+def notice_is_visible(path: pathlib.Path) -> bool:
+    image = Image.open(path).convert("RGB")
+    width, height = image.size
+    # The initial consent dialog has a bright green OK button centered at ~50% x, 73% y.
+    x0, x1 = int(width * 0.44), int(width * 0.56)
+    y0, y1 = int(height * 0.69), int(height * 0.79)
+    green = 0
+    for y in range(y0, y1, 2):
+        for x in range(x0, x1, 2):
+            r, g, b = image.getpixel((x, y))
+            if g > 150 and r < 155 and b < 120:
+                green += 1
+    return green > 80
+
 def run_variant(args: argparse.Namespace, mode: str, first_run: bool) -> dict[str, Any]:
     serial, base = args.serial, args.base_dir.rstrip("/")
     config_dir = f"{base}/game/geode/config/{args.mod_id}"
@@ -138,15 +153,25 @@ def run_variant(args: argparse.Namespace, mode: str, first_run: bool) -> dict[st
     shell(serial, "logcat -c", check=False)
     shell(serial, "am start -a android.intent.action.VIEW -d geode-launcher://main/launch -p com.geode.launcher", check=False)
     time.sleep(9)
-    if first_run:
-        screenshot(serial, f"dashcore-ab-{mode.lower()}-notice.png", variant_dir / "notice-before.png")
-        shell(serial, "input tap 960 793", check=False); time.sleep(5)
+    # Consent dialog is shown on each fresh launcher process in this cloud image.
+    notice_path = variant_dir / "notice-check.png"
+    for attempt in range(4):
+        screenshot(serial, f"dashcore-ab-{mode.lower()}-notice-{attempt}.png", notice_path)
+        if not notice_is_visible(notice_path):
+            break
+        shell(serial, "input tap 960 792", check=False)
+        time.sleep(1.5)
     screenshot(serial, f"dashcore-ab-{mode.lower()}-main.png", variant_dir / "main-menu.png")
-    shell(serial, "input tap 960 500"); time.sleep(6)
+    if notice_is_visible(variant_dir / "main-menu.png"):
+        raise RuntimeError(f"{mode}: Geometry Dash consent dialog remained visible after four taps; refusing to record an invalid gameplay pass.")
+    # The main-menu Play button is the center button in the bottom row.
+    shell(serial, "input tap 960 925"); time.sleep(7)
     screenshot(serial, f"dashcore-ab-{mode.lower()}-level.png", variant_dir / "level-select.png")
-    shell(serial, "input tap 960 500"); time.sleep(6)
+    # Level page Play button is centered in the panel.
+    shell(serial, "input tap 960 500"); time.sleep(7)
+    screenshot(serial, f"dashcore-ab-{mode.lower()}-gameplay-start.png", variant_dir / "gameplay-start.png")
     profile_complete = False
-    for second in range(1, 46):
+    for second in range(1, 121):
         shell(serial, "input tap 700 800", check=False); time.sleep(.32)
         shell(serial, "input tap 700 800", check=False); time.sleep(.68)
         if second % 5 == 0:
@@ -198,7 +223,7 @@ def write_report(args: argparse.Namespace, off: dict[str, Any], on: dict[str, An
     on_p95 = on_gfx.get("p95_ms") if on_gfx.get("available") else None
     gfx_change = ((off_p95-on_p95)/off_p95*100.0 if off_p95 is not None and on_p95 is not None and off_p95 > 0 else None)
     lines = [
-        "# DashCore AutoTest v4.2 — Fast-Path A/B", "",
+        "# DashCore AutoTest v4.3 — Fast-Path A/B", "",
         f"**Comparison status: {'VALID' if valid else 'INCOMPLETE'}**", "",
         "| Measurement | Fast path OFF | Fast path ON | ON improvement |",
         "|---|---:|---:|---:|",
@@ -244,7 +269,7 @@ def main() -> int:
     parser.add_argument("--base-dir", default="/sdcard/Android/media/com.geode.launcher")
     parser.add_argument("--mod-id", default="hesta.optgod")
     parser.add_argument("--mod-file", required=True)
-    parser.add_argument("--report-dir", default="reports/autotest-v4.2")
+    parser.add_argument("--report-dir", default="reports/autotest-v4.3")
     args = parser.parse_args()
     shell(args.serial, f"mkdir -p {shlex.quote(args.base_dir + '/game/geode/mods')}")
     shell(args.serial, f"mkdir -p {shlex.quote(args.base_dir + '/game/geode/config/' + args.mod_id)}")
