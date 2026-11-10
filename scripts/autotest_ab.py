@@ -228,8 +228,17 @@ def wait_for_state(serial: str, mode: str, label: str, destination: pathlib.Path
         time.sleep(interval_s)
     raise RuntimeError(f"{mode}: timed out waiting for {label}; last OCR text: {last_text[:500]!r}")
 
+def tap_notice_confirmation(serial: str, screenshot_path: pathlib.Path) -> tuple[int, int]:
+    # Use the captured device resolution. The Geometry Dash NOTICE dialog's
+    # green OK button is centered at roughly 50% width and 38% screen height.
+    with Image.open(screenshot_path) as frame:
+        width, height = frame.size
+    x, y = round(width * 0.50), round(height * 0.38)
+    shell(serial, f"input tap {x} {y}", check=False)
+    return x, y
+
 def wait_for_notice_dismissal(serial: str, mode: str, variant_dir: pathlib.Path) -> None:
-    deadline = time.monotonic() + 45
+    deadline = time.monotonic() + 60
     attempt = 0
     while time.monotonic() < deadline:
         attempt += 1
@@ -237,9 +246,31 @@ def wait_for_notice_dismissal(serial: str, mode: str, variant_dir: pathlib.Path)
         text = take_state_screenshot(serial, mode, f"notice-poll-{attempt}", path)
         if "notice" not in text and "terms of use" not in text:
             return
-        shell(serial, "input tap 960 790", check=False)
-        time.sleep(1.5)
-    raise RuntimeError(f"{mode}: NOTICE / Terms of Use dialog did not close.")
+        tap_notice_confirmation(serial, path)
+        time.sleep(2.0)
+    raise RuntimeError(f"{mode}: NOTICE / Terms of Use dialog did not close after resolution-aware OK taps.")
+
+def wait_for_main_menu(serial: str, mode: str, variant_dir: pathlib.Path,
+                       timeout_s: int = 90) -> str:
+    # The notice may appear after the Geode updater splash, not in the first
+    # startup screenshot. Detect and dismiss it while polling for the menu.
+    deadline = time.monotonic() + timeout_s
+    attempt = 0
+    last_text = ""
+    while time.monotonic() < deadline:
+        attempt += 1
+        path = variant_dir / f"main-menu-poll-{attempt}.png"
+        last_text = take_state_screenshot(serial, mode, f"main-menu-poll-{attempt}", path)
+        if "notice" in last_text or "terms of use" in last_text:
+            tap_notice_confirmation(serial, path)
+            time.sleep(2.0)
+            continue
+        if "play" in last_text and ("geometry dash" in last_text or "settings" in last_text or "editor" in last_text):
+            screenshot(serial, f"dashcore-{mode.lower()}-main-menu-confirmed.png",
+                       variant_dir / "main-menu-confirmed.png")
+            return last_text
+        time.sleep(2.0)
+    raise RuntimeError(f"{mode}: timed out waiting for main menu after handling NOTICE; last OCR text: {last_text[:500]!r}")
 
 def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[str, Any]:
     serial, base = args.serial, args.base_dir.rstrip("/")
@@ -270,11 +301,7 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[
     current_text = take_state_screenshot(serial, mode, "startup-current", variant_dir / "startup-current.png")
     gameplay_ready = bool(gameplay_pattern.search(current_text))
     if not gameplay_ready:
-        wait_for_state(
-            serial, mode, "main-menu", variant_dir / "main-menu.png",
-            lambda t: "play" in t and ("geometry dash" in t or "settings" in t or "editor" in t),
-            timeout_s=60
-        )
+        wait_for_main_menu(serial, mode, variant_dir, timeout_s=90)
         # The central Play button is used; bottom navigation icons are never tapped.
         shell(serial, "input tap 960 540")
         wait_for_state(
