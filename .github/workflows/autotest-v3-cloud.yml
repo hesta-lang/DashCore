@@ -315,8 +315,10 @@ jobs:
           # release is more useful than a single tap every second for GD jumps.
           # Capture evidence every 5 seconds and continue for up to 45 seconds.
           for second in $(seq 1 45); do
-            adb -s "$SERIAL" shell input swipe 1500 800 1500 800 180
-            sleep 0.32
+            for pulse in 1 2; do
+              adb -s "$SERIAL" shell input swipe 1500 800 1500 800 180
+              sleep 0.32
+            done
             if [ $((second % 5)) -eq 0 ]; then
               adb -s "$SERIAL" shell screencap -p "/sdcard/dashcore-gameplay-${second}s.png"
               adb -s "$SERIAL" pull "/sdcard/dashcore-gameplay-${second}s.png" "$REPORT_DIR/gameplay-${second}s.png" >/dev/null
