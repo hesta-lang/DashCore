@@ -4,6 +4,7 @@
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/CCDirector.hpp>
 #include <Geode/modify/CCNode.hpp>
+#include <Geode/modify/MenuLayer.hpp>
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -794,6 +795,27 @@ namespace {
         logGapBuckets("DRAWSCENE", g_profile.drawGapBuckets, g_profile.drawGapSamples,
             g_profile.drawGapsOver50ms, g_profile.drawGapsOver100ms);
     }
+    bool g_lastLevelLaunchAttempted = false;
+
+    void rememberLastPlayedLevel(GJGameLevel* level) {
+        if (!level) return;
+
+        // Daily/event and gauntlet entries can expire or require a separate
+        // manager lookup. Keep this first version to persistent standard levels.
+        if (level->m_dailyID.value() > 0 || level->m_gauntletLevel) return;
+
+        auto const id = level->m_levelID.value();
+        if (id <= 0) return;
+
+        auto* mod = Mod::get();
+        bool const isMainLevel = level->m_levelType == GJLevelType::Main;
+        mod->setSavedValue<int>("last-level-id", id);
+        mod->setSavedValue<bool>("last-level-main", isMainLevel);
+        mod->setSavedValue<std::string>("last-level-name", level->m_levelName);
+        log::info("DashCore: remembered last level '{}' (id={}, main={}).",
+            level->m_levelName, id, isMainLevel);
+    }
+
 }
 
 // GameObject inherits the Cocos visit implementation instead of providing
@@ -988,6 +1010,49 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         maybeFinishProfile();
     }
 };
+
+
+class $modify(OptGodMenuLayer, MenuLayer) {
+    void onEnterTransitionDidFinish() {
+        MenuLayer::onEnterTransitionDidFinish();
+
+        // Only attempt once per process. If the level cannot be resolved,
+        // leave the normal menu available and let the player choose manually.
+        if (g_lastLevelLaunchAttempted) return;
+        g_lastLevelLaunchAttempted = true;
+
+        if (!Mod::get()->getSettingValue<bool>("load-last-level")) return;
+
+        auto const id = Mod::get()->getSavedValue<int>("last-level-id", 0);
+        auto const isMainLevel = Mod::get()->getSavedValue<bool>("last-level-main", false);
+        if (id <= 0) {
+            log::info("DashCore: no previous level is stored; keeping the main menu.");
+            return;
+        }
+
+        auto* manager = GameLevelManager::sharedState();
+        auto* level = isMainLevel
+            ? manager->getMainLevel(id, false)
+            : manager->getSavedLevel(id);
+
+        if (!level) {
+            log::warn("DashCore: could not resolve previous level id={}; keeping the main menu.", id);
+            return;
+        }
+
+        log::info("DashCore: loading previous level '{}' (id={}, main={}).",
+            level->m_levelName, id, isMainLevel);
+        auto* scene = PlayLayer::scene(level, false, false);
+        if (!scene) {
+            log::warn("DashCore: PlayLayer scene creation failed for id={}; keeping the main menu.", id);
+            return;
+        }
+        cocos2d::CCDirector::sharedDirector()->replaceScene(
+            cocos2d::CCTransitionFade::create(0.5f, scene)
+        );
+    }
+};
+
 
 class $modify(OptGodDirector, cocos2d::CCDirector) {
     void drawScene() {

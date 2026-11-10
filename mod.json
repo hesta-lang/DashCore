@@ -7,7 +7,7 @@
   "name": "DashCore",
   "version": "0.9.1-beta",
   "developer": "hesta-lang",
-  "description": "DashCore 0.9.1-beta: conservative CCNode visit fast path with an internal startup override for controlled A/B testing. Original Geometry Dash rendering and gameplay remain unchanged; live culling stays hard-disabled.",
+  "description": "DashCore 0.9.1-beta: conservative CCNode visit fast path and optional last-played-level startup loading. Diagnostic visibility analysis remains read-only; live culling stays hard-disabled.",
   "tags": [
     "optimizations",
     "performance"
@@ -18,6 +18,12 @@
       "name": "Experimental render culling (locked off)",
       "description": "Not available in this beta. Live object hiding remains hard-disabled until camera-space bounds and trigger behavior are validated.",
       "default": false
+    },
+    "load-last-level": {
+      "type": "bool",
+      "name": "Load last played level on startup",
+      "description": "Automatically opens the last supported standard level after the main menu loads. If it cannot be found, the main menu remains available.",
+      "default": true
     }
   }
 }
