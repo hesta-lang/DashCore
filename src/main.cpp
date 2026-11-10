@@ -811,7 +811,6 @@ namespace {
         bool const isMainLevel = level->m_levelType == GJLevelType::Main;
         mod->setSavedValue<int>("last-level-id", id);
         mod->setSavedValue<bool>("last-level-main", isMainLevel);
-        mod->setSavedValue<std::string>("last-level-name", level->m_levelName);
         log::info("DashCore: remembered last level '{}' (id={}, main={}).",
             level->m_levelName, id, isMainLevel);
     }
@@ -929,6 +928,7 @@ class $modify(OptGodPlayLayer, PlayLayer) {
                 Clock::now() - start).count());
 
         if (result) {
+            rememberLastPlayedLevel(level);
             log::info(
                 "DashCore 0.9.1-beta: PlayLayer::init={}us ({}ms), levelID={}, replay={}, engineInitFlag={}. ",
                 elapsedUs, elapsedUs / 1000, level ? level->m_levelID : 0,
