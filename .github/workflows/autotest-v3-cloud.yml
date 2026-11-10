@@ -311,7 +311,7 @@ jobs:
           echo "Automated menu taps sent using corrected screenshot coordinates (OK 960,793; main-menu Play 960,500; level Play 960,500)." | tee -a "$REPORT_DIR/gameplay-input.txt"
 
           # Keep the PlayLayer active long enough for slower cloud devices to
-          # reach 600 DrawScene frames. A 180 ms press followed by a short
+          # complete 600 PlayLayer update cycles. A 180 ms press followed by a short
           # release is more useful than a single tap every second for GD jumps.
           # Capture evidence every 5 seconds and continue for up to 45 seconds.
           for second in $(seq 1 45); do
@@ -328,7 +328,7 @@ jobs:
               adb -s "$SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat-checkpoint-${second}s.txt"
               echo "Gameplay checkpoint: ${second}s; jump tap stimulus sent." | tee -a "$REPORT_DIR/gameplay-input.txt"
               if grep -q 'NODE-VISIT-COST FINAL' "$REPORT_DIR/logcat-checkpoint-${second}s.txt"; then
-                echo "Complete 600-DrawScene-frame profile detected at ${second}s; ending gameplay stimulus early." | tee -a "$REPORT_DIR/gameplay-input.txt"
+                echo "Complete 600-update node-visit profile detected at ${second}s; ending gameplay stimulus early." | tee -a "$REPORT_DIR/gameplay-input.txt"
                 break
               fi
             fi
@@ -377,7 +377,8 @@ jobs:
             fi
             echo "- DashCore load in Geode logs: $MOD_LOAD"
             echo "- DashCore PlayLayer hooks: $GAMEPLAY_LAYER"
-            echo "- NODE-VISIT-COST FINAL profile: $NODE_VISIT_PROFILE"
+            echo "- NODE-VISIT-COST FINAL profile (independent 600-update window): $NODE_VISIT_PROFILE
+            echo "- DRAWSCENE-CPU remains a separate optional callback metric; it is not required for the node-visit profile.""
             echo "- Gameplay: Up to 45 seconds of two scripted jump taps per second with screenshots every 5 seconds; early death remains visible in checkpoint captures."
             echo ""
             echo "## Scope and limits"
@@ -388,7 +389,7 @@ jobs:
             echo "- Cloud x86_64 + ARM translation is not equivalent to the Huawei STK-LX3 / Mali-G51."
             echo "- A PASS requires DashCore's setupHasCompleted hook to appear in the Geode log."
             echo "- Scripted jump inputs are a smoke-test stimulus, not a claim that the level was completed or that a fixed percentage was reached."
-            echo "- NODE-VISIT-COST FINAL confirms the complete 600-DrawScene-frame diagnostic window; cloud x86_64 plus ARM translation is not a physical-device performance result."
+            echo "- NODE-VISIT-COST FINAL confirms the complete 600-PlayLayer-update diagnostic window; cloud x86_64 plus ARM translation is not a physical-device performance result."
             echo "- No frame-pacing or GPU-performance claim is made."
           } | tee "$REPORT_DIR/summary.md"
           echo "result=$RESULT" >> "$GITHUB_OUTPUT"
