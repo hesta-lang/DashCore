@@ -324,27 +324,55 @@ def tap_notice_confirmation(serial: str, screenshot_path: pathlib.Path) -> tuple
         screen_x, screen_y = detected
         method = "green-button-pixel-detection"
 
-    # adb input coordinates follow Android's current logical display size.
+    # Android input uses the display's logical orientation, while screencap
+    # may return the app's rotated landscape buffer. Read InputReader's actual
+    # surface rotation and transform the point instead of scaling axes blindly.
     display_text = shell(serial, "wm size", check=False)
     sizes = re.findall(r"(?:Override|Physical) size:\s*(\d+)x(\d+)", display_text)
     if sizes:
         display_width, display_height = map(int, sizes[-1])
     else:
         display_width, display_height = width, height
-    x = round(screen_x * display_width / width)
-    y = round(screen_y * display_height / height)
+
+    if (width > height) != (display_width > display_height):
+        input_dump = shell(serial, "dumpsys input", check=False)
+        rotations = re.findall(r"SurfaceOrientation:\s*(\d+)", input_dump)
+        if not rotations:
+            raise RuntimeError(
+                "Cannot safely tap NOTICE: screenshot and input display orientations differ "
+                "and dumpsys input did not expose SurfaceOrientation."
+            )
+        rotation = int(rotations[-1]) % 4
+        if rotation == 1:
+            x = round(screen_y * display_width / height)
+            y = round((width - screen_x) * display_height / width)
+        elif rotation == 3:
+            x = round((height - screen_y) * display_width / height)
+            y = round(screen_x * display_height / width)
+        else:
+            raise RuntimeError(
+                f"Cannot safely tap NOTICE: landscape screenshot vs portrait input "
+                f"with unexpected SurfaceOrientation={rotation}."
+            )
+        method += f"+rotation-{rotation}-transform"
+    else:
+        x = round(screen_x * display_width / width)
+        y = round(screen_y * display_height / height)
+        rotation = 0
+
     shell(serial, f"input tap {x} {y}", check=False)
 
     record_notice_tap(screenshot_path.parent, {
         "method": method,
         "screenshot_size": [width, height],
         "display_size": [display_width, display_height],
+        "surface_orientation": rotation,
         "button_center_screenshot_px": [screen_x, screen_y],
         "adb_tap_px": [x, y],
     })
     print(
         f"NOTICE_CONFIRMATION: method={method} screenshot={width}x{height} "
-        f"display={display_width}x{display_height} tap={x},{y}"
+        f"display={display_width}x{display_height} rotation={rotation} tap={x},{y}"
     )
     return x, y
 
