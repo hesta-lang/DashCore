@@ -401,7 +401,7 @@ def wait_for_notice_dismissal(serial: str, mode: str, variant_dir: pathlib.Path)
 
 def is_gameplay_text(ocr_text: str) -> bool:
     """Recognize active gameplay by its ATTEMPT HUD, not level-select percentages."""
-    return bool(re.search(r"\battempt\s*#?\s*\d+\b", ocr_text, re.IGNORECASE))
+    return bool(re.search(r"\b(?:attempt|apt)\s*#?\s*\d+\b", ocr_text, re.IGNORECASE))
 
 
 def is_main_menu_text(ocr_text: str) -> bool:
