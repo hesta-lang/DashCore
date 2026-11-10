@@ -81,11 +81,11 @@ AutoTest v3.9 usa coordenadas nativas de las capturas 1920×1080: OK (960,793), 
 - This is still diagnostic-only. It does not alter frame pacing, rendering, gameplay, or enable culling. Validate the new report on the physical Huawei/Mali-G51 before drawing device-performance conclusions.
 
 
-## 0.8.8-alpha scene traversal diagnostics
+## 0.8.9-alpha independent scene traversal diagnostics
 
-- Adds sampled CPU timing around `CCNode::visit()` on the existing diagnostic sample frames (every 120th measured DrawScene frame).
+- Decouples `CCNode::visit()` sampling from `CCDirector::drawScene`: the node-visit sample window is driven by 600 completed `PlayLayer::postUpdate` cycles, with samples every 120 update cycles.
 - Reports total and maximum inclusive visit time, plus the GameObject subset, alongside the existing PlayLayer update and DrawScene callback timings.
 - These visit timings are inclusive: parent visit durations contain child visit work, so totals overlap and must not be added together or treated as standalone renderer/GPU time.
-- Sampling is limited to four frames in the 600-frame window to keep measurement overhead bounded. No extra per-frame scene traversal is introduced.
+- Sampling is limited to five update-aligned frames in the 600-update window to keep measurement overhead bounded. No extra per-frame scene traversal is introduced.
 - Live culling remains hard-disabled. No object visibility, draw order, transforms, scheduling, gameplay, physics, triggers, controls, or UI are changed.
-- The purpose is to determine whether CPU scene traversal is a meaningful contributor before selecting any optimization.
+- Emits `NODE-VISIT-COST FINAL` independently of the DrawScene hook, with a fallback report from `postUpdate` if node visits stop. `DRAWSCENE-CPU` remains a separate optional metric. The purpose is to determine whether CPU scene traversal is a meaningful contributor before selecting any optimization.
