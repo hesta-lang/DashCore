@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.8.9-alpha",
+  "version": "0.9.0-beta",
   "developer": "hesta-lang",
-  "description": "DashCore 0.8.9-alpha: Samples CCNode::visit and GameObject inclusive CPU timings on an independent 600-PlayLayer-update window, separate from DrawScene callback profiling. Diagnostic-only; live render culling remains hard-disabled.",
+  "description": "DashCore 0.9.0-beta: first conservative optimization reduces per-node hook overhead outside the diagnostic window. Original Geometry Dash rendering and gameplay remain unchanged; live culling stays hard-disabled.",
   "tags": [
     "optimizations",
     "performance"
@@ -16,7 +16,7 @@
     "experimental-render-culling": {
       "type": "bool",
       "name": "Experimental render culling (locked off)",
-      "description": "Diagnostic alpha only. Live object hiding remains hard-disabled until trigger classification and camera-space bounds are validated.",
+      "description": "Not available in this beta. Live object hiding remains hard-disabled until camera-space bounds and trigger behavior are validated.",
       "default": false
     }
   }
