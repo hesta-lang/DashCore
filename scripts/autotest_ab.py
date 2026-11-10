@@ -48,7 +48,7 @@ def percentile(values: list[float], p: float) -> float | None:
     return ordered[min(len(ordered)-1, max(0, math.ceil(p*len(ordered))-1))]
 
 def parse_gfxinfo(path: pathlib.Path) -> dict[str, Any]:
-    if not path.exists(): return {"available": False}
+    if not path.exists(): return {"available": False, "reason": "gfxinfo file missing"}
     lines = path.read_text(errors="replace").splitlines()
     completion_times = []
     for index, line in enumerate(lines):
@@ -63,10 +63,22 @@ def parse_gfxinfo(path: pathlib.Path) -> dict[str, Any]:
             if stamp > 0: completion_times.append(stamp)
         break
     intervals = [(right-left)/1_000_000.0 for left, right in zip(completion_times, completion_times[1:]) if right > left]
-    if not intervals: return {"available": False, "reason": "No FrameCompleted timestamps parsed"}
-    return {"available": True, "interval_count": len(intervals), "mean_ms": statistics.mean(intervals),
-            "p95_ms": percentile(intervals, .95), "max_ms": max(intervals),
-            "over_50ms": sum(value > 50.0 for value in intervals)}
+    if not intervals:
+        return {"available": False, "reason": "No FrameCompleted timestamps parsed"}
+    mean_ms, min_ms, max_ms = statistics.mean(intervals), min(intervals), max(intervals)
+    return {
+        "available": True,
+        "interval_count": len(intervals),
+        "max_fps": 1000.0 / min_ms,
+        "average_fps": 1000.0 / mean_ms,
+        "min_fps": 1000.0 / max_ms,
+        "mean_frame_ms": mean_ms,
+        "fastest_frame_ms": min_ms,
+        "slowest_frame_ms": max_ms,
+        "p95_frame_ms": percentile(intervals, .95),
+        "over_50ms": sum(value > 50.0 for value in intervals),
+        "over_100ms": sum(value > 100.0 for value in intervals),
+    }
 
 def parse_update(log_text: str) -> dict[str, int] | None:
     pattern = re.compile(r"UPDATE FINAL: frames=(\d+), avg=(\d+)us, max=(\d+)us, over8ms=(\d+), callbackGap>50ms=(\d+), callbackGap>100ms=(\d+), maxGap=(\d+)us")
@@ -140,59 +152,50 @@ def notice_is_visible(path: pathlib.Path) -> bool:
                 green += 1
     return green > 80
 
-def run_variant(args: argparse.Namespace, mode: str, first_run: bool) -> dict[str, Any]:
+def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[str, Any]:
     serial, base = args.serial, args.base_dir.rstrip("/")
-    config_dir = f"{base}/game/geode/config/{args.mod_id}"
+    mod_dir = f"{base}/game/geode/mods"
+    mod_remote = f"{mod_dir}/DashCore.geode"
     log_dir = f"{base}/game/geode/logs"
-    variant_dir = pathlib.Path(args.report_dir) / mode.lower()
+    variant_dir = pathlib.Path(args.report_dir) / mode.lower().replace("_", "-")
     variant_dir.mkdir(parents=True, exist_ok=True)
+
     shell(serial, "am force-stop com.geode.launcher", check=False); time.sleep(2)
-    shell(serial, f"mkdir -p {shlex.quote(config_dir)}")
-    shell(serial, f"printf '%s\\n' {shlex.quote(mode.lower())} > {shlex.quote(config_dir + '/fast-path-mode.txt')}")
+    shell(serial, f"mkdir -p {shlex.quote(mod_dir)}")
+    shell(serial, f"rm -f {shlex.quote(mod_remote)}")
+    if mod_enabled:
+        run_adb(serial, "push", args.mod_file, mod_remote, timeout=120)
+        shell(serial, f"test -s {shlex.quote(mod_remote)}")
     shell(serial, f"mkdir -p {shlex.quote(log_dir)} && rm -f {shlex.quote(log_dir)}/*")
     shell(serial, "logcat -c", check=False)
     shell(serial, "am start -a android.intent.action.VIEW -d geode-launcher://main/launch -p com.geode.launcher", check=False)
     time.sleep(9)
-    # Consent dialog is shown on each fresh launcher process in this cloud image.
+
     notice_path = variant_dir / "notice-check.png"
     for attempt in range(4):
-        screenshot(serial, f"dashcore-ab-{mode.lower()}-notice-{attempt}.png", notice_path)
-        if not notice_is_visible(notice_path):
-            break
-        shell(serial, "input tap 960 792", check=False)
-        time.sleep(1.5)
-    screenshot(serial, f"dashcore-ab-{mode.lower()}-main.png", variant_dir / "main-menu.png")
+        screenshot(serial, f"dashcore-{mode.lower()}-notice-{attempt}.png", notice_path)
+        if not notice_is_visible(notice_path): break
+        shell(serial, "input tap 960 792", check=False); time.sleep(1.5)
+    screenshot(serial, f"dashcore-{mode.lower()}-main.png", variant_dir / "main-menu.png")
     if notice_is_visible(variant_dir / "main-menu.png"):
-        raise RuntimeError(f"{mode}: Geometry Dash consent dialog remained visible after four taps; refusing to record an invalid gameplay pass.")
-    # The main-menu Play button is the center button in the bottom row.
+        raise RuntimeError(f"{mode}: consent dialog remained visible; refusing an invalid FPS measurement.")
+
     shell(serial, "input tap 960 925"); time.sleep(7)
-    screenshot(serial, f"dashcore-ab-{mode.lower()}-level.png", variant_dir / "level-select.png")
-    # Level page Play button is centered in the panel.
+    screenshot(serial, f"dashcore-{mode.lower()}-level.png", variant_dir / "level-select.png")
     shell(serial, "input tap 960 500"); time.sleep(7)
-    screenshot(serial, f"dashcore-ab-{mode.lower()}-gameplay-start.png", variant_dir / "gameplay-start.png")
-    profile_complete = False
-    for second in range(1, 121):
-        shell(serial, "input tap 700 800", check=False); time.sleep(.32)
-        shell(serial, "input tap 700 800", check=False); time.sleep(.68)
-        if second % 5 == 0:
-            screenshot(serial, f"dashcore-ab-{mode.lower()}-gameplay-{second}s.png", variant_dir / f"gameplay-{second}s.png")
-            logcat = shell(serial, "logcat -d -v threadtime", check=False)
-            (variant_dir / f"logcat-{second}s.txt").write_text(logcat)
-            geode_checkpoint = read_remote_logs(serial, log_dir, variant_dir / f"geode-logs-checkpoint-{second}s")
-            checkpoint = logcat + "\n" + geode_checkpoint
-            if "both 600-frame samples complete" in checkpoint and "NODE-VISIT-COST FINAL" in checkpoint:
-                profile_complete = True; break
-    time.sleep(2)
+    screenshot(serial, f"dashcore-{mode.lower()}-gameplay-start.png", variant_dir / "gameplay-start.png")
+
     pids = shell(serial, "pidof com.geode.launcher", check=False).strip().split()
     pid = pids[0] if pids else ""
-    observation = {"available": False, "reason": "Profile did not complete; fast path was not measured"}
-    gfx = {"available": False, "reason": "Profile did not complete"}
-    if profile_complete and pid:
+    gfx = {"available": False, "reason": "Launcher process not found"}
+    observation = {"available": False, "reason": "Launcher process not found"}
+    if pid:
         shell(serial, "dumpsys gfxinfo com.geode.launcher reset", check=False)
         observation = run_device_observation(serial, pid, variant_dir)
         gfx_text = shell(serial, "dumpsys gfxinfo com.geode.launcher framestats", check=False, timeout=90)
         (variant_dir / "gfxinfo-framestats.txt").write_text(gfx_text)
         gfx = parse_gfxinfo(variant_dir / "gfxinfo-framestats.txt")
+
     last_logcat = shell(serial, "logcat -d -v threadtime", check=False)
     (variant_dir / "logcat-final.txt").write_text(last_logcat)
     crash_text = shell(serial, "logcat -b crash -d -v threadtime", check=False)
@@ -200,67 +203,75 @@ def run_variant(args: argparse.Namespace, mode: str, first_run: bool) -> dict[st
     geode_text = read_remote_logs(serial, log_dir, variant_dir / "geode-logs-final")
     combined = last_logcat + "\n" + geode_text
     (variant_dir / "combined-geode-log.txt").write_text(combined)
-    screenshot(serial, f"dashcore-ab-{mode.lower()}-final.png", variant_dir / "final-screen.png")
-    log_summary = summarize_logs(combined, mode)
+    screenshot(serial, f"dashcore-{mode.lower()}-final.png", variant_dir / "final-screen.png")
     crash = bool(re.search(r"FATAL EXCEPTION|Fatal signal|SIGABRT|SIGSEGV|has died", crash_text, re.IGNORECASE))
-    data = {"mode": mode, "first_run": first_run, **log_summary,
-            "profile_complete": bool(profile_complete and log_summary["profile_complete"]),
-            "cpu_observation": observation, "gfxinfo": gfx, "crash_detected": crash,
+    data = {"mode": mode, "mod_enabled": mod_enabled, "gfxinfo": gfx,
+            "cpu_observation": observation, "crash_detected": crash,
             "launcher_pid_after_test": pid or None}
     (variant_dir / "metrics.json").write_text(json.dumps(data, indent=2) + "\n")
     shell(serial, "am force-stop com.geode.launcher", check=False)
     return data
 
-def write_report(args: argparse.Namespace, off: dict[str, Any], on: dict[str, Any]) -> bool:
+def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: dict[str, Any]) -> bool:
     out = pathlib.Path(args.report_dir); out.mkdir(parents=True, exist_ok=True)
-    valid = all(item["mode_confirmed"] and item["profile_complete"] and
-                item["cpu_observation"].get("available") and not item["crash_detected"] for item in (off, on))
+    base_gfx, mod_gfx = baseline["gfxinfo"], enabled["gfxinfo"]
+    base_cpu = baseline["cpu_observation"].get("cpu_percent_one_core")
+    mod_cpu = enabled["cpu_observation"].get("cpu_percent_one_core")
     def fmt(value: Any) -> str: return "unavailable" if value is None else f"{value:.2f}"
-    off_cpu, on_cpu = off["cpu_observation"].get("cpu_percent_one_core"), on["cpu_observation"].get("cpu_percent_one_core")
-    cpu_change = ((off_cpu-on_cpu)/off_cpu*100.0 if off_cpu is not None and on_cpu is not None and off_cpu > 0 else None)
-    off_gfx, on_gfx = off["gfxinfo"], on["gfxinfo"]
-    off_p95 = off_gfx.get("p95_ms") if off_gfx.get("available") else None
-    on_p95 = on_gfx.get("p95_ms") if on_gfx.get("available") else None
-    gfx_change = ((off_p95-on_p95)/off_p95*100.0 if off_p95 is not None and on_p95 is not None and off_p95 > 0 else None)
+    def fps(item: dict[str, Any], key: str) -> Any:
+        return item.get(key) if item.get("available") else None
+    base_max, mod_max = fps(base_gfx, "max_fps"), fps(mod_gfx, "max_fps")
+    base_avg, mod_avg = fps(base_gfx, "average_fps"), fps(mod_gfx, "average_fps")
+    base_min, mod_min = fps(base_gfx, "min_fps"), fps(mod_gfx, "min_fps")
+    max_delta = (mod_max-base_max) if base_max is not None and mod_max is not None else None
+    avg_delta = (mod_avg-base_avg) if base_avg is not None and mod_avg is not None else None
+    valid = all(item["gfxinfo"].get("available") and item["cpu_observation"].get("available")
+                and not item["crash_detected"] for item in (baseline, enabled))
     lines = [
-        "# DashCore AutoTest v4.3 — Fast-Path A/B", "",
-        f"**Comparison status: {'VALID' if valid else 'INCOMPLETE'}**", "",
-        "| Measurement | Fast path OFF | Fast path ON | ON improvement |",
+        "# DashCore AutoTest — FPS baseline vs mod", "",
+        f"**Measurement status: {'VALID' if valid else 'INCOMPLETE'}**", "",
+        "| Metric | Without DashCore | With DashCore | Difference (mod - baseline) |",
         "|---|---:|---:|---:|",
-        f"| Launcher CPU utilization (one-core %) | {fmt(off_cpu)} | {fmt(on_cpu)} | {fmt(cpu_change)}% |",
-        f"| gfxinfo frame interval p95 (ms) | {fmt(off_p95)} | {fmt(on_p95)} | {fmt(gfx_change)}% |",
-        f"| gfxinfo frame intervals sampled | {off_gfx.get('interval_count', 'unavailable')} | {on_gfx.get('interval_count', 'unavailable')} | — |",
-        "", "## Run validation", ""
+        f"| **Maximum FPS** | {fmt(base_max)} | {fmt(mod_max)} | {fmt(max_delta)} |",
+        f"| Average FPS | {fmt(base_avg)} | {fmt(mod_avg)} | {fmt(avg_delta)} |",
+        f"| Minimum FPS | {fmt(base_min)} | {fmt(mod_min)} | {fmt((mod_min-base_min) if mod_min is not None and base_min is not None else None)} |",
+        f"| 95th percentile frame time (ms) | {fmt(fps(base_gfx, 'p95_frame_ms'))} | {fmt(fps(mod_gfx, 'p95_frame_ms'))} | — |",
+        f"| Frames slower than 50 ms | {base_gfx.get('over_50ms', 'unavailable')} | {mod_gfx.get('over_50ms', 'unavailable')} | — |",
+        f"| Frames slower than 100 ms | {base_gfx.get('over_100ms', 'unavailable')} | {mod_gfx.get('over_100ms', 'unavailable')} | — |",
+        f"| Sampled frame intervals | {base_gfx.get('interval_count', 'unavailable')} | {mod_gfx.get('interval_count', 'unavailable')} | — |",
+        f"| Process CPU usage (% of one core) | {fmt(base_cpu)} | {fmt(mod_cpu)} | — |",
+        "", "## Validation", ""
     ]
-    for item in (off, on):
-        lines += [f"### {item['mode']}", f"- Mode confirmed in DashCore log: {item['mode_confirmed']}",
-                  f"- Both 600-frame diagnostic windows completed: {item['profile_complete']}",
-                  f"- Process CPU sample: {item['cpu_observation'].get('available')}",
-                  f"- gfxinfo frame data: {item['gfxinfo'].get('available')}",
-                  f"- Crash signature detected: {item['crash_detected']}",
-                  f"- Node visit final marker: {item['node_visit_final_present']}",
-                  f"- Culling active false marker: {item['culling_active_false']}"]
-        update = item.get("update_profile")
-        if update:
-            lines.append(f"- Diagnostic UPDATE profile (before fast-path observation): {update['frames']} frames, avg {update['avg_us']}us, max {update['max_us']}us, >8ms {update['over8ms']}, gaps >50ms {update['gaps_over_50ms']}, max gap {update['max_gap_us']}us")
+    for item in (baseline, enabled):
+        lines += [f"### {item['mode']}",
+                  f"- DashCore loaded: {item['mod_enabled']}",
+                  f"- Frame timing data available: {item['gfxinfo'].get('available')}",
+                  f"- Process CPU sample available: {item['cpu_observation'].get('available')}",
+                  f"- Crash signature detected: {item['crash_detected']}"]
+        if not item["gfxinfo"].get("available"):
+            lines.append(f"- FPS data reason: {item['gfxinfo'].get('reason', 'unknown')}")
         lines.append("")
     lines += [
         "## Method", "",
-        "- The same DashCore .geode package and cloud Android instance are used for both passes.",
-        "- The app is restarted between passes; the mod reads fast-path-mode.txt once at startup.",
-        "- Each pass follows the same menu taps into the default first level and sends the same scripted jump taps.",
-        "- Both 600-update and 600-draw diagnostic windows must finish before the separate 20-second process-CPU observation begins. The fast path is evaluated only in this post-profile window.",
-        "- Android gfxinfo framestats is best-effort. Missing frame timestamps are marked unavailable and do not stop the A/B run.",
-        "- CPU utilization is process CPU time divided by device-measured elapsed time; it is expressed relative to one CPU core.",
-        "- UPDATE and NODE-VISIT diagnostics are validation controls, not the fast-path performance result, because the fast path intentionally bypasses those hooks only after the diagnostic window ends.",
-        "- This is one cloud emulator (x86_64 with ARM translation), not a physical Huawei STK-LX3 / Mali-G51 measurement. Scripted inputs do not guarantee identical gameplay state or level completion.",
-        "- Live object culling remains hard-disabled in both passes.", "",
-        "A result is VALID only when the mod confirms both requested modes, both diagnostic windows finish, both process-CPU samples are available, and neither pass reports a crash."
+        "- First pass launches Geometry Dash with the DashCore .geode file absent from the Geode mods directory.",
+        "- Second pass installs the exact same built .geode artifact and restarts the launcher.",
+        "- Both passes use the same cloud device, game APK, menu navigation, default first level, scripted touch pattern, and 20-second device-timed observation.",
+        "- FPS is calculated from Android gfxinfo FrameCompleted timestamps: maximum FPS is the inverse of the shortest observed frame interval; average and minimum FPS are derived from the mean and longest interval.",
+        "- Frame-time outliers are reported separately so a brief FPS peak cannot hide stuttering.",
+        "- CPU utilization is process CPU time divided by device-measured elapsed time, expressed relative to one CPU core.",
+        "- This cloud emulator is x86_64 with ARM translation; it is not a physical Huawei STK-LX3 / Mali-G51 measurement.",
+        "- Geometry Dash cloud APK version is recorded separately; cloud results are comparative signals, not a guarantee of physical-device performance.", "",
+        "A result is VALID only when both passes provide frame timestamps and CPU samples and neither pass reports a crash."
     ]
-    (out / "comparison.md").write_text("\n".join(lines) + "\n")
-    (out / "comparison.json").write_text(json.dumps({"status": "VALID" if valid else "INCOMPLETE",
-        "cpu_improvement_percent": cpu_change, "gfxinfo_p95_improvement_percent": gfx_change,
-        "off": off, "on": on}, indent=2) + "\n")
+    (out / "fps-comparison.md").write_text("\n".join(lines) + "\n")
+    (out / "fps-comparison.json").write_text(json.dumps({
+        "status": "VALID" if valid else "INCOMPLETE",
+        "maximum_fps_difference": max_delta, "average_fps_difference": avg_delta,
+        "without_dashcore": baseline, "with_dashcore": enabled
+    }, indent=2) + "\n")
+    print("FPS-RESULT: WITHOUT-DASHCORE max={} avg={} min={}".format(fmt(base_max), fmt(base_avg), fmt(base_min)))
+    print("FPS-RESULT: WITH-DASHCORE max={} avg={} min={}".format(fmt(mod_max), fmt(mod_avg), fmt(mod_min)))
+    print("FPS-RESULT: MAX-DIFFERENCE={} AVG-DIFFERENCE={}".format(fmt(max_delta), fmt(avg_delta)))
     return valid
 
 def main() -> int:
@@ -269,19 +280,15 @@ def main() -> int:
     parser.add_argument("--base-dir", default="/sdcard/Android/media/com.geode.launcher")
     parser.add_argument("--mod-id", default="hesta.optgod")
     parser.add_argument("--mod-file", required=True)
-    parser.add_argument("--report-dir", default="reports/autotest-v4.3")
+    parser.add_argument("--report-dir", default="reports/autotest-fps")
     args = parser.parse_args()
     shell(args.serial, f"mkdir -p {shlex.quote(args.base_dir + '/game/geode/mods')}")
-    shell(args.serial, f"mkdir -p {shlex.quote(args.base_dir + '/game/geode/config/' + args.mod_id)}")
-    mod_remote = args.base_dir + "/game/geode/mods/DashCore.geode"
-    run_adb(args.serial, "push", args.mod_file, mod_remote, timeout=120)
-    shell(args.serial, f"test -s {shlex.quote(mod_remote)}")
-    off = run_variant(args, "OFF", first_run=True)
-    on = run_variant(args, "ON", first_run=False)
-    valid = write_report(args, off, on)
-    print((pathlib.Path(args.report_dir) / "comparison.md").read_text())
+    baseline = run_variant(args, "WITHOUT_DASHCORE", mod_enabled=False)
+    enabled = run_variant(args, "WITH_DASHCORE", mod_enabled=True)
+    valid = write_report(args, baseline, enabled)
+    print((pathlib.Path(args.report_dir) / "fps-comparison.md").read_text())
     if not valid:
-        print("::error::Fast-path A/B comparison is incomplete; see reports/autotest-v4.2/comparison.md")
+        print("::error::FPS comparison incomplete; Android frame timestamps or CPU samples are missing, or a crash was detected.")
         return 1
     return 0
 
