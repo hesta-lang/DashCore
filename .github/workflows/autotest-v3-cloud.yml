@@ -310,18 +310,22 @@ jobs:
           tap_image_xy "$REPORT_DIR/level-select.png" 960 500
           echo "Automated menu taps sent using corrected screenshot coordinates (OK 960,793; main-menu Play 960,500; level Play 960,500)." | tee -a "$REPORT_DIR/gameplay-input.txt"
 
-          # Actively play the selected first built-in level instead of leaving it
-          # idle. A tap is sent every 700 ms for 25 seconds, with five-second
-          # checkpoints. This gives the 600-frame DashCore profile (~10 s at
-          # 60 FPS) enough time to finish while retaining evidence if the player
-          # dies early. Taps are ordinary jump inputs; no game data is changed.
-          for second in $(seq 1 25); do
-            adb -s "$SERIAL" shell input tap 1500 800
-            sleep 1
+          # Keep the PlayLayer active long enough for slower cloud devices to
+          # reach 600 DrawScene frames. A 180 ms press followed by a short
+          # release is more useful than a single tap every second for GD jumps.
+          # Capture evidence every 5 seconds and continue for up to 45 seconds.
+          for second in $(seq 1 45); do
+            adb -s "$SERIAL" shell input swipe 1500 800 1500 800 180
+            sleep 0.32
             if [ $((second % 5)) -eq 0 ]; then
               adb -s "$SERIAL" shell screencap -p "/sdcard/dashcore-gameplay-${second}s.png"
               adb -s "$SERIAL" pull "/sdcard/dashcore-gameplay-${second}s.png" "$REPORT_DIR/gameplay-${second}s.png" >/dev/null
-              echo "Gameplay checkpoint: ${second}s; jump input sent." | tee -a "$REPORT_DIR/gameplay-input.txt"
+              adb -s "$SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat-checkpoint-${second}s.txt"
+              echo "Gameplay checkpoint: ${second}s; 180ms jump press/release stimulus sent." | tee -a "$REPORT_DIR/gameplay-input.txt"
+              if grep -q 'NODE-VISIT-COST FINAL' "$REPORT_DIR/logcat-checkpoint-${second}s.txt"; then
+                echo "Complete 600-DrawScene-frame profile detected at ${second}s; ending gameplay stimulus early." | tee -a "$REPORT_DIR/gameplay-input.txt"
+                break
+              fi
             fi
           done
           PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
