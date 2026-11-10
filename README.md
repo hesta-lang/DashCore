@@ -89,3 +89,11 @@ AutoTest v3.9 usa coordenadas nativas de las capturas 1920×1080: OK (960,793), 
 - Sampling is limited to five update-aligned frames in the 600-update window to keep measurement overhead bounded. No extra per-frame scene traversal is introduced.
 - Live culling remains hard-disabled. No object visibility, draw order, transforms, scheduling, gameplay, physics, triggers, controls, or UI are changed.
 - Emits `NODE-VISIT-COST FINAL` independently of the DrawScene hook, with a fallback report from `postUpdate` if node visits stop. `DRAWSCENE-CPU` remains a separate optional metric. The purpose is to determine whether CPU scene traversal is a meaningful contributor before selecting any optimization.
+
+
+## 0.9.0-beta — first conservative optimization
+
+- Starts the optimization phase with a fast path in the `CCNode::visit` hook: when no PlayLayer diagnostic window is active and live culling is disabled, the hook immediately delegates to the original Cocos visit implementation.
+- This avoids repeated profile-state checks for every visited node before gameplay profiling begins and after the diagnostic window ends.
+- It does not skip nodes, change visibility, alter draw order, or modify object updates, triggers, collisions, physics, controls, menus, or level data.
+- Live render culling remains hard-disabled. This is a deliberately small first optimization; its performance impact must be measured against the 0.8.9-alpha baseline on the cloud test and, ultimately, the physical Huawei/Mali-G51.
