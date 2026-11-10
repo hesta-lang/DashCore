@@ -294,7 +294,7 @@ jobs:
           adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-main-menu.png
           adb -s "$SERIAL" pull /sdcard/dashcore-main-menu.png "$REPORT_DIR/main-menu-after-notice.png" >/dev/null
           # Main-menu Play is near 50% width / 47% height; for the 1920x1080 capture this is about (960,500).
-          tap_image_xy "$REPORT_DIR/main-menu-after-notice.png" 960 793
+          tap_image_xy "$REPORT_DIR/main-menu-after-notice.png" 960 500
           sleep 6
           adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-level-select.png
           adb -s "$SERIAL" pull /sdcard/dashcore-level-select.png "$REPORT_DIR/level-select.png" >/dev/null
