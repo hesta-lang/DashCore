@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a paired DashCore fast-path OFF/ON benchmark on one Android cloud device."""
+"""Measure Geometry Dash frame timing first without DashCore, then with DashCore."""
 from __future__ import annotations
 import argparse, csv, json, math, pathlib, re, shlex, statistics, subprocess, sys, time
 from PIL import Image
@@ -128,15 +128,6 @@ echo "STAT_AFTER=$STAT_AFTER"
                 "cpu_seconds": cpu_seconds, "cpu_percent_one_core": cpu_seconds/elapsed*100.0,
                 "tap_count": int(markers.get("TAP_COUNT", "0"))}
     except (KeyError, ValueError): return {"available": False, "reason": "Could not parse device process samples"}
-
-def summarize_logs(text: str, mode: str) -> dict[str, Any]:
-    return {
-        "mode_confirmed": f"FAST-PATH: mode={mode}" in text,
-        "profile_complete": "both 600-frame samples complete" in text and "NODE-VISIT-COST FINAL" in text,
-        "update_profile": parse_update(text),
-        "node_visit_final_present": "NODE-VISIT-COST FINAL" in text,
-        "culling_active_false": "culling-active=false" in text,
-    }
 
 def notice_is_visible(path: pathlib.Path) -> bool:
     image = Image.open(path).convert("RGB")
