@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.8.7-alpha",
+  "version": "0.8.8-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.8.7-alpha: Android64 diagnostic build for Geometry Dash. Separates callback execution cost from callback cadence, reports p50/p95/p99 intervals and counts gaps over 50ms and 100ms. No rendering optimization is enabled; live culling remains hard-disabled.",
+  "description": "DashCore 0.8.8-alpha: Adds sampled CCNode::visit and GameObject visit inclusive CPU timings to distinguish scene traversal cost from PlayLayer update and DrawScene callback cost. Diagnostic-only; live render culling remains hard-disabled.",
   "tags": [
     "optimizations",
     "performance"
@@ -16,7 +16,7 @@
     "experimental-render-culling": {
       "type": "bool",
       "name": "Experimental render culling (locked off)",
-      "description": "Diagnostic alpha only. Live object hiding is hard-disabled until trigger classification and camera-space bounds are validated.",
+      "description": "Diagnostic alpha only. Live object hiding remains hard-disabled until trigger classification and camera-space bounds are validated.",
       "default": false
     }
   }
