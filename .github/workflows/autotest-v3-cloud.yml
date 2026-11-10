@@ -373,39 +373,39 @@ jobs:
             fi
             capture_sf_latency after
             python3 - "$REPORT_DIR" <<'PY'
-import pathlib, re, sys
-from statistics import mean
-root = pathlib.Path(sys.argv[1])
-def ticks(path):
-    try:
-        tail = path.read_text().strip().split(")", 1)[1].split()
-        return int(tail[11]) + int(tail[12])
-    except Exception: return None
-b, a = ticks(root/"process-stat-before.txt"), ticks(root/"process-stat-after.txt")
-try: elapsed = float((root/"uptime-after.txt").read_text().split()[0]) - float((root/"uptime-before.txt").read_text().split()[0])
-except Exception: elapsed = None
-lines = ["## Unprofiled 20-second observation"]
-if b is not None and a is not None and elapsed and elapsed > 0:
-    delta = max(0, a-b)
-    lines += [f"- Launcher CPU ticks: {delta}", f"- Elapsed seconds: {elapsed:.3f}", f"- CPU time estimate: {delta/100:.3f}s (USER_HZ assumed 100)", f"- Approx. launcher CPU utilization: {delta/100/elapsed*100:.1f}%"]
-else: lines.append("- Launcher CPU delta: unavailable")
-for phase in ("before", "after"):
-    p = root/f"surfaceflinger-latency-{phase}.txt"; stamps = []
-    if p.exists():
-        for line in p.read_text(errors="replace").splitlines():
-            c = line.split()
-            if len(c) >= 3 and all(re.fullmatch(r"-?\\d+", x) for x in c[:3]):
-                try:
-                    t = int(c[1])
-                    if t > 0: stamps.append(t)
-                except ValueError: pass
-    ds = [(y-x)/1e6 for x,y in zip(stamps, stamps[1:]) if y>x]
-    if ds:
-        q = sorted(ds); p95 = q[min(len(q)-1, int(.95*(len(q)-1)))]
-        lines.append(f"- SurfaceFlinger {phase}: {len(ds)} intervals; mean {mean(ds):.2f} ms; p95 {p95:.2f} ms; max {max(ds):.2f} ms; >50 ms {sum(x>50 for x in ds)}")
-    else: lines.append(f"- SurfaceFlinger {phase}: unavailable/no usable timestamps")
-(root/"unprofiled-metrics.md").write_text("\\n".join(lines)+"\\n")
-print("\\n".join(lines))
+          import pathlib, re, sys
+          from statistics import mean
+          root = pathlib.Path(sys.argv[1])
+          def ticks(path):
+              try:
+                  tail = path.read_text().strip().split(")", 1)[1].split()
+                  return int(tail[11]) + int(tail[12])
+              except Exception: return None
+          b, a = ticks(root/"process-stat-before.txt"), ticks(root/"process-stat-after.txt")
+          try: elapsed = float((root/"uptime-after.txt").read_text().split()[0]) - float((root/"uptime-before.txt").read_text().split()[0])
+          except Exception: elapsed = None
+          lines = ["## Unprofiled 20-second observation"]
+          if b is not None and a is not None and elapsed and elapsed > 0:
+              delta = max(0, a-b)
+              lines += [f"- Launcher CPU ticks: {delta}", f"- Elapsed seconds: {elapsed:.3f}", f"- CPU time estimate: {delta/100:.3f}s (USER_HZ assumed 100)", f"- Approx. launcher CPU utilization: {delta/100/elapsed*100:.1f}%"]
+          else: lines.append("- Launcher CPU delta: unavailable")
+          for phase in ("before", "after"):
+              p = root/f"surfaceflinger-latency-{phase}.txt"; stamps = []
+              if p.exists():
+                  for line in p.read_text(errors="replace").splitlines():
+                      c = line.split()
+                      if len(c) >= 3 and all(re.fullmatch(r"-?\\d+", x) for x in c[:3]):
+                          try:
+                              t = int(c[1])
+                              if t > 0: stamps.append(t)
+                          except ValueError: pass
+              ds = [(y-x)/1e6 for x,y in zip(stamps, stamps[1:]) if y>x]
+              if ds:
+                  q = sorted(ds); p95 = q[min(len(q)-1, int(.95*(len(q)-1)))]
+                  lines.append(f"- SurfaceFlinger {phase}: {len(ds)} intervals; mean {mean(ds):.2f} ms; p95 {p95:.2f} ms; max {max(ds):.2f} ms; >50 ms {sum(x>50 for x in ds)}")
+              else: lines.append(f"- SurfaceFlinger {phase}: unavailable/no usable timestamps")
+          (root/"unprofiled-metrics.md").write_text("\\n".join(lines)+"\\n")
+          print("\\n".join(lines))
 PY
             cat "$REPORT_DIR/unprofiled-metrics.md" | tee -a "$REPORT_DIR/unprofiled-observation.txt"
           else
