@@ -79,3 +79,13 @@ AutoTest v3.9 usa coordenadas nativas de las capturas 1920×1080: OK (960,793), 
 - Reports callback-interval buckets, p50/p95/p99 intervals, and counts above 50 ms and 100 ms. Intervals in the 25–50 ms range are no longer automatically described as long stalls.
 - The cloud v3.9 run reached active Stereo Madness gameplay and confirmed `setupHasCompleted`. Its 200 intervals above 25 ms are therefore treated as a cadence observation, not 200 proven rendering stalls; the single 385 ms maximum may include cloud-emulator scheduling or pauses.
 - This is still diagnostic-only. It does not alter frame pacing, rendering, gameplay, or enable culling. Validate the new report on the physical Huawei/Mali-G51 before drawing device-performance conclusions.
+
+
+## 0.8.8-alpha scene traversal diagnostics
+
+- Adds sampled CPU timing around `CCNode::visit()` on the existing diagnostic sample frames (every 120th measured DrawScene frame).
+- Reports total and maximum inclusive visit time, plus the GameObject subset, alongside the existing PlayLayer update and DrawScene callback timings.
+- These visit timings are inclusive: parent visit durations contain child visit work, so totals overlap and must not be added together or treated as standalone renderer/GPU time.
+- Sampling is limited to four frames in the 600-frame window to keep measurement overhead bounded. No extra per-frame scene traversal is introduced.
+- Live culling remains hard-disabled. No object visibility, draw order, transforms, scheduling, gameplay, physics, triggers, controls, or UI are changed.
+- The purpose is to determine whether CPU scene traversal is a meaningful contributor before selecting any optimization.
