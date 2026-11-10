@@ -158,6 +158,10 @@ runs:
       with:
         variant: ${{ steps.platform.outputs.ccache_variant }}
         key: ${{ steps.platform.outputs.target_id }}-v1
+        # Keep the cache compact to reduce GitHub cache restore/save time.
+        max-size: 2G
+        # Only the default branch updates the shared cache; other branches reuse it.
+        save: ${{ github.ref == 'refs/heads/main' }}
       if: steps.platform.outputs.ccache_variant != ''
 
     - name: Setup CPM Cache
