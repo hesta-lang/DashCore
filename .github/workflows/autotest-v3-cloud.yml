@@ -213,12 +213,12 @@ jobs:
           rows = ["16666667"]
           rows += [f"{i*period} {i*period} {i*period}" for i in range(1, 20)]
           rows += [f"{2**63-1} {2**63-1} {2**63-1}"]
-          parsed = module.parse_surfaceflinger_latency("\\n".join(rows))
+          parsed = module.parse_surfaceflinger_latency("\n".join(rows))
           assert parsed.get("available") is True, parsed
           assert parsed["frame_count"] == 19, parsed
           assert 59.0 <= parsed["average_fps"] <= 61.0, parsed
           invalid = module.parse_surfaceflinger_latency(
-              "16666667\\n" + "\\n".join([f"{2**63-1} {2**63-1} {2**63-1}"] * 20)
+              "16666667\\n" + "\n".join([f"{2**63-1} {2**63-1} {2**63-1}"] * 20)
           )
           assert invalid.get("available") is False, invalid
           print("SurfaceFlinger timestamp parser self-test passed.")
