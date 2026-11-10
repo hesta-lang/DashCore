@@ -413,7 +413,15 @@ def wait_for_main_menu(serial: str, mode: str, variant_dir: pathlib.Path,
             tap_notice_confirmation(serial, path)
             time.sleep(2.0)
             continue
-        if "play" in last_text and ("geometry dash" in last_text or "settings" in last_text or "editor" in last_text):
+        menu_landmarks = (
+            "character select" in last_text and
+            "level editor" in last_text
+        )
+        legacy_menu_match = (
+            "play" in last_text and
+            ("geometry dash" in last_text or "settings" in last_text or "editor" in last_text)
+        )
+        if menu_landmarks or legacy_menu_match:
             screenshot(serial, f"dashcore-{mode.lower()}-main-menu-confirmed.png",
                        variant_dir / "main-menu-confirmed.png")
             update_notice_state(
