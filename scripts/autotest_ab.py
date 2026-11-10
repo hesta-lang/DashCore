@@ -80,6 +80,72 @@ def parse_gfxinfo(path: pathlib.Path) -> dict[str, Any]:
         "over_100ms": sum(value > 100.0 for value in intervals),
     }
 
+def parse_surfaceflinger_latency(text: str) -> dict[str, Any]:
+    """Parse SurfaceFlinger --latency output (refresh period + desired/present/ready ns)."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    refresh_ns = None
+    if lines:
+        try: refresh_ns = int(lines[0].split()[0])
+        except (ValueError, IndexError): pass
+    present_ns = []
+    for line in lines[1:]:
+        fields = line.split()
+        if len(fields) < 2: continue
+        try:
+            # SurfaceFlinger reports desiredPresentTime, actualPresentTime, frameReadyTime.
+            stamp = int(fields[1])
+        except ValueError:
+            continue
+        if stamp > 0: present_ns.append(stamp)
+    present_ns = sorted(set(present_ns))
+    intervals = [(b-a)/1_000_000.0 for a, b in zip(present_ns, present_ns[1:]) if b > a]
+    if len(intervals) < 10:
+        return {"available": False, "reason": f"Insufficient SurfaceFlinger frames ({len(intervals)} intervals)",
+                "frame_count": len(present_ns), "refresh_period_ns": refresh_ns}
+    mean_ms, min_ms, max_ms = statistics.mean(intervals), min(intervals), max(intervals)
+    return {
+        "available": True, "source": "SurfaceFlinger actualPresentTime",
+        "frame_count": len(present_ns), "interval_count": len(intervals),
+        "refresh_period_ns": refresh_ns,
+        "max_fps": 1000.0 / min_ms, "average_fps": 1000.0 / mean_ms,
+        "min_fps": 1000.0 / max_ms, "mean_frame_ms": mean_ms,
+        "fastest_frame_ms": min_ms, "slowest_frame_ms": max_ms,
+        "p95_frame_ms": percentile(intervals, .95),
+        "over_50ms": sum(value > 50.0 for value in intervals),
+        "over_100ms": sum(value > 100.0 for value in intervals),
+    }
+
+def prepare_surfaceflinger(serial: str, mode_dir: pathlib.Path) -> list[str]:
+    listing = shell(serial, "dumpsys SurfaceFlinger --list", check=False, timeout=60)
+    (mode_dir / "surfaceflinger-layers.txt").write_text(listing)
+    candidates = []
+    for line in listing.splitlines():
+        name = line.strip()
+        if not name: continue
+        low = name.lower()
+        if "com.geode.launcher" in low or "geometrydashactivity" in low:
+            candidates.append(name)
+    # Keep the actual app-owned layers; exclude unrelated launcher/system layers.
+    candidates = list(dict.fromkeys(candidates))
+    (mode_dir / "surfaceflinger-candidates.txt").write_text("\n".join(candidates) + ("\n" if candidates else ""))
+    for index, name in enumerate(candidates):
+        shell(serial, "dumpsys SurfaceFlinger --latency-clear " + shlex.quote(name), check=False, timeout=30)
+    return candidates
+
+def collect_surfaceflinger(serial: str, candidates: list[str], mode_dir: pathlib.Path) -> dict[str, Any]:
+    best: dict[str, Any] = {"available": False, "reason": "No app-owned SurfaceFlinger layer found"}
+    for index, name in enumerate(candidates):
+        raw = shell(serial, "dumpsys SurfaceFlinger --latency " + shlex.quote(name), check=False, timeout=60)
+        (mode_dir / f"surfaceflinger-latency-{index}.txt").write_text("LAYER=" + name + "\n" + raw)
+        parsed = parse_surfaceflinger_latency(raw)
+        parsed["layer"] = name
+        if parsed.get("available"):
+            if not best.get("available") or parsed.get("frame_count", 0) > best.get("frame_count", 0):
+                best = parsed
+        elif not best.get("available") and parsed.get("frame_count", 0) > best.get("frame_count", 0):
+            best = parsed
+    return best
+
 def parse_update(log_text: str) -> dict[str, int] | None:
     pattern = re.compile(r"UPDATE FINAL: frames=(\d+), avg=(\d+)us, max=(\d+)us, over8ms=(\d+), callbackGap>50ms=(\d+), callbackGap>100ms=(\d+), maxGap=(\d+)us")
     match = pattern.search(log_text)
@@ -180,12 +246,22 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[
     pid = pids[0] if pids else ""
     gfx = {"available": False, "reason": "Launcher process not found"}
     observation = {"available": False, "reason": "Launcher process not found"}
+    surface_layers: list[str] = []
+    surface_metrics: dict[str, Any] = {"available": False, "reason": "Launcher process not found"}
     if pid:
         shell(serial, "dumpsys gfxinfo com.geode.launcher reset", check=False)
+        surface_layers = prepare_surfaceflinger(serial, variant_dir)
         observation = run_device_observation(serial, pid, variant_dir)
+        surface_metrics = collect_surfaceflinger(serial, surface_layers, variant_dir)
         gfx_text = shell(serial, "dumpsys gfxinfo com.geode.launcher framestats", check=False, timeout=90)
         (variant_dir / "gfxinfo-framestats.txt").write_text(gfx_text)
         gfx = parse_gfxinfo(variant_dir / "gfxinfo-framestats.txt")
+        # gfxinfo is retained as a diagnostic fallback, but SurfaceFlinger is preferred
+        # for the game's native OpenGL SurfaceView frames.
+        if surface_metrics.get("available"):
+            gfx = surface_metrics
+        elif not gfx.get("available"):
+            gfx = surface_metrics
 
     last_logcat = shell(serial, "logcat -d -v threadtime", check=False)
     (variant_dir / "logcat-final.txt").write_text(last_logcat)
@@ -197,6 +273,7 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[
     screenshot(serial, f"dashcore-{mode.lower()}-final.png", variant_dir / "final-screen.png")
     crash = bool(re.search(r"FATAL EXCEPTION|Fatal signal|SIGABRT|SIGSEGV|has died", crash_text, re.IGNORECASE))
     data = {"mode": mode, "mod_enabled": mod_enabled, "gfxinfo": gfx,
+            "surfaceflinger": surface_metrics, "surfaceflinger_candidate_count": len(surface_layers),
             "cpu_observation": observation, "crash_detected": crash,
             "launcher_pid_after_test": pid or None}
     (variant_dir / "metrics.json").write_text(json.dumps(data, indent=2) + "\n")
@@ -247,12 +324,13 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
         "- First pass launches Geometry Dash with the DashCore .geode file absent from the Geode mods directory.",
         "- Second pass installs the exact same built .geode artifact and restarts the launcher.",
         "- Both passes use the same cloud device, game APK, menu navigation, default first level, scripted touch pattern, and 20-second device-timed observation.",
-        "- FPS is calculated from Android gfxinfo FrameCompleted timestamps: maximum FPS is the inverse of the shortest observed frame interval; average and minimum FPS are derived from the mean and longest interval.",
+        "- FPS prefers SurfaceFlinger actualPresentTime timestamps from Geometry Dash-owned layers, which capture native OpenGL presentation; Android gfxinfo is retained only as a fallback diagnostic.",
+        "- Maximum FPS is the inverse of the shortest observed presentation interval; average and minimum FPS are derived from the mean and longest interval. At least 10 real frame intervals are required.",
         "- Frame-time outliers are reported separately so a brief FPS peak cannot hide stuttering.",
         "- CPU utilization is process CPU time divided by device-measured elapsed time, expressed relative to one CPU core.",
         "- This cloud emulator is x86_64 with ARM translation; it is not a physical Huawei STK-LX3 / Mali-G51 measurement.",
         "- Geometry Dash cloud APK version is recorded separately; cloud results are comparative signals, not a guarantee of physical-device performance.", "",
-        "A result is VALID only when both passes provide frame timestamps and CPU samples and neither pass reports a crash."
+        "A result is VALID only when both passes provide at least 10 real presentation intervals and CPU samples and neither pass reports a crash. Raw layer listings and latency dumps are included for diagnosis."
     ]
     (out / "fps-comparison.md").write_text("\n".join(lines) + "\n")
     (out / "fps-comparison.json").write_text(json.dumps({
