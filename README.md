@@ -71,3 +71,11 @@ AutoTest v3.9 conserva la validación del parser PNG y corrige la secuencia de t
 
 
 AutoTest v3.9 usa coordenadas nativas de las capturas 1920×1080: OK (960,793), Play del menú principal (960,500) y Play del nivel seleccionado (960,500).
+
+
+## 0.8.7-alpha callback cadence diagnostics
+
+- Separates callback execution cost (time spent inside `PlayLayer::postUpdate` and `CCDirector::drawScene`) from the wall-clock interval between consecutive callbacks.
+- Reports callback-interval buckets, p50/p95/p99 intervals, and counts above 50 ms and 100 ms. Intervals in the 25–50 ms range are no longer automatically described as long stalls.
+- The cloud v3.9 run reached active Stereo Madness gameplay and confirmed `setupHasCompleted`. Its 200 intervals above 25 ms are therefore treated as a cadence observation, not 200 proven rendering stalls; the single 385 ms maximum may include cloud-emulator scheduling or pauses.
+- This is still diagnostic-only. It does not alter frame pacing, rendering, gameplay, or enable culling. Validate the new report on the physical Huawei/Mali-G51 before drawing device-performance conclusions.
