@@ -308,8 +308,22 @@ jobs:
           adb -s "$SERIAL" pull /sdcard/dashcore-level-select.png "$REPORT_DIR/level-select.png" >/dev/null
           # Attempt the selected level's centered Play control; retain screenshot for audit.
           tap_image_xy "$REPORT_DIR/level-select.png" 960 500
-          echo "Automated first-level launch taps sent using corrected 1920x1080 screenshot pixel coordinates (OK 960,793; main-menu Play 960,500; level Play 960,500); no gameplay controls or level data were modified." | tee -a "$REPORT_DIR/gameplay-input.txt"
-          sleep 30
+          echo "Automated menu taps sent using corrected screenshot coordinates (OK 960,793; main-menu Play 960,500; level Play 960,500)." | tee -a "$REPORT_DIR/gameplay-input.txt"
+
+          # Actively play the selected first built-in level instead of leaving it
+          # idle. A tap is sent every 700 ms for 25 seconds, with five-second
+          # checkpoints. This gives the 600-frame DashCore profile (~10 s at
+          # 60 FPS) enough time to finish while retaining evidence if the player
+          # dies early. Taps are ordinary jump inputs; no game data is changed.
+          for second in $(seq 1 25); do
+            adb -s "$SERIAL" shell input tap 1500 800
+            sleep 1
+            if [ $((second % 5)) -eq 0 ]; then
+              adb -s "$SERIAL" shell screencap -p "/sdcard/dashcore-gameplay-${second}s.png"
+              adb -s "$SERIAL" pull "/sdcard/dashcore-gameplay-${second}s.png" "$REPORT_DIR/gameplay-${second}s.png" >/dev/null
+              echo "Gameplay checkpoint: ${second}s; jump input sent." | tee -a "$REPORT_DIR/gameplay-input.txt"
+            fi
+          done
           PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
           echo "Launcher PID after launch wait: ${PID:-not-running}" | tee -a "$REPORT_DIR/process.txt"
           adb -s "$SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat.txt"
@@ -322,11 +336,15 @@ jobs:
 
           MOD_LOAD="NOT CONFIRMED"
           GAMEPLAY_LAYER="NOT CONFIRMED"
+          NODE_VISIT_PROFILE="NOT CONFIRMED"
           if grep -R -I -E 'hesta\.optgod|DashCore' "$REPORT_DIR"/geode-logs* >/dev/null 2>&1; then
             MOD_LOAD="CONFIRMED"
           fi
           if grep -R -I -E 'DashCore.*setupHasCompleted' "$REPORT_DIR"/geode-logs* >/dev/null 2>&1; then
             GAMEPLAY_LAYER="CONFIRMED"
+          fi
+          if grep -R -I -E 'NODE-VISIT-COST FINAL' "$REPORT_DIR"/geode-logs* >/dev/null 2>&1; then
+            NODE_VISIT_PROFILE="CONFIRMED"
           fi
           if [ -z "$PID" ] || grep -E 'com\.geode\.launcher|com\.robtopx\.geometryjump' "$REPORT_DIR/crash-buffer.txt" | grep -Ei 'FATAL EXCEPTION|Fatal signal|SIGABRT|SIGSEGV|has died' >/dev/null; then
             RESULT="FAIL"
@@ -350,7 +368,8 @@ jobs:
             fi
             echo "- DashCore load in Geode logs: $MOD_LOAD"
             echo "- DashCore PlayLayer hooks: $GAMEPLAY_LAYER"
-            echo "- First-level launch: attempted via corrected screenshot-pixel emulator taps; verify screenshots and PlayLayer log markers."
+            echo "- NODE-VISIT-COST FINAL profile: $NODE_VISIT_PROFILE"
+            echo "- Gameplay: 25 seconds of scripted jump input with screenshots every 5 seconds; early death remains visible in checkpoint captures."
             echo ""
             echo "## Scope and limits"
             echo "- Static .geode validation ran before device startup."
@@ -359,12 +378,14 @@ jobs:
             echo "- Geometry Dash is installed only when a legitimate universal APK is supplied through workflow input or GEOMETRY_DASH_MEDIAFIRE_URL secret."
             echo "- Cloud x86_64 + ARM translation is not equivalent to the Huawei STK-LX3 / Mali-G51."
             echo "- A PASS requires DashCore's setupHasCompleted hook to appear in the Geode log."
-            echo "- Automated taps only dismiss the first-run notice and attempt to open the first built-in level; they do not validate full gameplay or trigger behavior."
+            echo "- Scripted jump inputs are a smoke-test stimulus, not a claim that the level was completed or that a fixed percentage was reached."
+            echo "- NODE-VISIT-COST FINAL confirms the complete 600-DrawScene-frame diagnostic window; cloud x86_64 plus ARM translation is not a physical-device performance result."
             echo "- No frame-pacing or GPU-performance claim is made."
           } | tee "$REPORT_DIR/summary.md"
           echo "result=$RESULT" >> "$GITHUB_OUTPUT"
           echo "mod_load=$MOD_LOAD" >> "$GITHUB_OUTPUT"
           echo "gameplay_layer=$GAMEPLAY_LAYER" >> "$GITHUB_OUTPUT"
+          echo "node_visit_profile=$NODE_VISIT_PROFILE" >> "$GITHUB_OUTPUT"
           if [ "$RESULT" = "FAIL" ]; then
             echo "::error::Launcher process failed or a crash signature was detected."
             exit 1
