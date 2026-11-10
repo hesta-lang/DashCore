@@ -267,4 +267,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-# Repetition trigger: benchmark repeat 1; no test or build behavior changes.
+# Repetition trigger: benchmark repeat 2; no test or build behavior changes.
