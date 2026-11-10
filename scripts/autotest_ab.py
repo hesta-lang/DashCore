@@ -314,7 +314,7 @@ def update_notice_state(variant_dir: pathlib.Path, **changes: Any) -> None:
 
 def parse_wm_size(text: str, fallback_width: int, fallback_height: int) -> tuple[int, int]:
     """Read the configured display size, falling back to captured frame size."""
-    sizes = re.findall(r"(?:Override|Physical) size:\\s*(\\d+)x(\\d+)", text)
+    sizes = re.findall(r"(?:Override|Physical) size:\s*(\d+)x(\d+)", text)
     if sizes:
         return tuple(map(int, sizes[-1]))
     return fallback_width, fallback_height
