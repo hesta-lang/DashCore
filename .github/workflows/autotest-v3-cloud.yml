@@ -227,6 +227,7 @@ jobs:
           center = module.detect_notice_ok_button(notice)
           assert center is not None and abs(center[0] - 960) <= 3 and abs(center[1] - 792) <= 3, center
           assert module.is_gameplay_text("ATTEMPT 1") is True
+          assert module.is_gameplay_text("apt 1") is True
           assert module.is_gameplay_text("Stereo Madness normal mode 0% practice mode 0%") is False
           assert module.is_main_menu_text("character select level editor\\nDownload mods here!") is True
           assert module.is_main_menu_text("geomenrs) drs\\nales\\nsone oe\\n©googod &.") is False
