@@ -223,8 +223,10 @@ def wait_for_state(serial: str, mode: str, label: str, destination: pathlib.Path
         last_text = take_state_screenshot(serial, mode, f"{label}-{attempt}", destination)
         if predicate(last_text):
             screenshot(serial, f"dashcore-{mode.lower()}-{label}-confirmed.png", destination)
-            (destination.parent / f"{label}-confirmed-ocr.txt").write_text(last_text + "\n")
-            return last_text
+            confirmed_text = screenshot_text(destination)
+            if predicate(confirmed_text):
+                (destination.parent / f"{label}-confirmed-ocr.txt").write_text(confirmed_text + "\n")
+                return confirmed_text
         time.sleep(interval_s)
     raise RuntimeError(f"{mode}: timed out waiting for {label}; last OCR text: {last_text[:500]!r}")
 
@@ -461,7 +463,10 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[
     if "notice" in startup_text or "terms of use" in startup_text:
         wait_for_notice_dismissal(serial, mode, variant_dir)
 
-    gameplay_pattern = re.compile(r"\b\d{1,3}\s*%")
+    # Geometry Dash's level-select screen also contains "0%" progress labels.
+    # The in-level HUD instead exposes the "ATTEMPT N" label; use that to avoid
+    # treating the Stereo Madness selection screen as active gameplay.
+    gameplay_pattern = re.compile(r"\battempt\s*#?\s*\d+\b", re.IGNORECASE)
     current_text = take_state_screenshot(serial, mode, "startup-current", variant_dir / "startup-current.png")
     gameplay_ready = bool(gameplay_pattern.search(current_text))
     if not gameplay_ready:
@@ -579,7 +584,7 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
         "- CPU utilization is process CPU time divided by device-measured elapsed time, expressed relative to one CPU core.",
         "- This cloud emulator is x86_64 with ARM translation; it is not a physical Huawei STK-LX3 / Mali-G51 measurement.",
         "- Geometry Dash cloud APK version is recorded separately; cloud results are comparative signals, not a guarantee of physical-device performance.", "",
-        "A result is VALID only when both passes positively verify the in-game percentage HUD, provide at least 10 plausible presentation intervals and CPU samples, and neither pass reports a crash. INT64_MAX sentinel timestamps and intervals outside 0.1–1000 ms are rejected. Raw layer listings and latency dumps are included for diagnosis."
+        "A result is VALID only when both passes positively verify the in-level ATTEMPT HUD (not the level-select 0% labels), provide at least 10 plausible presentation intervals and CPU samples, and neither pass reports a crash. INT64_MAX sentinel timestamps and intervals outside 0.1–1000 ms are rejected. Raw layer listings and latency dumps are included for diagnosis."
     ]
     (out / "fps-comparison.md").write_text("\n".join(lines) + "\n")
     (out / "fps-comparison.json").write_text(json.dumps({
