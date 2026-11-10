@@ -829,7 +829,7 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
 
         auto* object = typeinfo_cast<GameObject*>(this);
         if (!object) {
-            CCNode::visit();
+            visitBase();
             return;
         }
 
@@ -859,7 +859,7 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
         }
 
         if (!g_cullingEnabled) {
-            CCNode::visit();
+            visitBase();
             return;
         }
 
@@ -873,7 +873,7 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
             return;
         }
 
-        CCNode::visit();
+        visitBase();
     }
 };
 
