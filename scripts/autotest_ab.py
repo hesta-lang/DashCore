@@ -312,6 +312,14 @@ def update_notice_state(variant_dir: pathlib.Path, **changes: Any) -> None:
     path.write_text(json.dumps(state, indent=2) + "\n")
 
 
+def parse_wm_size(text: str, fallback_width: int, fallback_height: int) -> tuple[int, int]:
+    """Read the configured display size, falling back to captured frame size."""
+    sizes = re.findall(r"(?:Override|Physical) size:\\s*(\\d+)x(\\d+)", text)
+    if sizes:
+        return tuple(map(int, sizes[-1]))
+    return fallback_width, fallback_height
+
+
 def map_screenshot_point_to_input(
     screen_x: int, screen_y: int,
     screenshot_width: int, screenshot_height: int,
@@ -349,11 +357,7 @@ def tap_notice_confirmation(serial: str, screenshot_path: pathlib.Path) -> tuple
     # ADB input coordinate space are landscape. Match dimensions to the
     # screenshot orientation before scaling; do not rotate the point.
     display_text = shell(serial, "wm size", check=False)
-    sizes = re.findall(r"(?:Override|Physical) size:\\s*(\\d+)x(\\d+)", display_text)
-    if sizes:
-        display_width, display_height = map(int, sizes[-1])
-    else:
-        display_width, display_height = width, height
+    display_width, display_height = parse_wm_size(display_text, width, height)
     x, y, input_width, input_height = map_screenshot_point_to_input(
         screen_x, screen_y, width, height, display_width, display_height
     )
