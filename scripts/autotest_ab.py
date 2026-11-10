@@ -397,6 +397,17 @@ def wait_for_notice_dismissal(serial: str, mode: str, variant_dir: pathlib.Path)
         time.sleep(2.0)
     raise RuntimeError(f"{mode}: NOTICE / Terms of Use dialog did not close after automatic button-detection taps.")
 
+def is_main_menu_text(ocr_text: str) -> bool:
+    """Recognize the GD main menu without depending on OCR of its logo."""
+    normalized = " ".join(ocr_text.lower().split())
+    menu_landmarks = "character select" in normalized and "level editor" in normalized
+    legacy_menu_match = (
+        "play" in normalized and
+        ("geometry dash" in normalized or "settings" in normalized or "editor" in normalized)
+    )
+    return menu_landmarks or legacy_menu_match
+
+
 def wait_for_main_menu(serial: str, mode: str, variant_dir: pathlib.Path,
                        timeout_s: int = 90) -> str:
     # The notice may appear after the Geode updater splash, not in the first
@@ -413,15 +424,7 @@ def wait_for_main_menu(serial: str, mode: str, variant_dir: pathlib.Path,
             tap_notice_confirmation(serial, path)
             time.sleep(2.0)
             continue
-        menu_landmarks = (
-            "character select" in last_text and
-            "level editor" in last_text
-        )
-        legacy_menu_match = (
-            "play" in last_text and
-            ("geometry dash" in last_text or "settings" in last_text or "editor" in last_text)
-        )
-        if menu_landmarks or legacy_menu_match:
+        if is_main_menu_text(last_text):
             screenshot(serial, f"dashcore-{mode.lower()}-main-menu-confirmed.png",
                        variant_dir / "main-menu-confirmed.png")
             update_notice_state(
