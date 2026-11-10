@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.8.8-alpha",
+  "version": "0.8.9-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.8.8-alpha: Adds sampled CCNode::visit and GameObject visit inclusive CPU timings to distinguish scene traversal cost from PlayLayer update and DrawScene callback cost. Diagnostic-only; live render culling remains hard-disabled.",
+  "description": "DashCore 0.8.9-alpha: Samples CCNode::visit and GameObject inclusive CPU timings on an independent 600-PlayLayer-update window, separate from DrawScene callback profiling. Diagnostic-only; live render culling remains hard-disabled.",
   "tags": [
     "optimizations",
     "performance"
