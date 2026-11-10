@@ -197,6 +197,9 @@ jobs:
       - name: Install benchmark image reader
         run: python3 -m pip install --disable-pip-version-check pillow
 
+      - name: Validate FPS benchmark script syntax
+        run: python3 -m py_compile scripts/autotest_ab.py
+
       - name: Run baseline vs DashCore FPS benchmark
         env:
           SERIAL: ${{ steps.device.outputs.serial }}
