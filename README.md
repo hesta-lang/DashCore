@@ -4,7 +4,7 @@ DashCore is an Android64 mod for Geometry Dash that investigates rendering perfo
 
 The long-term goal is to reduce unnecessary rendering work and stuttering on Android while keeping Geometry Dash's original gameplay, physics, controls, menus, and visual behavior intact.
 
-**Current status:** DashCore is in diagnostic/validation development. Its visibility analysis is experimental and read-only; live object culling is hard-disabled. It does not currently claim or deliver an active rendering-performance optimization.
+**Current status:** DashCore 0.9.1-beta includes a conservative fast path in its CCNode::visit hook. Its visibility analysis remains diagnostic/read-only and live object culling is hard-disabled.
 
 ## Compatibility
 
@@ -97,3 +97,12 @@ AutoTest v3.9 usa coordenadas nativas de las capturas 1920×1080: OK (960,793), 
 - This avoids repeated profile-state checks for every visited node before gameplay profiling begins and after the diagnostic window ends.
 - It does not skip nodes, change visibility, alter draw order, or modify object updates, triggers, collisions, physics, controls, menus, or level data.
 - Live render culling remains hard-disabled. This is a deliberately small first optimization; its performance impact must be measured against the 0.8.9-alpha baseline on the cloud test and, ultimately, the physical Huawei/Mali-G51.
+
+
+## 0.9.1-beta — controlled fast-path comparison
+
+- Adds an internal startup override at the mod config path fast-path-mode.txt. The values on and off select the fast path; a missing or unrecognized file keeps the production default ON.
+- AutoTest v4.2 runs the same cloud device, default level-entry sequence, and scripted jump stimulus twice using the same .geode package: first OFF, then ON.
+- It confirms the selected mode from the mod log, waits for both 600-frame diagnostic windows to finish, and only then measures a separate 20-second process-CPU observation. Android gfxinfo framestats is collected as a best-effort frame-pacing signal when available.
+- The SurfaceFlinger call used by AutoTest v4.1 has been removed; missing frame-stat data is reported as unavailable rather than failing the test.
+- The A/B comparison does not enable or evaluate live culling. Live culling remains hard-disabled, and the cloud x86_64 + ARM-translation result is not a physical Huawei/Mali-G51 benchmark.

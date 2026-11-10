@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.9.0-beta",
+  "version": "0.9.1-beta",
   "developer": "hesta-lang",
-  "description": "DashCore 0.9.0-beta: first conservative optimization reduces per-node hook overhead outside the diagnostic window. Original Geometry Dash rendering and gameplay remain unchanged; live culling stays hard-disabled.",
+  "description": "DashCore 0.9.1-beta: conservative CCNode visit fast path with an internal startup override for controlled A/B testing. Original Geometry Dash rendering and gameplay remain unchanged; live culling stays hard-disabled.",
   "tags": [
     "optimizations",
     "performance"

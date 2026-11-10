@@ -1,14 +1,11 @@
-name: DashCore AutoTest v4.1 - Profile and Unprofiled Observation
+
+name: DashCore AutoTest v4.2 - Fast-Path A/B Comparison
 
 on:
   workflow_run:
     workflows: ["Build OptGod (Android64)"]
     types: [completed]
     branches: [main]
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/autotest-v3-cloud.yml'
   workflow_dispatch:
     inputs:
       mediafire_url:
@@ -22,21 +19,20 @@ permissions:
   contents: read
 
 concurrency:
-  group: dashcore-autotest-v4.1-cloud
+  group: dashcore-autotest-v4.2-ab
   cancel-in-progress: true
 
 jobs:
   cloud-runtime:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
-    name: Launch Geometry Dash and verify DashCore gameplay hooks on ARM-translated Android
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    name: Compare DashCore fast path OFF vs ON on the same Android device
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       GEOMETRY_DASH_MEDIAFIRE_URL: ${{ inputs.mediafire_url || secrets.GEOMETRY_DASH_MEDIAFIRE_URL || 'https://www.mediafire.com/file/o9rk5i69nmu0nci/Geometry+Dash_2.2081.apk/file' }}
-      PACKAGE_NAME: com.geode.launcher
-      REPORT_DIR: reports/autotest-v4.1
+      REPORT_DIR: reports/autotest-v4.2
     steps:
-      - name: Select DashCore build artifact and source revision
+      - name: Select DashCore build artifact and exact source revision
         id: build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -59,8 +55,8 @@ jobs:
           token = os.environ["GH_TOKEN"]
           url = f"https://api.github.com/repos/{repo}/actions/workflows/build-android64.yml/runs?branch=main&status=success&per_page=20"
           req = urllib.request.Request(url, headers={"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}"})
-          with urllib.request.urlopen(req, timeout=30) as r:
-              runs = json.load(r).get("workflow_runs", [])
+          with urllib.request.urlopen(req, timeout=30) as response:
+              runs = json.load(response).get("workflow_runs", [])
           if not runs:
               raise SystemExit("No successful Android64 build found on main.")
           selected = runs[0]
@@ -69,7 +65,7 @@ jobs:
           PY
           fi
 
-      - name: Checkout the exact source revision used by the build
+      - name: Checkout exact source revision used by the build
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.build.outputs.head_sha }}
@@ -79,7 +75,7 @@ jobs:
         with:
           packages: 'platform-tools build-tools;35.0.0'
 
-      - name: Download DashCore .geode artifact
+      - name: Download and validate DashCore package
         uses: actions/download-artifact@v4
         with:
           name: OptGod-Android64
@@ -107,9 +103,9 @@ jobs:
           import json, os, urllib.request
           token = os.environ["ANDROID_LAUNCHER_TOKEN"]
           url = "https://api.github.com/repos/hesta-lang/android-launcher/actions/workflows/build.yml/runs?branch=spotify-app-remote-integration&status=success&per_page=1"
-          req = urllib.request.Request(url, headers={"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}"})
-          with urllib.request.urlopen(req, timeout=30) as r:
-              runs = json.load(r).get("workflow_runs", [])
+          request = urllib.request.Request(url, headers={"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}"})
+          with urllib.request.urlopen(request, timeout=30) as response:
+              runs = json.load(response).get("workflow_runs", [])
           if not runs:
               raise SystemExit("No successful launcher build found on spotify-app-remote-integration.")
           print(f"run_id={runs[0]['id']}")
@@ -124,27 +120,24 @@ jobs:
           repository: hesta-lang/android-launcher
           run-id: ${{ steps.launcher-build.outputs.run_id }}
 
-      - name: Prepare APKs and start cloud device
-        id: apk
+      - name: Prepare authorized Geometry Dash APK
         run: |
           set -euo pipefail
-          mkdir -p test-input reports/autotest-v4.1
+          mkdir -p test-input "$REPORT_DIR"
           APK="$(find artifacts/launcher -type f -name 'geode-launcher-release-*.apk' ! -name '*android32*' -print -quit)"
           if [ -z "$APK" ]; then
             echo "::error::Universal Geode Launcher APK not found."
             exit 1
           fi
           cp "$APK" test-input/geode-launcher.apk
-          if [ -n "$GEOMETRY_DASH_MEDIAFIRE_URL" ]; then
-            python3 scripts/download_mediafire_apk.py \
-              --url "$GEOMETRY_DASH_MEDIAFIRE_URL" \
-              --output test-input/geometry-dash.apk \
-              --report reports/autotest-v3.9/mediafire-download.json
-            echo "game_apk_available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "game_apk_available=false" >> "$GITHUB_OUTPUT"
+          if [ -z "$GEOMETRY_DASH_MEDIAFIRE_URL" ]; then
+            echo "::error::No authorized Geometry Dash APK URL was supplied."
+            exit 1
           fi
-          echo "launcher_apk=test-input/geode-launcher.apk" >> "$GITHUB_OUTPUT"
+          python3 scripts/download_mediafire_apk.py \
+            --url "$GEOMETRY_DASH_MEDIAFIRE_URL" \
+            --output test-input/geometry-dash.apk \
+            --report "$REPORT_DIR/mediafire-download.json"
 
       - name: Start Android 11 cloud device
         id: cloud
@@ -155,17 +148,14 @@ jobs:
             model=Pixel2,version=30
           max-time-limit: 25m
           record-video: true
-          outputs-dir: reports/autotest-v3.9/cloud-session
+          outputs-dir: reports/autotest-v4.2/cloud-session
 
-      - name: Install, stage mod and run runtime checks
-        id: runtime
+      - name: Install APKs and prepare the test device
+        id: device
         env:
           ADB_PORTS: ${{ steps.cloud.outputs.adb_attached }}
-          LAUNCHER_APK: ${{ steps.apk.outputs.launcher_apk }}
-          GAME_APK_AVAILABLE: ${{ steps.apk.outputs.game_apk_available }}
         run: |
           set -euo pipefail
-          mkdir -p "$REPORT_DIR"
           if [ -z "$ADB_PORTS" ]; then
             echo "::error::Cloud device did not provide an ADB port."
             exit 1
@@ -175,7 +165,6 @@ jobs:
           SERIAL="$(adb devices | awk '$2=="device"{print $1;exit}')"
           [ -n "$SERIAL" ] || { echo "::error::No connected Android device."; exit 1; }
           adb -s "$SERIAL" wait-for-device
-
           prop() { adb -s "$SERIAL" shell getprop "$1" | tr -d '\r'; }
           SDK="$(prop ro.build.version.sdk)"
           ABI="$(prop ro.product.cpu.abi)"
@@ -187,314 +176,42 @@ jobs:
             echo "Supported ABIs: $ABIS"
             echo "Native bridge: ${BRIDGE:-<empty>}"
           } | tee "$REPORT_DIR/device.txt"
-          adb -s "$SERIAL" shell getprop | tr -d '\r' | grep -Ei 'native.bridge|dalvik.vm.isa.(arm|arm64)' > "$REPORT_DIR/native-bridge.txt" || true
-
-          # Validate the cloud image can execute the ARM64 launcher before testing the mod.
-          if ! printf '%s' "$ABIS" | grep -q 'arm64-v8a'; then
-            echo "::error::Cloud device does not advertise arm64-v8a."
+          if [ "$SDK" -lt 29 ] || ! printf '%s' "$ABIS" | grep -q 'arm64-v8a' || [ -z "$BRIDGE" ] || [ "$BRIDGE" = "0" ]; then
+            echo "::error::Cloud device does not meet Android 10+ ARM64 translation requirements."
             exit 1
           fi
-          if [ -z "$BRIDGE" ] || [ "$BRIDGE" = "0" ]; then
-            echo "::error::Expected ARM native-bridge configuration was not found."
+          adb -s "$SERIAL" install -r test-input/geode-launcher.apk | tee "$REPORT_DIR/launcher-install.txt"
+          BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging test-input/geometry-dash.apk)"
+          printf '%s\n' "$BADGING" > "$REPORT_DIR/game-apk-badging.txt"
+          GAME_PACKAGE="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -n 1)"
+          GAME_VERSION="$(printf '%s\n' "$BADGING" | sed -n "s/^package:.*versionName='\([^']*\)'.*/\1/p" | head -n 1)"
+          if [ -z "$GAME_PACKAGE" ] || [ "$GAME_VERSION" != "2.2.144" ]; then
+            echo "::error::Expected authorized Android Geometry Dash 2.2.144 APK; found package=$GAME_PACKAGE version=$GAME_VERSION."
             exit 1
           fi
+          adb -s "$SERIAL" install -r test-input/geometry-dash.apk | tee "$REPORT_DIR/game-install.txt"
+          adb -s "$SERIAL" shell pm path "$GAME_PACKAGE" | grep '^package:' >/dev/null
+          echo "Game package: $GAME_PACKAGE; versionName: $GAME_VERSION" | tee "$REPORT_DIR/game-version.txt"
+          echo "serial=$SERIAL" >> "$GITHUB_OUTPUT"
 
-          adb -s "$SERIAL" install -r "$LAUNCHER_APK" | tee "$REPORT_DIR/launcher-install.txt"
-          adb -s "$SERIAL" shell pm path com.geode.launcher | tee -a "$REPORT_DIR/launcher-install.txt"
-
-          GAME_INSTALLED="false"
-          GAME_PACKAGE=""
-          if [ "$GAME_APK_AVAILABLE" = "true" ]; then
-            # Read the actual application ID and version from the APK itself.
-            # Do not assume every authorized non-Play build uses the same package ID.
-            BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging test-input/geometry-dash.apk)"
-            printf '%s\n' "$BADGING" > "$REPORT_DIR/game-apk-badging.txt"
-            GAME_PACKAGE="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" | head -n 1)"
-            GAME_VERSION="$(printf '%s\n' "$BADGING" | sed -n "s/^package:.*versionName='\\([^']*\\)'.*/\\1/p" | head -n 1)"
-            if [ -z "$GAME_PACKAGE" ]; then
-              echo "::error::Could not read the APK application ID."
-              exit 1
-            fi
-            echo "APK application ID: $GAME_PACKAGE" | tee "$REPORT_DIR/game-package.txt"
-            echo "APK versionName: ${GAME_VERSION:-not declared}" | tee "$REPORT_DIR/game-version.txt"
-            # This APK reports Android versionName 2.2.144, commonly identified
-            # as the Android 2.208 release. Do not mislabel it as desktop 2.2081:
-            # this smoke test records the mobile build's actual version string.
-            if [ "$GAME_VERSION" != "2.2.144" ]; then
-              echo "::error::Expected Android Geometry Dash 2.2.144 (the mobile build used with the 2.2081 target); found: ${GAME_VERSION:-empty}."
-              exit 1
-            fi
-            echo "Mobile release mapping: Android 2.2.144 / 2.208; this does not independently prove desktop patch 2.2081 parity." | tee -a "$REPORT_DIR/game-version.txt"
-            adb -s "$SERIAL" install -r test-input/geometry-dash.apk | tee "$REPORT_DIR/game-install.txt"
-            if adb -s "$SERIAL" shell pm path "$GAME_PACKAGE" | grep -q '^package:'; then
-              GAME_INSTALLED="true"
-              adb -s "$SERIAL" shell dumpsys package "$GAME_PACKAGE" | grep -E 'versionName=|versionCode=' | tee -a "$REPORT_DIR/game-version.txt" || true
-            else
-              echo "::error::APK installation completed but Package Manager cannot resolve $GAME_PACKAGE."
-              exit 1
-            fi
-          fi
-          echo "Geometry Dash installed: $GAME_INSTALLED" | tee "$REPORT_DIR/game-status.txt"
-
-          # The standard launcher build does NOT use Android/data. Its
-          # LaunchUtils.getBaseDirectory() resolves to context.externalMediaDirs.first(),
-          # which is /sdcard/Android/media/<package> on this device. Stage directly
-          # into Geode's real mods directory; do not create a symlink.
-          PID_BEFORE="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\\r' || true)"
-          if [ -z "$PID_BEFORE" ]; then
-            adb -s "$SERIAL" shell monkey -p com.geode.launcher -c android.intent.category.LAUNCHER 1 | tee "$REPORT_DIR/launcher-first-run.txt"
-            sleep 10
-          fi
-          PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\\r' || true)"
-          echo "Launcher PID before staging: ${PID:-not-running}" | tee "$REPORT_DIR/process.txt"
-          adb -s "$SERIAL" shell dumpsys package com.geode.launcher | grep -E 'flags=|pkgFlags=' > "$REPORT_DIR/launcher-package-flags.txt" || true
-
-          # The downloaded APK is the standard (non-Google-Play) universal release.
-          # Source: LaunchUtils.getBaseDirectory(): context.externalMediaDirs.first().
-          BASE_DIR="/sdcard/Android/media/com.geode.launcher"
-          MODS="$BASE_DIR/game/geode/mods"
+      - name: Run paired fast-path OFF/ON benchmark
+        env:
+          SERIAL: ${{ steps.device.outputs.serial }}
+        run: |
+          set -euo pipefail
           MOD="$(find artifacts/mod -type f -name '*.geode' -print -quit)"
           [ -n "$MOD" ] || { echo "::error::DashCore .geode artifact missing."; exit 1; }
-          mkdir -p "$REPORT_DIR"
-          if ! adb -s "$SERIAL" shell mkdir -p "$MODS" 2> "$REPORT_DIR/storage-error.txt"; then
-            {
-              echo "Unable to create Geode mods directory under Android/media."
-              echo "Expected launcher base directory: $BASE_DIR"
-              echo "Launcher standard build uses externalMediaDirs.first(), not Android/data."
-              echo "No mod load was attempted."
-            } | tee "$REPORT_DIR/storage-blocked.txt"
-            echo "::error::Cannot stage DashCore in the launcher's Android/media Geode mods directory."
-            exit 1
-          fi
-          adb -s "$SERIAL" push "$MOD" "$MODS/DashCore.geode" | tee "$REPORT_DIR/mod-stage.txt"
-          adb -s "$SERIAL" shell test -s "$MODS/DashCore.geode"
-          adb -s "$SERIAL" shell ls -l "$MODS" | tee -a "$REPORT_DIR/mod-stage.txt"
-          adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "geode-launcher://main/launch" -p com.geode.launcher | tee -a "$REPORT_DIR/launcher-launch.txt" || true
-          # Android reports its natural panel size as portrait (1080x1920),
-          # but Geometry Dash is rotated and screencap/input use landscape (1920x1080).
-          # adb shell input tap uses the current rotated logical coordinates, so
-          # use the PNG coordinate space directly; record wm size for diagnostics.
-          tap_image_xy() {
-            local image_path="$1" image_x="$2" image_y="$3"
-            local image_w image_h wm_sizes
-            wm_sizes="$(adb -s "$SERIAL" shell wm size | tr -d '\r')"
-            printf "%s\n" "$wm_sizes" | tee -a "$REPORT_DIR/gameplay-input.txt"
-            read -r image_w image_h <<< "$(python3 - "$image_path" <<'PY'
-          import struct, sys
-          with open(sys.argv[1], "rb") as f:
-              header = f.read(24)
-          if header[:8] != b"\x89PNG\r\n\x1a\n":
-              raise SystemExit("Invalid screenshot PNG")
-          print(*struct.unpack(">II", header[16:24]))
-          PY
-          )"
-            if [ "$image_x" -lt 0 ] || [ "$image_y" -lt 0 ] || [ "$image_x" -ge "$image_w" ] || [ "$image_y" -ge "$image_h" ]; then
-              echo "Tap coordinate outside screenshot: ($image_x,$image_y) for ${image_w}x${image_h}" | tee -a "$REPORT_DIR/gameplay-input.txt"
-              return 1
-            fi
-            echo "Tap screenshot/current-rotation=($image_x,$image_y) logical-size=${image_w}x${image_h}; wm-size recorded above" | tee -a "$REPORT_DIR/gameplay-input.txt"
-            adb -s "$SERIAL" shell input tap "$image_x" "$image_y"
-          }
+          python3 scripts/autotest_ab.py \
+            --serial "$SERIAL" \
+            --mod-file "$MOD" \
+            --base-dir /sdcard/Android/media/com.geode.launcher \
+            --report-dir "$REPORT_DIR"
 
-          # Capture the notice before tapping; OK is near 50% width / 73.5% height; for the 1920x1080 capture this is about (960,793).
-          sleep 8
-          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-notice-before.png
-          adb -s "$SERIAL" pull /sdcard/dashcore-notice-before.png "$REPORT_DIR/notice-before.png" >/dev/null
-          sleep 4
-          tap_image_xy "$REPORT_DIR/notice-before.png" 960 793
-          sleep 8
-          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-main-menu.png
-          adb -s "$SERIAL" pull /sdcard/dashcore-main-menu.png "$REPORT_DIR/main-menu-after-notice.png" >/dev/null
-          # Main-menu Play is near 50% width / 47% height; for the 1920x1080 capture this is about (960,500).
-          tap_image_xy "$REPORT_DIR/main-menu-after-notice.png" 960 500
-          sleep 6
-          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-level-select.png
-          adb -s "$SERIAL" pull /sdcard/dashcore-level-select.png "$REPORT_DIR/level-select.png" >/dev/null
-          # Attempt the selected level's centered Play control; retain screenshot for audit.
-          tap_image_xy "$REPORT_DIR/level-select.png" 960 500
-          echo "Automated menu taps sent using corrected screenshot coordinates (OK 960,793; main-menu Play 960,500; level Play 960,500)." | tee -a "$REPORT_DIR/gameplay-input.txt"
-
-          PROFILE_COMPLETE="false"
-          # Keep the PlayLayer active long enough for slower cloud devices to
-          # complete 600 PlayLayer update cycles. A 180 ms press followed by a short
-          # release is more useful than a single tap every second for GD jumps.
-          # Capture evidence every 5 seconds and continue for up to 45 seconds.
-          for second in $(seq 1 45); do
-            # Geometry Dash's player is near the lower-left gameplay lane.
-            # Use discrete taps at that lane; a stationary swipe can be
-            # interpreted as a held touch and repeatedly miss the jump window.
-            for pulse in 1 2; do
-              adb -s "$SERIAL" shell input tap 700 800
-              sleep 0.32
-            done
-            if [ $((second % 5)) -eq 0 ]; then
-              adb -s "$SERIAL" shell screencap -p "/sdcard/dashcore-gameplay-${second}s.png"
-              adb -s "$SERIAL" pull "/sdcard/dashcore-gameplay-${second}s.png" "$REPORT_DIR/gameplay-${second}s.png" >/dev/null
-              adb -s "$SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat-checkpoint-${second}s.txt"
-              echo "Gameplay checkpoint: ${second}s; jump tap stimulus sent." | tee -a "$REPORT_DIR/gameplay-input.txt"
-              if grep -q 'NODE-VISIT-COST FINAL' "$REPORT_DIR/logcat-checkpoint-${second}s.txt"; then
-                PROFILE_COMPLETE="true"
-                echo "Complete 600-update node-visit profile detected at ${second}s; ending diagnostic stimulus." | tee -a "$REPORT_DIR/gameplay-input.txt"
-                break
-              fi
-            fi
-          done
-          # Separate timed window after the 600-update profile. The mod profile is
-          # inactive here, so CCNode::visit() can take its fast path.
-          # This is a 20-second observation, NOT a claimed second 600-update window.
-          if [ "$PROFILE_COMPLETE" = "true" ]; then
-            echo "PROFILE_COMPLETE=true" | tee "$REPORT_DIR/unprofiled-observation.txt"
-            PID_FOR_SAMPLE="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
-            if [ -n "$PID_FOR_SAMPLE" ]; then
-              capture_sf_latency before
-              # Run the whole stimulus and both process samples inside one
-              # device-side shell. Host/ADB round trips are outside the measured
-              # interval; elapsed time is read from Android's monotonic uptime.
-              adb -s "$SERIAL" shell "sh -s '$PID_FOR_SAMPLE'" > "$REPORT_DIR/device-observation.txt" <<'DEVICE_SCRIPT'
-          PID="$1"
-          read U0 _ < /proc/uptime
-          cat "/proc/$PID/stat" > /sdcard/dashcore-process-stat-before.txt 2>/dev/null || true
-          START="$U0"
-          COUNT=0
-          while :; do
-            read NOW _ < /proc/uptime
-            awk -v a="$START" -v b="$NOW" 'BEGIN { exit !((b-a) < 20.0) }' || break
-            input tap 700 800 >/dev/null 2>&1 || true
-            COUNT=$((COUNT+1))
-            sleep 0.5
-          done
-          read END _ < /proc/uptime
-          cat "/proc/$PID/stat" > /sdcard/dashcore-process-stat-after.txt 2>/dev/null || true
-          echo "DEVICE_ELAPSED=$END"
-          echo "DEVICE_START=$START"
-          echo "TAP_COUNT=$COUNT"
-          DEVICE_SCRIPT
-              adb -s "$SERIAL" pull /sdcard/dashcore-process-stat-before.txt "$REPORT_DIR/process-stat-before.txt" >/dev/null 2>&1 || true
-              adb -s "$SERIAL" pull /sdcard/dashcore-process-stat-after.txt "$REPORT_DIR/process-stat-after.txt" >/dev/null 2>&1 || true
-              cat "$REPORT_DIR/device-observation.txt" | tee -a "$REPORT_DIR/unprofiled-observation.txt"
-            else
-              echo "Launcher PID unavailable; skipped process CPU sampling." | tee -a "$REPORT_DIR/unprofiled-observation.txt"
-            fi
-            capture_sf_latency after
-            python3 - "$REPORT_DIR" <<'PY'
-          import pathlib, re, sys
-          from statistics import mean
-          root = pathlib.Path(sys.argv[1])
-          def ticks(path):
-              try:
-                  tail = path.read_text().strip().split(")", 1)[1].split()
-                  return int(tail[11]) + int(tail[12])
-              except Exception: return None
-          b, a = ticks(root/"process-stat-before.txt"), ticks(root/"process-stat-after.txt")
-          device = (root/"device-observation.txt").read_text(errors="replace") if (root/"device-observation.txt").exists() else ""
-          def marker(name):
-              m = re.search(rf"^{name}=([0-9.]+)$", device, re.M)
-              return float(m.group(1)) if m else None
-          start, end = marker("DEVICE_START"), marker("DEVICE_ELAPSED")
-          elapsed = end-start if start is not None and end is not None else None
-          lines = ["## Unprofiled fast-path observation"]
-          if b is not None and a is not None and elapsed and elapsed > 0:
-              delta = max(0, a-b)
-              lines += [f"- Launcher CPU ticks: {delta}", f"- Device-measured elapsed seconds: {elapsed:.3f}", f"- CPU time estimate: {delta/100:.3f}s (USER_HZ assumed 100)", f"- Approx. launcher CPU utilization: {delta/100/elapsed*100:.1f}%"]
-          else: lines.append("- Launcher CPU delta or device elapsed time: unavailable")
-          for phase in ("before", "after"):
-              p = root/f"surfaceflinger-latency-{phase}.txt"; stamps = []
-              if p.exists():
-                  for line in p.read_text(errors="replace").splitlines():
-                      cols = line.split()
-                      if len(cols) >= 3 and all(re.fullmatch(r"-?\d+", x) for x in cols[:3]):
-                          try:
-                              t = int(cols[1])
-                              if t > 0: stamps.append(t)
-                          except ValueError: pass
-              ds = [(y-x)/1e6 for x,y in zip(stamps, stamps[1:]) if y>x]
-              if ds:
-                  q = sorted(ds); p95 = q[min(len(q)-1, int(.95*(len(q)-1)))]
-                  lines.append(f"- SurfaceFlinger {phase}: {len(ds)} intervals; mean {mean(ds):.2f} ms; p95 {p95:.2f} ms; max {max(ds):.2f} ms; >50 ms {sum(x>50 for x in ds)}")
-              else: lines.append(f"- SurfaceFlinger {phase}: unavailable/no usable timestamps")
-          (root/"unprofiled-metrics.md").write_text("\n".join(lines)+"\n")
-          print("\n".join(lines))
-          PY
-            cat "$REPORT_DIR/unprofiled-metrics.md" | tee -a "$REPORT_DIR/unprofiled-observation.txt"
-          else
-            echo "PROFILE_COMPLETE=false; skipped unprofiled observation because the diagnostic did not complete." | tee "$REPORT_DIR/unprofiled-observation.txt"
-          fi
-
-          PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
-          echo "Launcher PID after launch wait: ${PID:-not-running}" | tee -a "$REPORT_DIR/process.txt"
-          adb -s "$SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat.txt"
-          adb -s "$SERIAL" logcat -b crash -d -v threadtime > "$REPORT_DIR/crash-buffer.txt"
-          adb -s "$SERIAL" shell dumpsys activity activities > "$REPORT_DIR/activities.txt" 2>&1 || true
-          adb -s "$SERIAL" shell screencap -p /sdcard/dashcore-autotest-v3.9.png >/dev/null 2>&1 || true
-          adb -s "$SERIAL" pull /sdcard/dashcore-autotest-v3.9.png "$REPORT_DIR/screenshot.png" >/dev/null 2>&1 || true
-          adb -s "$SERIAL" pull /sdcard/Android/media/com.geode.launcher/game/geode/logs "$REPORT_DIR/geode-logs" >/dev/null 2>&1 || true
-          adb -s "$SERIAL" pull /sdcard/Android/media/com.geode.launcher/game/geode/logs "$REPORT_DIR/geode-logs-media" >/dev/null 2>&1 || true
-
-          MOD_LOAD="NOT CONFIRMED"
-          GAMEPLAY_LAYER="NOT CONFIRMED"
-          NODE_VISIT_PROFILE="NOT CONFIRMED"
-          if grep -R -I -E 'hesta\.optgod|DashCore' "$REPORT_DIR"/geode-logs* >/dev/null 2>&1; then
-            MOD_LOAD="CONFIRMED"
-          fi
-          if grep -R -I -E 'DashCore.*setupHasCompleted' "$REPORT_DIR"/geode-logs* >/dev/null 2>&1; then
-            GAMEPLAY_LAYER="CONFIRMED"
-          fi
-          if grep -R -I -E 'NODE-VISIT-COST FINAL' "$REPORT_DIR"/geode-logs* >/dev/null 2>&1; then
-            NODE_VISIT_PROFILE="CONFIRMED"
-          fi
-          if [ -z "$PID" ] || grep -E 'com\.geode\.launcher|com\.robtopx\.geometryjump' "$REPORT_DIR/crash-buffer.txt" | grep -Ei 'FATAL EXCEPTION|Fatal signal|SIGABRT|SIGSEGV|has died' >/dev/null; then
-            RESULT="FAIL"
-          elif [ "$MOD_LOAD" = "CONFIRMED" ] && [ "$GAMEPLAY_LAYER" = "CONFIRMED" ]; then
-            RESULT="PASS"
-          else
-            RESULT="INCONCLUSIVE"
-          fi
-
-          {
-            echo "# DashCore AutoTest v4.1 — Gameplay Smoke Test"
-            echo ""
-            echo "**Overall result: $RESULT**"
-            echo "- Android API: $SDK"
-            echo "- Device ABI: $ABI"
-            echo "- Native bridge: ${BRIDGE:-not reported}"
-            echo "- Launcher process: ${PID:-not running}"
-            echo "- Geometry Dash installed: $GAME_INSTALLED"
-            if [ "$GAME_INSTALLED" = "true" ]; then
-              echo "- Android APK versionName: $GAME_VERSION (mobile 2.2.144 / 2.208; exact desktop 2.2081 parity not asserted)"
-            fi
-            echo "- DashCore load in Geode logs: $MOD_LOAD"
-            echo "- DashCore PlayLayer hooks: $GAMEPLAY_LAYER"
-            echo "- NODE-VISIT-COST FINAL profile (600-update diagnostic window): $NODE_VISIT_PROFILE"
-            echo "- DRAWSCENE-CPU remains a separate optional callback metric; it is not required for the node-visit profile."
-            echo "- Gameplay: Up to 45 seconds of two scripted jump taps per second with screenshots every 5 seconds; early death remains visible in checkpoint captures."
-            echo ""
-            echo "## Scope and limits"
-            echo "- Static .geode validation ran before device startup."
-            echo "- Standard launcher base directory was resolved from source to Android/media; DashCore was staged directly in game/geode/mods."
-            echo "- A DashCore load is counted only when its identifier appears in collected Geode logs."
-            echo "- Geometry Dash is installed only when a legitimate universal APK is supplied through workflow input or GEOMETRY_DASH_MEDIAFIRE_URL secret."
-            echo "- Cloud x86_64 + ARM translation is not equivalent to the Huawei STK-LX3 / Mali-G51."
-            echo "- A PASS requires DashCore's setupHasCompleted hook to appear in the Geode log."
-            echo "- Scripted jump inputs are a smoke-test stimulus, not a claim that the level was completed or that a fixed percentage was reached."
-            echo "- NODE-VISIT-COST FINAL confirms the complete 600-PlayLayer-update diagnostic window. A separate 20-second unprofiled fast-path observation follows; it is not a second 600-update counter."
-            echo "- CPU ticks and SurfaceFlinger timestamps are best-effort cloud observations; unavailable data is reported as unavailable."
-            echo "- Cloud x86_64 plus ARM translation is not a physical-device performance result."
-            echo "- No frame-pacing or GPU-performance claim is made."
-          } | tee "$REPORT_DIR/summary.md"
-          echo "result=$RESULT" >> "$GITHUB_OUTPUT"
-          echo "mod_load=$MOD_LOAD" >> "$GITHUB_OUTPUT"
-          echo "gameplay_layer=$GAMEPLAY_LAYER" >> "$GITHUB_OUTPUT"
-          echo "node_visit_profile=$NODE_VISIT_PROFILE" >> "$GITHUB_OUTPUT"
-          if [ "$RESULT" = "FAIL" ]; then
-            echo "::error::Launcher process failed or a crash signature was detected."
-            exit 1
-          fi
-
-      - name: Upload AutoTest v4.1 reports
+      - name: Upload AutoTest v4.2 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-AutoTest-v4.1-${{ github.run_number }}
+          name: DashCore-AutoTest-v4.2-${{ github.run_number }}
           path: |
             reports/
             artifacts/
