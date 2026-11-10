@@ -228,13 +228,124 @@ def wait_for_state(serial: str, mode: str, label: str, destination: pathlib.Path
         time.sleep(interval_s)
     raise RuntimeError(f"{mode}: timed out waiting for {label}; last OCR text: {last_text[:500]!r}")
 
+def detect_notice_ok_button(frame: Image.Image) -> tuple[int, int] | None:
+    """Find the bright-green OK button in a Geometry Dash NOTICE screenshot."""
+    image = frame.convert("RGB")
+    width, height = image.size
+    pixels = image.load()
+    x0, x1 = int(width * 0.40), int(width * 0.60)
+    y0, y1 = int(height * 0.55), int(height * 0.90)
+    minimum_row_hits = max(8, int((x1 - x0) * 0.02))
+    row_hits: dict[int, list[int]] = {}
+
+    for y in range(y0, y1):
+        hits = []
+        for x in range(x0, x1):
+            red, green, blue = pixels[x, y]
+            if green >= 145 and green > red * 1.20 and green > blue * 1.20:
+                hits.append(x)
+        if len(hits) >= minimum_row_hits:
+            row_hits[y] = hits
+
+    if not row_hits:
+        return None
+
+    # Join adjacent green rows into candidate button regions. The modal's
+    # highlighted OK button is the largest bright-green component in this ROI.
+    groups: list[list[int]] = []
+    current: list[int] = []
+    previous_y: int | None = None
+    for y in sorted(row_hits):
+        if previous_y is None or y - previous_y <= 2:
+            current.append(y)
+        else:
+            groups.append(current)
+            current = [y]
+        previous_y = y
+    if current:
+        groups.append(current)
+
+    candidates = []
+    for rows in groups:
+        xs = [x for row in rows for x in row_hits[row]]
+        left, right = min(xs), max(xs)
+        top, bottom = min(rows), max(rows)
+        box_width, box_height = right - left + 1, bottom - top + 1
+        center_x = (left + right) // 2
+        center_y = (top + bottom) // 2
+        if not (width * 0.42 <= center_x <= width * 0.58):
+            continue
+        if not (width * 0.04 <= box_width <= width * 0.16):
+            continue
+        if not (height * 0.025 <= box_height <= height * 0.13):
+            continue
+        if not (height * 0.58 <= center_y <= height * 0.88):
+            continue
+        peak = max(len(row_hits[row]) for row in rows)
+        candidates.append((peak * 1000 + len(xs), center_x, center_y))
+
+    if not candidates:
+        return None
+    _, center_x, center_y = max(candidates)
+    return center_x, center_y
+
+
+def record_notice_tap(variant_dir: pathlib.Path, event: dict[str, Any]) -> None:
+    path = variant_dir / "notice-handling.json"
+    try:
+        state = json.loads(path.read_text()) if path.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        state = {}
+    taps = state.get("taps", [])
+    taps.append(event)
+    state.update({"dialog_detected": True, "taps": taps})
+    path.write_text(json.dumps(state, indent=2) + "\n")
+
+
+def update_notice_state(variant_dir: pathlib.Path, **changes: Any) -> None:
+    path = variant_dir / "notice-handling.json"
+    try:
+        state = json.loads(path.read_text()) if path.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        state = {}
+    state.update(changes)
+    path.write_text(json.dumps(state, indent=2) + "\n")
+
+
 def tap_notice_confirmation(serial: str, screenshot_path: pathlib.Path) -> tuple[int, int]:
-    # Use the captured device resolution. In the landscape emulator screenshot,
-    # the NOTICE dialog's green OK button is centered at 50% width and 76% height.
     with Image.open(screenshot_path) as frame:
         width, height = frame.size
-    x, y = round(width * 0.50), round(height * 0.63)
+        detected = detect_notice_ok_button(frame)
+    if detected is None:
+        # Measured fallback for this landscape Geometry Dash NOTICE layout.
+        screen_x, screen_y = round(width * 0.50), round(height * 0.734)
+        method = "measured-layout-fallback"
+    else:
+        screen_x, screen_y = detected
+        method = "green-button-pixel-detection"
+
+    # adb input coordinates follow Android's current logical display size.
+    display_text = shell(serial, "wm size", check=False)
+    sizes = re.findall(r"(?:Override|Physical) size:\\s*(\\d+)x(\\d+)", display_text)
+    if sizes:
+        display_width, display_height = map(int, sizes[-1])
+    else:
+        display_width, display_height = width, height
+    x = round(screen_x * display_width / width)
+    y = round(screen_y * display_height / height)
     shell(serial, f"input tap {x} {y}", check=False)
+
+    record_notice_tap(screenshot_path.parent, {
+        "method": method,
+        "screenshot_size": [width, height],
+        "display_size": [display_width, display_height],
+        "button_center_screenshot_px": [screen_x, screen_y],
+        "adb_tap_px": [x, y],
+    })
+    print(
+        f"NOTICE_CONFIRMATION: method={method} screenshot={width}x{height} "
+        f"display={display_width}x{display_height} tap={x},{y}"
+    )
     return x, y
 
 def wait_for_notice_dismissal(serial: str, mode: str, variant_dir: pathlib.Path) -> None:
@@ -245,6 +356,7 @@ def wait_for_notice_dismissal(serial: str, mode: str, variant_dir: pathlib.Path)
         path = variant_dir / f"notice-poll-{attempt}.png"
         text = take_state_screenshot(serial, mode, f"notice-poll-{attempt}", path)
         if "notice" not in text and "terms of use" not in text:
+            update_notice_state(variant_dir, dismissed=True, dismissal_poll=attempt)
             return
         tap_notice_confirmation(serial, path)
         time.sleep(2.0)
@@ -262,12 +374,18 @@ def wait_for_main_menu(serial: str, mode: str, variant_dir: pathlib.Path,
         path = variant_dir / f"main-menu-poll-{attempt}.png"
         last_text = take_state_screenshot(serial, mode, f"main-menu-poll-{attempt}", path)
         if "notice" in last_text or "terms of use" in last_text:
+            update_notice_state(variant_dir, dialog_detected=True)
             tap_notice_confirmation(serial, path)
             time.sleep(2.0)
             continue
         if "play" in last_text and ("geometry dash" in last_text or "settings" in last_text or "editor" in last_text):
             screenshot(serial, f"dashcore-{mode.lower()}-main-menu-confirmed.png",
                        variant_dir / "main-menu-confirmed.png")
+            update_notice_state(
+                variant_dir,
+                main_menu_confirmed=True,
+                notice_status="dismissed" if (variant_dir / "notice-handling.json").exists() else "not-shown",
+            )
             return last_text
         time.sleep(2.0)
     raise RuntimeError(f"{mode}: timed out waiting for main menu after handling NOTICE; last OCR text: {last_text[:500]!r}")
