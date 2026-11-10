@@ -326,7 +326,7 @@ def tap_notice_confirmation(serial: str, screenshot_path: pathlib.Path) -> tuple
 
     # adb input coordinates follow Android's current logical display size.
     display_text = shell(serial, "wm size", check=False)
-    sizes = re.findall(r"(?:Override|Physical) size:\\s*(\\d+)x(\\d+)", display_text)
+    sizes = re.findall(r"(?:Override|Physical) size:\s*(\d+)x(\d+)", display_text)
     if sizes:
         display_width, display_height = map(int, sizes[-1])
     else:
@@ -360,7 +360,7 @@ def wait_for_notice_dismissal(serial: str, mode: str, variant_dir: pathlib.Path)
             return
         tap_notice_confirmation(serial, path)
         time.sleep(2.0)
-    raise RuntimeError(f"{mode}: NOTICE / Terms of Use dialog did not close after resolution-aware OK taps.")
+    raise RuntimeError(f"{mode}: NOTICE / Terms of Use dialog did not close after automatic button-detection taps.")
 
 def wait_for_main_menu(serial: str, mode: str, variant_dir: pathlib.Path,
                        timeout_s: int = 90) -> str:
