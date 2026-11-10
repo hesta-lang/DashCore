@@ -377,8 +377,8 @@ jobs:
             fi
             echo "- DashCore load in Geode logs: $MOD_LOAD"
             echo "- DashCore PlayLayer hooks: $GAMEPLAY_LAYER"
-            echo "- NODE-VISIT-COST FINAL profile (independent 600-update window): $NODE_VISIT_PROFILE
-            echo "- DRAWSCENE-CPU remains a separate optional callback metric; it is not required for the node-visit profile.""
+            echo "- NODE-VISIT-COST FINAL profile (independent 600-update window): $NODE_VISIT_PROFILE"
+            echo "- DRAWSCENE-CPU remains a separate optional callback metric; it is not required for the node-visit profile."
             echo "- Gameplay: Up to 45 seconds of two scripted jump taps per second with screenshots every 5 seconds; early death remains visible in checkpoint captures."
             echo ""
             echo "## Scope and limits"
