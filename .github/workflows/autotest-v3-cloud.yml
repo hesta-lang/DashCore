@@ -315,15 +315,18 @@ jobs:
           # release is more useful than a single tap every second for GD jumps.
           # Capture evidence every 5 seconds and continue for up to 45 seconds.
           for second in $(seq 1 45); do
+            # Geometry Dash's player is near the lower-left gameplay lane.
+            # Use discrete taps at that lane; a stationary swipe can be
+            # interpreted as a held touch and repeatedly miss the jump window.
             for pulse in 1 2; do
-              adb -s "$SERIAL" shell input swipe 1500 800 1500 800 180
+              adb -s "$SERIAL" shell input tap 700 800
               sleep 0.32
             done
             if [ $((second % 5)) -eq 0 ]; then
               adb -s "$SERIAL" shell screencap -p "/sdcard/dashcore-gameplay-${second}s.png"
               adb -s "$SERIAL" pull "/sdcard/dashcore-gameplay-${second}s.png" "$REPORT_DIR/gameplay-${second}s.png" >/dev/null
               adb -s "$SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat-checkpoint-${second}s.txt"
-              echo "Gameplay checkpoint: ${second}s; 180ms jump press/release stimulus sent." | tee -a "$REPORT_DIR/gameplay-input.txt"
+              echo "Gameplay checkpoint: ${second}s; jump tap stimulus sent." | tee -a "$REPORT_DIR/gameplay-input.txt"
               if grep -q 'NODE-VISIT-COST FINAL' "$REPORT_DIR/logcat-checkpoint-${second}s.txt"; then
                 echo "Complete 600-DrawScene-frame profile detected at ${second}s; ending gameplay stimulus early." | tee -a "$REPORT_DIR/gameplay-input.txt"
                 break
@@ -375,7 +378,7 @@ jobs:
             echo "- DashCore load in Geode logs: $MOD_LOAD"
             echo "- DashCore PlayLayer hooks: $GAMEPLAY_LAYER"
             echo "- NODE-VISIT-COST FINAL profile: $NODE_VISIT_PROFILE"
-            echo "- Gameplay: 25 seconds of scripted jump input with screenshots every 5 seconds; early death remains visible in checkpoint captures."
+            echo "- Gameplay: Up to 45 seconds of two scripted jump taps per second with screenshots every 5 seconds; early death remains visible in checkpoint captures."
             echo ""
             echo "## Scope and limits"
             echo "- Static .geode validation ran before device startup."
