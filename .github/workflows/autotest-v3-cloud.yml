@@ -1,4 +1,4 @@
-name: DashCore AutoTest v4.0 - Profile and Unprofiled Observation
+name: DashCore AutoTest v4.1 - Profile and Unprofiled Observation
 
 on:
   workflow_run:
@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dashcore-autotest-v4.0-cloud
+  group: dashcore-autotest-v4.1-cloud
   cancel-in-progress: true
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
     env:
       GEOMETRY_DASH_MEDIAFIRE_URL: ${{ inputs.mediafire_url || secrets.GEOMETRY_DASH_MEDIAFIRE_URL || 'https://www.mediafire.com/file/o9rk5i69nmu0nci/Geometry+Dash_2.2081.apk/file' }}
       PACKAGE_NAME: com.geode.launcher
-      REPORT_DIR: reports/autotest-v4.0
+      REPORT_DIR: reports/autotest-v4.1
     steps:
       - name: Select DashCore build artifact and source revision
         id: build
@@ -128,7 +128,7 @@ jobs:
         id: apk
         run: |
           set -euo pipefail
-          mkdir -p test-input reports/autotest-v4.0
+          mkdir -p test-input reports/autotest-v4.1
           APK="$(find artifacts/launcher -type f -name 'geode-launcher-release-*.apk' ! -name '*android32*' -print -quit)"
           if [ -z "$APK" ]; then
             echo "::error::Universal Geode Launcher APK not found."
@@ -346,30 +346,33 @@ jobs:
             echo "PROFILE_COMPLETE=true" | tee "$REPORT_DIR/unprofiled-observation.txt"
             PID_FOR_SAMPLE="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
             if [ -n "$PID_FOR_SAMPLE" ]; then
-              adb -s "$SERIAL" shell "cat /proc/$PID_FOR_SAMPLE/stat" > "$REPORT_DIR/process-stat-before.txt" || true
-              adb -s "$SERIAL" shell cat /proc/uptime > "$REPORT_DIR/uptime-before.txt" || true
-            fi
-            capture_sf_latency() {
-              local label="$1"
-              adb -s "$SERIAL" shell dumpsys SurfaceFlinger --list 2>/dev/null | tr -d '\r' | grep -Ei 'SurfaceView|Geometry Dash|Geode|com\.geode\.launcher' | head -n 5 > "$REPORT_DIR/surfaceflinger-layers-$label.txt" || true
-              : > "$REPORT_DIR/surfaceflinger-latency-$label.txt"
-              while IFS= read -r layer; do
-                [ -n "$layer" ] || continue
-                { echo "LAYER: $layer"; adb -s "$SERIAL" shell dumpsys SurfaceFlinger --latency "$layer" 2>&1 || true; echo; } >> "$REPORT_DIR/surfaceflinger-latency-$label.txt"
-              done < "$REPORT_DIR/surfaceflinger-layers-$label.txt"
-            }
-            capture_sf_latency before
-            for second in $(seq 1 20); do
-              for pulse in 1 2; do adb -s "$SERIAL" shell input tap 700 800; sleep 0.32; done
-              if [ $((second % 5)) -eq 0 ]; then
-                adb -s "$SERIAL" shell screencap -p "/sdcard/dashcore-unprofiled-${second}s.png"
-                adb -s "$SERIAL" pull "/sdcard/dashcore-unprofiled-${second}s.png" "$REPORT_DIR/unprofiled-${second}s.png" >/dev/null
-                echo "Unprofiled fast-path observation: ${second}/20s" | tee -a "$REPORT_DIR/unprofiled-observation.txt"
-              fi
-            done
-            if [ -n "$PID_FOR_SAMPLE" ]; then
-              adb -s "$SERIAL" shell "cat /proc/$PID_FOR_SAMPLE/stat" > "$REPORT_DIR/process-stat-after.txt" || true
-              adb -s "$SERIAL" shell cat /proc/uptime > "$REPORT_DIR/uptime-after.txt" || true
+              # Run the whole stimulus and both process samples inside one
+              # device-side shell. Host/ADB round trips are outside the measured
+              # interval; elapsed time is read from Android's monotonic uptime.
+              adb -s "$SERIAL" shell "sh -s '$PID_FOR_SAMPLE'" > "$REPORT_DIR/device-observation.txt" <<'DEVICE_SCRIPT'
+          PID="$1"
+          read U0 _ < /proc/uptime
+          cat "/proc/$PID/stat" > /sdcard/dashcore-process-stat-before.txt 2>/dev/null || true
+          START="$U0"
+          COUNT=0
+          while :; do
+            read NOW _ < /proc/uptime
+            awk -v a="$START" -v b="$NOW" 'BEGIN { exit !((b-a) < 20.0) }' || break
+            input tap 700 800 >/dev/null 2>&1 || true
+            COUNT=$((COUNT+1))
+            sleep 0.5
+          done
+          read END _ < /proc/uptime
+          cat "/proc/$PID/stat" > /sdcard/dashcore-process-stat-after.txt 2>/dev/null || true
+          echo "DEVICE_ELAPSED=$END"
+          echo "DEVICE_START=$START"
+          echo "TAP_COUNT=$COUNT"
+          DEVICE_SCRIPT
+              adb -s "$SERIAL" pull /sdcard/dashcore-process-stat-before.txt "$REPORT_DIR/process-stat-before.txt" >/dev/null 2>&1 || true
+              adb -s "$SERIAL" pull /sdcard/dashcore-process-stat-after.txt "$REPORT_DIR/process-stat-after.txt" >/dev/null 2>&1 || true
+              cat "$REPORT_DIR/device-observation.txt" | tee -a "$REPORT_DIR/unprofiled-observation.txt"
+            else
+              echo "Launcher PID unavailable; skipped process CPU sampling." | tee -a "$REPORT_DIR/unprofiled-observation.txt"
             fi
             capture_sf_latency after
             python3 - "$REPORT_DIR" <<'PY'
@@ -382,21 +385,25 @@ jobs:
                   return int(tail[11]) + int(tail[12])
               except Exception: return None
           b, a = ticks(root/"process-stat-before.txt"), ticks(root/"process-stat-after.txt")
-          try: elapsed = float((root/"uptime-after.txt").read_text().split()[0]) - float((root/"uptime-before.txt").read_text().split()[0])
-          except Exception: elapsed = None
-          lines = ["## Unprofiled 20-second observation"]
+          device = (root/"device-observation.txt").read_text(errors="replace") if (root/"device-observation.txt").exists() else ""
+          def marker(name):
+              m = re.search(rf"^{name}=([0-9.]+)$", device, re.M)
+              return float(m.group(1)) if m else None
+          start, end = marker("DEVICE_START"), marker("DEVICE_ELAPSED")
+          elapsed = end-start if start is not None and end is not None else None
+          lines = ["## Unprofiled fast-path observation"]
           if b is not None and a is not None and elapsed and elapsed > 0:
               delta = max(0, a-b)
-              lines += [f"- Launcher CPU ticks: {delta}", f"- Elapsed seconds: {elapsed:.3f}", f"- CPU time estimate: {delta/100:.3f}s (USER_HZ assumed 100)", f"- Approx. launcher CPU utilization: {delta/100/elapsed*100:.1f}%"]
-          else: lines.append("- Launcher CPU delta: unavailable")
+              lines += [f"- Launcher CPU ticks: {delta}", f"- Device-measured elapsed seconds: {elapsed:.3f}", f"- CPU time estimate: {delta/100:.3f}s (USER_HZ assumed 100)", f"- Approx. launcher CPU utilization: {delta/100/elapsed*100:.1f}%"]
+          else: lines.append("- Launcher CPU delta or device elapsed time: unavailable")
           for phase in ("before", "after"):
               p = root/f"surfaceflinger-latency-{phase}.txt"; stamps = []
               if p.exists():
                   for line in p.read_text(errors="replace").splitlines():
-                      c = line.split()
-                      if len(c) >= 3 and all(re.fullmatch(r"-?\d+", x) for x in c[:3]):
+                      cols = line.split()
+                      if len(cols) >= 3 and all(re.fullmatch(r"-?\\d+", x) for x in cols[:3]):
                           try:
-                              t = int(c[1])
+                              t = int(cols[1])
                               if t > 0: stamps.append(t)
                           except ValueError: pass
               ds = [(y-x)/1e6 for x,y in zip(stamps, stamps[1:]) if y>x]
@@ -404,8 +411,8 @@ jobs:
                   q = sorted(ds); p95 = q[min(len(q)-1, int(.95*(len(q)-1)))]
                   lines.append(f"- SurfaceFlinger {phase}: {len(ds)} intervals; mean {mean(ds):.2f} ms; p95 {p95:.2f} ms; max {max(ds):.2f} ms; >50 ms {sum(x>50 for x in ds)}")
               else: lines.append(f"- SurfaceFlinger {phase}: unavailable/no usable timestamps")
-          (root/"unprofiled-metrics.md").write_text("\n".join(lines)+"\n")
-          print("\n".join(lines))
+          (root/"unprofiled-metrics.md").write_text("\\n".join(lines)+"\\n")
+          print("\\n".join(lines))
           PY
             cat "$REPORT_DIR/unprofiled-metrics.md" | tee -a "$REPORT_DIR/unprofiled-observation.txt"
           else
@@ -443,7 +450,7 @@ jobs:
           fi
 
           {
-            echo "# DashCore AutoTest v4.0 — Gameplay Smoke Test"
+            echo "# DashCore AutoTest v4.1 — Gameplay Smoke Test"
             echo ""
             echo "**Overall result: $RESULT**"
             echo "- Android API: $SDK"
@@ -482,11 +489,11 @@ jobs:
             exit 1
           fi
 
-      - name: Upload AutoTest v4.0 reports
+      - name: Upload AutoTest v4.1 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-AutoTest-v4.0-${{ github.run_number }}
+          name: DashCore-AutoTest-v4.1-${{ github.run_number }}
           path: |
             reports/
             artifacts/
