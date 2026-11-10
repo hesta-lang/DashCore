@@ -1,10 +1,14 @@
-name: DashCore AutoTest v3.9 - Gameplay Smoke Test
+name: DashCore AutoTest v4.0 - Profile and Unprofiled Observation
 
 on:
   workflow_run:
     workflows: ["Build OptGod (Android64)"]
     types: [completed]
     branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/autotest-v3-cloud.yml'
   workflow_dispatch:
     inputs:
       mediafire_url:
@@ -18,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dashcore-autotest-v3.9-cloud
+  group: dashcore-autotest-v4.0-cloud
   cancel-in-progress: true
 
 jobs:
@@ -30,7 +34,7 @@ jobs:
     env:
       GEOMETRY_DASH_MEDIAFIRE_URL: ${{ inputs.mediafire_url || secrets.GEOMETRY_DASH_MEDIAFIRE_URL || 'https://www.mediafire.com/file/o9rk5i69nmu0nci/Geometry+Dash_2.2081.apk/file' }}
       PACKAGE_NAME: com.geode.launcher
-      REPORT_DIR: reports/autotest-v3.9
+      REPORT_DIR: reports/autotest-v4.0
     steps:
       - name: Select DashCore build artifact and source revision
         id: build
@@ -124,7 +128,7 @@ jobs:
         id: apk
         run: |
           set -euo pipefail
-          mkdir -p test-input reports/autotest-v3.9
+          mkdir -p test-input reports/autotest-v4.0
           APK="$(find artifacts/launcher -type f -name 'geode-launcher-release-*.apk' ! -name '*android32*' -print -quit)"
           if [ -z "$APK" ]; then
             echo "::error::Universal Geode Launcher APK not found."
@@ -310,6 +314,7 @@ jobs:
           tap_image_xy "$REPORT_DIR/level-select.png" 960 500
           echo "Automated menu taps sent using corrected screenshot coordinates (OK 960,793; main-menu Play 960,500; level Play 960,500)." | tee -a "$REPORT_DIR/gameplay-input.txt"
 
+          PROFILE_COMPLETE="false"
           # Keep the PlayLayer active long enough for slower cloud devices to
           # complete 600 PlayLayer update cycles. A 180 ms press followed by a short
           # release is more useful than a single tap every second for GD jumps.
@@ -328,11 +333,85 @@ jobs:
               adb -s "$SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat-checkpoint-${second}s.txt"
               echo "Gameplay checkpoint: ${second}s; jump tap stimulus sent." | tee -a "$REPORT_DIR/gameplay-input.txt"
               if grep -q 'NODE-VISIT-COST FINAL' "$REPORT_DIR/logcat-checkpoint-${second}s.txt"; then
-                echo "Complete 600-update node-visit profile detected at ${second}s; ending gameplay stimulus early." | tee -a "$REPORT_DIR/gameplay-input.txt"
+                PROFILE_COMPLETE="true"
+                echo "Complete 600-update node-visit profile detected at ${second}s; ending diagnostic stimulus." | tee -a "$REPORT_DIR/gameplay-input.txt"
                 break
               fi
             fi
           done
+          # Separate timed window after the 600-update profile. The mod profile is
+          # inactive here, so CCNode::visit() can take its fast path.
+          # This is a 20-second observation, NOT a claimed second 600-update window.
+          if [ "$PROFILE_COMPLETE" = "true" ]; then
+            echo "PROFILE_COMPLETE=true" | tee "$REPORT_DIR/unprofiled-observation.txt"
+            PID_FOR_SAMPLE="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
+            if [ -n "$PID_FOR_SAMPLE" ]; then
+              adb -s "$SERIAL" shell "cat /proc/$PID_FOR_SAMPLE/stat" > "$REPORT_DIR/process-stat-before.txt" || true
+              adb -s "$SERIAL" shell cat /proc/uptime > "$REPORT_DIR/uptime-before.txt" || true
+            fi
+            capture_sf_latency() {
+              local label="$1"
+              adb -s "$SERIAL" shell dumpsys SurfaceFlinger --list 2>/dev/null | tr -d '\r' | grep -Ei 'SurfaceView|Geometry Dash|Geode|com\.geode\.launcher' | head -n 5 > "$REPORT_DIR/surfaceflinger-layers-$label.txt" || true
+              : > "$REPORT_DIR/surfaceflinger-latency-$label.txt"
+              while IFS= read -r layer; do
+                [ -n "$layer" ] || continue
+                { echo "LAYER: $layer"; adb -s "$SERIAL" shell dumpsys SurfaceFlinger --latency "$layer" 2>&1 || true; echo; } >> "$REPORT_DIR/surfaceflinger-latency-$label.txt"
+              done < "$REPORT_DIR/surfaceflinger-layers-$label.txt"
+            }
+            capture_sf_latency before
+            for second in $(seq 1 20); do
+              for pulse in 1 2; do adb -s "$SERIAL" shell input tap 700 800; sleep 0.32; done
+              if [ $((second % 5)) -eq 0 ]; then
+                adb -s "$SERIAL" shell screencap -p "/sdcard/dashcore-unprofiled-${second}s.png"
+                adb -s "$SERIAL" pull "/sdcard/dashcore-unprofiled-${second}s.png" "$REPORT_DIR/unprofiled-${second}s.png" >/dev/null
+                echo "Unprofiled fast-path observation: ${second}/20s" | tee -a "$REPORT_DIR/unprofiled-observation.txt"
+              fi
+            done
+            if [ -n "$PID_FOR_SAMPLE" ]; then
+              adb -s "$SERIAL" shell "cat /proc/$PID_FOR_SAMPLE/stat" > "$REPORT_DIR/process-stat-after.txt" || true
+              adb -s "$SERIAL" shell cat /proc/uptime > "$REPORT_DIR/uptime-after.txt" || true
+            fi
+            capture_sf_latency after
+            python3 - "$REPORT_DIR" <<'PY'
+import pathlib, re, sys
+from statistics import mean
+root = pathlib.Path(sys.argv[1])
+def ticks(path):
+    try:
+        tail = path.read_text().strip().split(")", 1)[1].split()
+        return int(tail[11]) + int(tail[12])
+    except Exception: return None
+b, a = ticks(root/"process-stat-before.txt"), ticks(root/"process-stat-after.txt")
+try: elapsed = float((root/"uptime-after.txt").read_text().split()[0]) - float((root/"uptime-before.txt").read_text().split()[0])
+except Exception: elapsed = None
+lines = ["## Unprofiled 20-second observation"]
+if b is not None and a is not None and elapsed and elapsed > 0:
+    delta = max(0, a-b)
+    lines += [f"- Launcher CPU ticks: {delta}", f"- Elapsed seconds: {elapsed:.3f}", f"- CPU time estimate: {delta/100:.3f}s (USER_HZ assumed 100)", f"- Approx. launcher CPU utilization: {delta/100/elapsed*100:.1f}%"]
+else: lines.append("- Launcher CPU delta: unavailable")
+for phase in ("before", "after"):
+    p = root/f"surfaceflinger-latency-{phase}.txt"; stamps = []
+    if p.exists():
+        for line in p.read_text(errors="replace").splitlines():
+            c = line.split()
+            if len(c) >= 3 and all(re.fullmatch(r"-?\\d+", x) for x in c[:3]):
+                try:
+                    t = int(c[1])
+                    if t > 0: stamps.append(t)
+                except ValueError: pass
+    ds = [(y-x)/1e6 for x,y in zip(stamps, stamps[1:]) if y>x]
+    if ds:
+        q = sorted(ds); p95 = q[min(len(q)-1, int(.95*(len(q)-1)))]
+        lines.append(f"- SurfaceFlinger {phase}: {len(ds)} intervals; mean {mean(ds):.2f} ms; p95 {p95:.2f} ms; max {max(ds):.2f} ms; >50 ms {sum(x>50 for x in ds)}")
+    else: lines.append(f"- SurfaceFlinger {phase}: unavailable/no usable timestamps")
+(root/"unprofiled-metrics.md").write_text("\\n".join(lines)+"\\n")
+print("\\n".join(lines))
+PY
+            cat "$REPORT_DIR/unprofiled-metrics.md" | tee -a "$REPORT_DIR/unprofiled-observation.txt"
+          else
+            echo "PROFILE_COMPLETE=false; skipped unprofiled observation because the diagnostic did not complete." | tee "$REPORT_DIR/unprofiled-observation.txt"
+          fi
+
           PID="$(adb -s "$SERIAL" shell pidof com.geode.launcher | tr -d '\r' || true)"
           echo "Launcher PID after launch wait: ${PID:-not-running}" | tee -a "$REPORT_DIR/process.txt"
           adb -s "$SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat.txt"
@@ -364,7 +443,7 @@ jobs:
           fi
 
           {
-            echo "# DashCore AutoTest v3.9 — Gameplay Smoke Test"
+            echo "# DashCore AutoTest v4.0 — Gameplay Smoke Test"
             echo ""
             echo "**Overall result: $RESULT**"
             echo "- Android API: $SDK"
@@ -377,7 +456,7 @@ jobs:
             fi
             echo "- DashCore load in Geode logs: $MOD_LOAD"
             echo "- DashCore PlayLayer hooks: $GAMEPLAY_LAYER"
-            echo "- NODE-VISIT-COST FINAL profile (independent 600-update window): $NODE_VISIT_PROFILE"
+            echo "- NODE-VISIT-COST FINAL profile (600-update diagnostic window): $NODE_VISIT_PROFILE"
             echo "- DRAWSCENE-CPU remains a separate optional callback metric; it is not required for the node-visit profile."
             echo "- Gameplay: Up to 45 seconds of two scripted jump taps per second with screenshots every 5 seconds; early death remains visible in checkpoint captures."
             echo ""
@@ -389,7 +468,9 @@ jobs:
             echo "- Cloud x86_64 + ARM translation is not equivalent to the Huawei STK-LX3 / Mali-G51."
             echo "- A PASS requires DashCore's setupHasCompleted hook to appear in the Geode log."
             echo "- Scripted jump inputs are a smoke-test stimulus, not a claim that the level was completed or that a fixed percentage was reached."
-            echo "- NODE-VISIT-COST FINAL confirms the complete 600-PlayLayer-update diagnostic window; cloud x86_64 plus ARM translation is not a physical-device performance result."
+            echo "- NODE-VISIT-COST FINAL confirms the complete 600-PlayLayer-update diagnostic window. A separate 20-second unprofiled fast-path observation follows; it is not a second 600-update counter."
+            echo "- CPU ticks and SurfaceFlinger timestamps are best-effort cloud observations; unavailable data is reported as unavailable."
+            echo "- Cloud x86_64 plus ARM translation is not a physical-device performance result."
             echo "- No frame-pacing or GPU-performance claim is made."
           } | tee "$REPORT_DIR/summary.md"
           echo "result=$RESULT" >> "$GITHUB_OUTPUT"
@@ -401,11 +482,11 @@ jobs:
             exit 1
           fi
 
-      - name: Upload AutoTest v3.9 reports
+      - name: Upload AutoTest v4.0 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-AutoTest-v3.9-${{ github.run_number }}
+          name: DashCore-AutoTest-v4.0-${{ github.run_number }}
           path: |
             reports/
             artifacts/
