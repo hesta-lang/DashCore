@@ -312,6 +312,27 @@ def update_notice_state(variant_dir: pathlib.Path, **changes: Any) -> None:
     path.write_text(json.dumps(state, indent=2) + "\n")
 
 
+def map_screenshot_point_to_input(
+    screen_x: int, screen_y: int,
+    screenshot_width: int, screenshot_height: int,
+    wm_width: int, wm_height: int,
+) -> tuple[int, int, int, int]:
+    """Map screenshot pixels into ADB input coordinates for the current orientation.
+
+    `wm size` can report portrait panel dimensions while an app is running in
+    landscape. ADB input coordinates follow the current display orientation,
+    as does the captured game frame.
+    """
+    if min(screenshot_width, screenshot_height, wm_width, wm_height) <= 0:
+        raise ValueError("Display and screenshot dimensions must be positive")
+    input_width, input_height = wm_width, wm_height
+    if (screenshot_width > screenshot_height) != (wm_width > wm_height):
+        input_width, input_height = wm_height, wm_width
+    x = round(screen_x * input_width / screenshot_width)
+    y = round(screen_y * input_height / screenshot_height)
+    return x, y, input_width, input_height
+
+
 def tap_notice_confirmation(serial: str, screenshot_path: pathlib.Path) -> tuple[int, int]:
     with Image.open(screenshot_path) as frame:
         width, height = frame.size
@@ -324,55 +345,37 @@ def tap_notice_confirmation(serial: str, screenshot_path: pathlib.Path) -> tuple
         screen_x, screen_y = detected
         method = "green-button-pixel-detection"
 
-    # Android input uses the display's logical orientation, while screencap
-    # may return the app's rotated landscape buffer. Read InputReader's actual
-    # surface rotation and transform the point instead of scaling axes blindly.
+    # wm size may report the panel's portrait dimensions while the game and
+    # ADB input coordinate space are landscape. Match dimensions to the
+    # screenshot orientation before scaling; do not rotate the point.
     display_text = shell(serial, "wm size", check=False)
-    sizes = re.findall(r"(?:Override|Physical) size:\s*(\d+)x(\d+)", display_text)
+    sizes = re.findall(r"(?:Override|Physical) size:\\s*(\\d+)x(\\d+)", display_text)
     if sizes:
         display_width, display_height = map(int, sizes[-1])
     else:
         display_width, display_height = width, height
-
-    if (width > height) != (display_width > display_height):
-        input_dump = shell(serial, "dumpsys input", check=False)
-        rotations = re.findall(r"SurfaceOrientation:\s*(\d+)", input_dump)
-        if not rotations:
-            raise RuntimeError(
-                "Cannot safely tap NOTICE: screenshot and input display orientations differ "
-                "and dumpsys input did not expose SurfaceOrientation."
-            )
-        rotation = int(rotations[-1]) % 4
-        if rotation == 1:
-            x = round(screen_y * display_width / height)
-            y = round((width - screen_x) * display_height / width)
-        elif rotation == 3:
-            x = round((height - screen_y) * display_width / height)
-            y = round(screen_x * display_height / width)
-        else:
-            raise RuntimeError(
-                f"Cannot safely tap NOTICE: landscape screenshot vs portrait input "
-                f"with unexpected SurfaceOrientation={rotation}."
-            )
-        method += f"+rotation-{rotation}-transform"
+    x, y, input_width, input_height = map_screenshot_point_to_input(
+        screen_x, screen_y, width, height, display_width, display_height
+    )
+    if (input_width, input_height) != (display_width, display_height):
+        method += "+current-orientation-input-space"
     else:
-        x = round(screen_x * display_width / width)
-        y = round(screen_y * display_height / height)
-        rotation = 0
+        method += "+scaled-input-space"
 
     shell(serial, f"input tap {x} {y}", check=False)
 
     record_notice_tap(screenshot_path.parent, {
         "method": method,
         "screenshot_size": [width, height],
-        "display_size": [display_width, display_height],
-        "surface_orientation": rotation,
+        "wm_size_reported": [display_width, display_height],
+        "input_coordinate_size": [input_width, input_height],
         "button_center_screenshot_px": [screen_x, screen_y],
         "adb_tap_px": [x, y],
     })
     print(
         f"NOTICE_CONFIRMATION: method={method} screenshot={width}x{height} "
-        f"display={display_width}x{display_height} rotation={rotation} tap={x},{y}"
+        f"wm_size={display_width}x{display_height} "
+        f"input_space={input_width}x{input_height} tap={x},{y}"
     )
     return x, y
 
