@@ -5,6 +5,116 @@ import argparse, csv, json, math, pathlib, re, shlex, statistics, subprocess, sy
 from PIL import Image
 from typing import Any
 
+def load_device_profile(path: pathlib.Path) -> dict[str, Any]:
+    """Load and validate a reference-device profile without changing emulator settings."""
+    if not path.is_file():
+        raise FileNotFoundError(f"Device profile not found: {path}")
+    profile = json.loads(path.read_text(encoding="utf-8"))
+    required = ("schema_version", "profile_id", "display_name", "device", "android", "display", "benchmark")
+    missing = [key for key in required if key not in profile]
+    if missing:
+        raise ValueError(f"Device profile is missing fields: {', '.join(missing)}")
+    if profile["schema_version"] != 1:
+        raise ValueError(f"Unsupported device profile schema: {profile['schema_version']!r}")
+    if not profile["profile_id"] or not profile["display_name"]:
+        raise ValueError("Device profile ID and display name must be non-empty")
+    device, android, display = profile["device"], profile["android"], profile["display"]
+    if not android.get("api_level") or not android.get("abi"):
+        raise ValueError("Device profile must define Android API level and ABI")
+    if not display.get("width_px") or not display.get("height_px"):
+        raise ValueError("Device profile must define display width and height")
+    if not device.get("gpu", {}).get("name"):
+        raise ValueError("Device profile must define the reference GPU name")
+    return profile
+
+
+def collect_device_fingerprint(serial: str) -> dict[str, Any]:
+    """Record the cloud guest as it actually exists; never apply reference-device overrides."""
+    def prop(name: str) -> str:
+        return shell(serial, f"getprop {shlex.quote(name)}", check=False, timeout=30).strip()
+
+    wm_size = shell(serial, "wm size", check=False, timeout=30).strip()
+    wm_density = shell(serial, "wm density", check=False, timeout=30).strip()
+    display_dump = shell(serial, "dumpsys display", check=False, timeout=45)
+    sf_dump = shell(serial, "dumpsys SurfaceFlinger", check=False, timeout=45)
+    size_matches = re.findall(r"(?:Override|Physical) size:\s*(\d+)x(\d+)", wm_size)
+    density_matches = re.findall(r"(?:Override|Physical) density:\s*(\d+)", wm_density)
+    refresh_match = re.search(r"(?:refreshRate|mRefreshRate|fps)[=: ]+([0-9]+(?:\.[0-9]+)?)",
+                              display_dump, re.IGNORECASE)
+    renderer_match = re.search(r"(?:GLES:\s*|OpenGL ES\s+)([^\r\n]+)", sf_dump, re.IGNORECASE)
+    return {
+        "manufacturer": prop("ro.product.manufacturer"),
+        "model": prop("ro.product.model"),
+        "device": prop("ro.product.device"),
+        "board": prop("ro.product.board"),
+        "hardware": prop("ro.hardware"),
+        "soc_model": prop("ro.soc.model") or prop("ro.boot.hardware"),
+        "android_release": prop("ro.build.version.release"),
+        "android_api_level": prop("ro.build.version.sdk"),
+        "primary_abi": prop("ro.product.cpu.abi"),
+        "supported_abis": prop("ro.product.cpu.abilist"),
+        "native_bridge": prop("ro.dalvik.vm.native.bridge"),
+        "opengles_version_property": prop("ro.opengles.version"),
+        "egl_implementation": prop("ro.hardware.egl"),
+        "wm_size_raw": wm_size,
+        "wm_size_reported_px": [int(size_matches[-1][0]), int(size_matches[-1][1])] if size_matches else None,
+        "wm_density_raw": wm_density,
+        "wm_density_dpi": int(density_matches[-1]) if density_matches else None,
+        "display_refresh_rate_hz": float(refresh_match.group(1)) if refresh_match else None,
+        "surfaceflinger_renderer": renderer_match.group(1).strip() if renderer_match else None,
+        "fingerprint_scope": "cloud Android guest only; host GPU/CPU and physical phone thermals are not reproduced"
+    }
+
+
+def assess_device_profile(profile: dict[str, Any], actual: dict[str, Any]) -> dict[str, Any]:
+    """Compare observable guest facts with the reference profile, with explicit limits."""
+    target_android = profile["android"]
+    target_display = profile["display"]
+    actual_api = int(actual["android_api_level"]) if str(actual.get("android_api_level", "")).isdigit() else None
+    actual_abis = [v.strip() for v in actual.get("supported_abis", "").split(",") if v.strip()]
+    actual_size = actual.get("wm_size_reported_px")
+    target_size = [int(target_display["width_px"]), int(target_display["height_px"])]
+    normalized_target = sorted(target_size, reverse=True)
+    normalized_actual = sorted(actual_size, reverse=True) if actual_size else None
+    api_status = ("MATCH" if actual_api == int(target_android["api_level"]) else
+                  "DIFFERENT" if actual_api is not None else "UNKNOWN")
+    abi_status = ("ARM64_ABI_AVAILABLE" if target_android["abi"] in actual_abis or
+                  actual.get("primary_abi") == target_android["abi"] else "NOT_CONFIRMED")
+    resolution_status = ("MATCH" if normalized_actual == normalized_target else
+                         "DIFFERENT" if normalized_actual else "UNKNOWN")
+    return {
+        "profile_id": profile["profile_id"],
+        "display_name": profile["display_name"],
+        "role": "reference_hardware_profile",
+        "execution_environment": "cloud_android_emulator",
+        "hardware_equivalence": "NOT_EMULATED",
+        "target": {
+            "manufacturer": profile["device"].get("manufacturer"),
+            "model": profile["device"].get("model"),
+            "soc": profile["device"].get("soc", {}).get("name"),
+            "gpu": profile["device"].get("gpu", {}).get("name"),
+            "physical_ram_mb": profile["device"].get("memory", {}).get("physical_ram_mb"),
+            "android_release": target_android.get("version"),
+            "android_api_level": target_android.get("api_level"),
+            "abi": target_android.get("abi"),
+            "display_px": target_size,
+            "refresh_rate_hz": target_display.get("refresh_rate_hz")
+        },
+        "observed_cloud_guest": actual,
+        "comparison": {
+            "android_api": api_status,
+            "arm64_abi": abi_status,
+            "display_resolution": resolution_status
+        },
+        "limitations": [
+            "The cloud Pixel emulator is not a Kirin 710F CPU or Mali-G51 MP4 GPU.",
+            "Cloud CPU scheduling, GPU drivers, memory bandwidth, thermals and physical frame pacing differ from the Huawei Y9s.",
+            "Reference values are descriptive metadata only; no resolution, density, ABI, GPU or CPU override is applied."
+        ]
+    }
+
+
+
 def run_adb(serial: str, *args: str, input_text: str | None = None, timeout: int = 90, check: bool = True) -> str:
     proc = subprocess.run(["adb", "-s", serial, *args], input=input_text, text=True,
                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
@@ -527,7 +637,9 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[
     (variant_dir / "combined-geode-log.txt").write_text(combined)
     screenshot(serial, f"dashcore-{mode.lower()}-final.png", variant_dir / "final-screen.png")
     crash = bool(re.search(r"FATAL EXCEPTION|Fatal signal|SIGABRT|SIGSEGV|has died", crash_text, re.IGNORECASE))
-    data = {"mode": mode, "mod_enabled": mod_enabled, "gfxinfo": gfx,
+    data = {"mode": mode, "mod_enabled": mod_enabled, "device_profile_id": args.device_profile_data["profile_id"],
+            "execution_environment": "cloud_android_emulator", "hardware_equivalence": "NOT_EMULATED",
+            "gfxinfo": gfx,
             "surfaceflinger": surface_metrics, "surfaceflinger_candidate_count": len(surface_layers),
             "cpu_observation": observation, "crash_detected": crash,
             "gameplay_verified": gameplay_verified, "gameplay_ocr": gameplay_ocr[:1000],
@@ -553,8 +665,26 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
                 and item["gfxinfo"].get("available")
                 and item["cpu_observation"].get("available")
                 and not item["crash_detected"] for item in (baseline, enabled))
+    profile_report = args.device_profile_assessment
+    target = profile_report["target"]
+    observed = profile_report["observed_cloud_guest"]
+    comparison = profile_report["comparison"]
+    target_size = "×".join(map(str, target["display_px"]))
+    observed_size = "×".join(map(str, observed["wm_size_reported_px"])) if observed.get("wm_size_reported_px") else "unavailable"
     lines = [
         "# DashCore AutoTest — FPS baseline vs mod", "",
+        "## Device profile", "",
+        f"- Reference profile: **{profile_report['display_name']}** (\`{profile_report['profile_id']}\`)",
+        "- Execution target: **cloud Android emulator**, not a physical Huawei Y9s.",
+        "- Hardware equivalence: **NOT EMULATED**.",
+        f"- Reference SoC/GPU: {target['soc']} / {target['gpu']}.",
+        f"- Actual cloud guest: {observed.get('manufacturer') or 'unknown'} {observed.get('model') or 'unknown'}; Android {observed.get('android_release') or 'unknown'} (API {observed.get('android_api_level') or 'unknown'}); ABI {observed.get('primary_abi') or 'unknown'}.",
+        f"- Reference display: {target_size}px; guest wm size: {observed_size}px; refresh-rate observation: {observed.get('display_refresh_rate_hz') or 'unavailable'} Hz.",
+        f"- Profile comparisons: API={comparison['android_api']}; ARM64 ABI={comparison['arm64_abi']}; resolution={comparison['display_resolution']}.",
+        "- The profile is used for identification and report labeling only; no emulator CPU/GPU, resolution, density or memory overrides are applied.",
+        "",
+        *[f"- Limitation: {item}" for item in profile_report["limitations"]],
+        "",
         f"**Measurement status: {'VALID' if valid else 'INCOMPLETE'}**", "",
         "| Metric | Without DashCore | With DashCore | Difference (mod - baseline) |",
         "|---|---:|---:|---:|",
@@ -594,6 +724,7 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
     (out / "fps-comparison.md").write_text("\n".join(lines) + "\n")
     (out / "fps-comparison.json").write_text(json.dumps({
         "status": "VALID" if valid else "INCOMPLETE",
+        "device_profile": profile_report,
         "maximum_fps_difference": max_delta, "average_fps_difference": avg_delta,
         "without_dashcore": baseline, "with_dashcore": enabled
     }, indent=2) + "\n")
@@ -609,7 +740,28 @@ def main() -> int:
     parser.add_argument("--mod-id", default="hesta.optgod")
     parser.add_argument("--mod-file", required=True)
     parser.add_argument("--report-dir", default="reports/autotest-fps")
+    parser.add_argument("--device-profile", default="profiles/huawei-y9s.json",
+                        help="Reference device profile JSON; descriptive only, never applied as emulator overrides.")
     args = parser.parse_args()
+    profile_path = pathlib.Path(args.device_profile)
+    args.device_profile_data = load_device_profile(profile_path)
+    args.device_profile_assessment = assess_device_profile(
+        args.device_profile_data, collect_device_fingerprint(args.serial)
+    )
+    report_root = pathlib.Path(args.report_dir)
+    report_root.mkdir(parents=True, exist_ok=True)
+    (report_root / "device-profile.json").write_text(
+        json.dumps(args.device_profile_data, indent=2) + "\n", encoding="utf-8"
+    )
+    (report_root / "cloud-device-fingerprint.json").write_text(
+        json.dumps(args.device_profile_assessment["observed_cloud_guest"], indent=2) + "\n", encoding="utf-8"
+    )
+    (report_root / "device-profile-assessment.json").write_text(
+        json.dumps(args.device_profile_assessment, indent=2) + "\n", encoding="utf-8"
+    )
+    print("DEVICE-PROFILE: {} | execution=cloud-emulator | hardware-equivalence=NOT-EMULATED".format(
+        args.device_profile_data["profile_id"]
+    ))
     shell(args.serial, f"mkdir -p {shlex.quote(args.base_dir + '/game/geode/mods')}")
     baseline = run_variant(args, "WITHOUT_DASHCORE", mod_enabled=False)
     enabled = run_variant(args, "WITH_DASHCORE", mod_enabled=True)
