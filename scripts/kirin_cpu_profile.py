@@ -336,20 +336,42 @@ def build_topology_assessment(reference: dict[str, Any], actual: dict[str, Any],
 
 
 def median_scores(runs: list[dict[str, Any]]) -> dict[str, Any]:
-    by_cpu: dict[int, list[float]] = {}
+    by_test: dict[str, list[dict[str, Any]]] = {}
     for run in runs:
-        for worker in run["workers"]:
-            if worker.get("affinity_ok") and worker.get("iterations_per_second") is not None:
-                by_cpu.setdefault(int(worker["cpu"]), []).append(
-                    float(worker["iterations_per_second"])
-                )
-    return {
-        str(cpu): {
-            "median_iterations_per_second": round(statistics.median(values), 3),
-            "samples": len(values),
+        workers = [
+            worker for worker in run["workers"]
+            if worker.get("affinity_ok") and worker.get("iterations_per_second") is not None
+        ]
+        if not workers:
+            continue
+        by_test.setdefault(run["test"], []).append({
+            "aggregate_iterations_per_second": sum(
+                float(worker["iterations_per_second"]) for worker in workers
+            ),
+            "per_cpu": {
+                str(worker["cpu"]): float(worker["iterations_per_second"])
+                for worker in workers
+            },
+        })
+    summary = {}
+    for test_name, samples in by_test.items():
+        cpu_values: dict[str, list[float]] = {}
+        for sample in samples:
+            for cpu, value in sample["per_cpu"].items():
+                cpu_values.setdefault(cpu, []).append(value)
+        summary[test_name] = {
+            "median_aggregate_iterations_per_second": round(
+                statistics.median(
+                    sample["aggregate_iterations_per_second"] for sample in samples
+                ), 3
+            ),
+            "median_per_cpu_iterations_per_second": {
+                cpu: round(statistics.median(values), 3)
+                for cpu, values in sorted(cpu_values.items(), key=lambda item: int(item[0]))
+            },
+            "samples": len(samples),
         }
-        for cpu, values in sorted(by_cpu.items())
-    }
+    return summary
 
 
 def main() -> int:
@@ -550,16 +572,16 @@ def main() -> int:
         "",
         "## Benchmark throughput",
         "",
-        "| Test | Repetition | CPU IDs | Median worker iterations/s |",
+        "| Test | Repetition | CPU IDs | Aggregate iterations/s |",
         "|---|---:|---|---:|",
     ]
     for run in runs:
         rates = [row["iterations_per_second"] for row in run["workers"]
-                 if row.get("iterations_per_second") is not None]
-        med = round(statistics.median(rates), 3) if rates else "n/a"
+                 if row.get("affinity_ok") and row.get("iterations_per_second") is not None]
+        total = round(sum(rates), 3) if rates else "n/a"
         lines.append(
             f"| {run['test']} | {run['repetition']} | "
-            f"{','.join(map(str, run['requested_cpus']))} | {med} |"
+            f"{','.join(map(str, run['requested_cpus']))} | {total} |"
         )
     lines += [
         "",
