@@ -1,11 +1,20 @@
 # DashCore — Android rendering optimization
 
+## 0.9.5-alpha — Bismuth-inspired conservative static-object culling
+
+- Adds an opt-in CPU visibility pass for ordinary static objects outside an expanded camera viewport.
+- Uses each object's local content bounds transformed through the full Cocos node hierarchy, with a 125% viewport guard band.
+- Keeps triggers, effects, grouped objects, rotating objects, and objects with invalid bounds on the original Geometry Dash draw path.
+- The feature is OFF by default and can be enabled through **Experimental static-object culling (alpha)**.
+- This does not replace Cocos with Bismuth's custom renderer: Bismuth's current renderer requires desktop OpenGL 4.3 features that are not available as a direct Android GLES port.
+- This is an experimental diagnostic/validation build; physical Huawei Y9s testing is required before any stable optimization claim.
+
 ## 0.9.4-alpha — remove inactive diagnostic hook overhead
 
 - Makes the high-frequency hooks for `CCNode::visit`, `PlayLayer::postUpdate`, and `CCDirector::drawScene` opt-in at the Geode hook level.
 - When **Performance Diagnostics** is OFF, these hooks are not auto-enabled, removing DashCore detour execution from the normal per-node/per-frame paths.
 - When diagnostics are ON, the three hooks are enabled for the existing 600-frame sample and GLES/scene diagnostics.
-- Leaves the original Cocos/Geometry Dash rendering, updates, physics, triggers, and draw order untouched. Live render culling remains hard-disabled.
+- Leaves the original Cocos/Geometry Dash rendering, updates, physics, triggers, and draw order untouched. Experimental static-object culling is opt-in and OFF by default.
 - This is an optimization candidate; no FPS improvement is claimed until the new binary passes cloud A/B and physical Huawei Y9s validation.
 
 ## 0.9.3-alpha — lower runtime overhead by default
@@ -19,7 +28,7 @@ DashCore is an Android64 mod for Geometry Dash that investigates rendering perfo
 
 The long-term goal is to reduce unnecessary rendering work and stuttering on Android while keeping Geometry Dash's original gameplay, physics, controls, menus, and visual behavior intact.
 
-**Current status:** DashCore 0.9.3-alpha is a conservative optimization review build. Performance Diagnostics are OFF by default, so normal play skips DashCore's 600-frame profiling window, scene-graph/bounds scans and one-shot GLES probes. Turn **Performance Diagnostics** ON only when collecting a diagnostic Geode log. The `General Enable` master switch remains available. Live object culling is still hard-disabled.
+**Current status:** DashCore 0.9.3-alpha is a conservative optimization review build. Performance Diagnostics are OFF by default, so normal play skips DashCore's 600-frame profiling window, scene-graph/bounds scans and one-shot GLES probes. Turn **Performance Diagnostics** ON only when collecting a diagnostic Geode log. The `General Enable` master switch remains available. Static-object culling is available as an opt-in alpha feature; keep it OFF for baseline play.
 
 ## Compatibility
 
@@ -47,7 +56,7 @@ Scene bounds are not yet fully validated against the game's camera translation a
 
 ## Safety
 
-- Live render culling is hard-disabled.
+- Static-object culling is opt-in and OFF by default.
 - The original Geometry Dash renderer remains in control.
 - Diagnostic code does not change object visibility, draw calls, transforms, updates, collisions, physics, trigger execution, or level data.
 - Trigger, effect, grouped, missing-parent, and invalid-bounds objects are handled conservatively in diagnostic classification.
@@ -55,7 +64,7 @@ Scene bounds are not yet fully validated against the game's camera translation a
 ## Validation procedure
 
 1. Install the Android64 alpha build from the successful GitHub Actions workflow.
-2. Keep **Experimental render culling** disabled.
+2. Keep **Experimental static-object culling (alpha)** disabled for the baseline; enable it only for a separate visual-validation run.
 3. Turn **Performance Diagnostics** ON only for a diagnostic session, then open a normal level and play long enough for the frame-sampling window to complete (approximately 10 seconds at 60 FPS). Turn it OFF again for normal play.
 4. Where possible, test a level containing move, rotate, scale, alpha, toggle, color, and pulse triggers, as well as grouped objects.
 5. Repeat on another level and provide the complete Geode log.
@@ -75,7 +84,7 @@ Useful log entries include `SCENE-GRAPH`, `GPU-INPUT-CLASSIFICATION`, `OBJECT-GE
 - Stages DashCore in the launcher's actual Geode mods directory and confirms the mod appears in Geode's log.
 - Captures the first-run Terms notice, uses the captured landscape screenshot coordinates directly for `adb shell input tap` (Android's `wm size` reports the panel's portrait natural orientation even while the game is rotated), dismisses the notice at (960,793), taps the main-menu Play button at (960,500), and then taps the selected level's Play control at (960,500). It retains notice, main-menu, level-select, and final screenshots.
 - A runtime PASS requires DashCore's `PlayLayer::setupHasCompleted` hook to appear in the collected Geode log. If the game remains open but no gameplay hook appears, the result is INCONCLUSIVE rather than a false PASS. Tap coordinates are validated against the captured PNG dimensions and sent in the current rotated logical coordinate space; `adb shell wm size` is recorded for diagnostics, not used to scale landscape taps.
-- This is a cloud smoke test, not a substitute for physical-device playtesting on the Huawei STK-LX3 / Mali-G51. Live culling remains hard-disabled.
+- This is a cloud smoke test, not a substitute for physical-device playtesting on the Huawei STK-LX3 / Mali-G51. Static-object culling remains opt-in and OFF by default.
 
 ## Huawei Y9s reference profile
 
