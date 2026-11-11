@@ -1,5 +1,13 @@
 # DashCore — Android rendering optimization
 
+## 0.9.4-alpha — remove inactive diagnostic hook overhead
+
+- Makes the high-frequency hooks for `CCNode::visit`, `PlayLayer::postUpdate`, and `CCDirector::drawScene` opt-in at the Geode hook level.
+- When **Performance Diagnostics** is OFF, these hooks are not auto-enabled, removing DashCore detour execution from the normal per-node/per-frame paths.
+- When diagnostics are ON, the three hooks are enabled for the existing 600-frame sample and GLES/scene diagnostics.
+- Leaves the original Cocos/Geometry Dash rendering, updates, physics, triggers, and draw order untouched. Live render culling remains hard-disabled.
+- This is an optimization candidate; no FPS improvement is claimed until the new binary passes cloud A/B and physical Huawei Y9s validation.
+
 ## 0.9.3-alpha — lower runtime overhead by default
 
 - Disables optional timing instrumentation and diagnostic scene/GPU scans by default.
