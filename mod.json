@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.9.4-alpha",
+  "version": "0.9.5-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.9.4-alpha: removes high-frequency diagnostic hook overhead during normal play; diagnostic hooks activate only when requested. The original Geometry Dash renderer remains unchanged and live render culling stays hard-disabled.",
+  "description": "DashCore 0.9.5-alpha: adds opt-in conservative culling for off-screen static objects while preserving vanilla rendering for triggers, effects, grouped and rotating objects.",
   "tags": [
     "optimizations",
     "performance"
@@ -21,8 +21,8 @@
     },
     "experimental-render-culling": {
       "type": "bool",
-      "name": "Experimental render culling (locked off)",
-      "description": "Unavailable in this alpha build. Live object hiding remains hard-disabled until camera-space bounds and trigger behavior are validated.",
+      "name": "Experimental static-object culling (alpha)",
+      "description": "Opt-in Bismuth-inspired CPU visibility culling for ordinary static objects outside an expanded viewport. Triggers, effects, grouped objects, rotating objects and invalid bounds remain visible. Experimental; keep OFF if you notice missing objects or visual changes.",
       "default": false
     },
     "load-last-level": {
