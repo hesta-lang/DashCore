@@ -796,9 +796,13 @@ def main() -> int:
     parser.add_argument("--mod-id", default="hesta.optgod")
     parser.add_argument("--mod-file", required=True)
     parser.add_argument("--report-dir", default="reports/autotest-fps")
+    parser.add_argument("--repetitions", type=int, default=3,
+                        help="Number of paired baseline/mod measurements (1-5; default: 3).")
     parser.add_argument("--device-profile", default="profiles/huawei-y9s.json",
                         help="Reference device profile JSON; descriptive only, never applied as emulator overrides.")
     args = parser.parse_args()
+    if not 1 <= args.repetitions <= 5:
+        parser.error("--repetitions must be between 1 and 5")
     profile_path = pathlib.Path(args.device_profile)
     args.device_profile_data = load_device_profile(profile_path)
     args.device_profile_assessment = assess_device_profile(
@@ -819,12 +823,81 @@ def main() -> int:
         args.device_profile_data["profile_id"]
     ))
     shell(args.serial, f"mkdir -p {shlex.quote(args.base_dir + '/game/geode/mods')}")
-    baseline = run_variant(args, "WITHOUT_DASHCORE", mod_enabled=False)
-    enabled = run_variant(args, "WITH_DASHCORE", mod_enabled=True)
-    valid = write_report(args, baseline, enabled)
-    print((pathlib.Path(args.report_dir) / "fps-comparison.md").read_text())
-    if not valid:
-        print("::error::FPS comparison incomplete; Android frame timestamps or CPU samples are missing, or a crash was detected.")
+    original_report_dir = args.report_dir
+    paired_results = []
+    for repetition in range(1, args.repetitions + 1):
+        args.report_dir = str(report_root / f"repeat-{repetition:02d}")
+        pathlib.Path(args.report_dir).mkdir(parents=True, exist_ok=True)
+        print(f"BENCHMARK-REPETITION: {repetition}/{args.repetitions}")
+        # Alternate order between pairs to reduce systematic warm-up/thermal bias.
+        if repetition % 2:
+            baseline = run_variant(args, "WITHOUT_DASHCORE", mod_enabled=False)
+            enabled = run_variant(args, "WITH_DASHCORE", mod_enabled=True)
+        else:
+            enabled = run_variant(args, "WITH_DASHCORE", mod_enabled=True)
+            baseline = run_variant(args, "WITHOUT_DASHCORE", mod_enabled=False)
+        pair_valid = write_report(args, baseline, enabled)
+        paired_results.append({
+            "repetition": repetition,
+            "status": "VALID" if pair_valid else "INCOMPLETE",
+            "without_dashcore": baseline,
+            "with_dashcore": enabled,
+        })
+        print((pathlib.Path(args.report_dir) / "fps-comparison.md").read_text())
+    args.report_dir = original_report_dir
+
+    def median_metric(mode: str, key: str) -> float | None:
+        values = []
+        for pair in paired_results:
+            value = pair[mode]["gfxinfo"].get(key)
+            if pair["status"] == "VALID" and isinstance(value, (int, float)):
+                values.append(float(value))
+        return statistics.median(values) if len(values) == args.repetitions else None
+
+    baseline_avg = median_metric("without_dashcore", "average_fps")
+    enabled_avg = median_metric("with_dashcore", "average_fps")
+    summary_valid = all(pair["status"] == "VALID" for pair in paired_results)
+    summary = {
+        "status": "VALID" if summary_valid else "INCOMPLETE",
+        "repetitions_requested": args.repetitions,
+        "repetitions_valid": sum(pair["status"] == "VALID" for pair in paired_results),
+        "aggregation": "median across valid paired runs; no emulator-to-phone equivalence claimed",
+        "median_without_dashcore_average_fps": baseline_avg,
+        "median_with_dashcore_average_fps": enabled_avg,
+        "median_average_fps_change_percent": (
+            (enabled_avg / baseline_avg - 1.0) * 100.0
+            if baseline_avg and enabled_avg is not None else None
+        ),
+        "device_profile": args.device_profile_assessment,
+        "repetitions": paired_results,
+        "physical_huawei_y9s_validation": "PENDING",
+    }
+    (report_root / "fps-repeated-summary.json").write_text(
+        json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+    )
+    lines = [
+        "# DashCore repeated FPS benchmark", "",
+        f"- Status: **{summary['status']}**",
+        f"- Valid paired repetitions: **{summary['repetitions_valid']}/{args.repetitions}**",
+        "- Environment: cloud Android emulator; not the physical Huawei Y9s.",
+        "- Hardware equivalence: **NOT EMULATED**.",
+        "- Aggregation: median of each metric across all valid paired repetitions.",
+        f"- Median average FPS without DashCore: **{baseline_avg if baseline_avg is not None else 'unavailable'}**",
+        f"- Median average FPS with DashCore: **{enabled_avg if enabled_avg is not None else 'unavailable'}**",
+        f"- Median average-FPS change: **{summary['median_average_fps_change_percent'] if summary['median_average_fps_change_percent'] is not None else 'unavailable'}%**",
+        "- Physical Huawei Y9s validation: **PENDING**.", "",
+        "| Repetition | Status | Baseline avg FPS | DashCore avg FPS |",
+        "|---:|---|---:|---:|",
+    ]
+    for pair in paired_results:
+        b = pair["without_dashcore"]["gfxinfo"].get("average_fps")
+        m = pair["with_dashcore"]["gfxinfo"].get("average_fps")
+        lines.append(f"| {pair['repetition']} | {pair['status']} | {b if b is not None else 'unavailable'} | {m if m is not None else 'unavailable'} |")
+    lines += ["", "Cloud measurements are comparative signals only. Do not publish a non-alpha optimization release until validated on the physical reference phone."]
+    (report_root / "fps-repeated-summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print((report_root / "fps-repeated-summary.md").read_text())
+    if not summary_valid:
+        print("::error::Repeated FPS benchmark incomplete; at least one paired run lacked valid frame/CPU data or detected a crash.")
         return 1
     return 0
 
