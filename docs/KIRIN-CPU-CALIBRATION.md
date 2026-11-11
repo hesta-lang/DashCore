@@ -86,6 +86,27 @@ represent identical microarchitectures on different devices. If the cloud
 guest does not expose the same ARM CPU part IDs and topology, the report marks
 that limitation rather than relabeling its cores as Cortex-A73/A53.
 
+## AutoTest integration
+
+The AutoTest FPS runner now consumes the selected physical CPU sample through
+`scripts/kirin_autotest_calibration.py`. It writes a compact reference into
+`device-profile-assessment.json`, each per-pass `metrics.json`, the
+`fps-comparison.json` reports and `fps-repeated-summary.json`. The report
+includes the selected sample ID, duration/repetition count, physical A73/A53
+candidate medians, and the concurrent all-core median.
+
+This integration is intentionally descriptive. It does not change the cloud
+guest's CPU count, affinity, clock, governor, quota, scheduler, GPU, display,
+or memory. It does not normalize FPS using CPU microbenchmark ratios. The
+cloud CPU probe and its physical-vs-cloud comparison remain separate artifacts
+under `kirin-cpu-profile-cloud/` and
+`kirin-cpu-calibration-comparison/`, because those measurements are not FPS.
+
+A cloud-only AutoTest run now reports physical Huawei Y9s FPS validation as
+`NOT_RUN_CLOUD_ONLY`, not as completed validation. The physical phone still
+needs a same-level, same-route baseline/with-mod run before any optimization
+can be treated as validated.
+
 ## Calibration decision
 
 - The physical reference is now recorded; no additional temperature test is
