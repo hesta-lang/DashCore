@@ -141,13 +141,26 @@ class Target:
         return result.stdout.strip()
 
     def read_file(self, path: str) -> str | None:
+        if not self.serial:
+            try:
+                return pathlib.Path(path).read_text(
+                    encoding="utf-8", errors="replace"
+                ).strip()
+            except OSError:
+                return None
         output = self.shell(f"cat {shlex.quote(path)}", check=False)
         if not output or output.startswith("cat:"):
             return None
         return output
 
     def getprop(self, key: str) -> str | None:
-        return self.shell(f"getprop {shlex.quote(key)}", check=False) or None
+        if self.serial:
+            return self.shell(f"getprop {shlex.quote(key)}", check=False) or None
+        result = subprocess.run(
+            ["/system/bin/getprop", key], text=True, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, timeout=10,
+        )
+        return result.stdout.strip() or None
 
     def install_binary(self, binary: pathlib.Path) -> str:
         if self.serial:
@@ -162,11 +175,23 @@ class Target:
     def run_benchmark(self, binary_path: str, cpus: list[int],
                       duration_ms: int) -> list[dict[str, Any]]:
         cpu_arg = ",".join(str(cpu) for cpu in cpus)
-        command = (
-            f"{shlex.quote(binary_path)} --cpus {shlex.quote(cpu_arg)} "
-            f"--duration-ms {duration_ms}"
-        )
-        output = self.shell(command, check=True, timeout=duration_ms / 1000 + 45)
+        if self.serial:
+            command = (
+                f"{shlex.quote(binary_path)} --cpus {shlex.quote(cpu_arg)} "
+                f"--duration-ms {duration_ms}"
+            )
+            output = self.shell(command, check=True, timeout=duration_ms / 1000 + 45)
+        else:
+            result = subprocess.run(
+                [binary_path, "--cpus", cpu_arg, "--duration-ms", str(duration_ms)],
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                timeout=duration_ms / 1000 + 45,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"Local CPU probe failed ({result.returncode}): {result.stdout[-2000:]}"
+                )
+            output = result.stdout
         rows = []
         for line in output.splitlines():
             try:
