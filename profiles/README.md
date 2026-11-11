@@ -22,7 +22,9 @@ Recorded target:
 
 This profile does **not** turn the GitHub cloud emulator into a Kirin 710F or Mali-G51 device. The emulator's GPU remains the host/virtual GPU. Its CPU scheduler and memory subsystem also differ from the phone.
 
-The profile initially records the Huawei target and provides benchmark acceptance rules. It deliberately does not change AutoTest's current screenshot/tap resolution or GPU mode, because doing so without migrating and validating the automation would invalidate its coordinates and comparisons.
+The profile is now loaded by `scripts/autotest_ab.py` and validated by `.github/workflows/autotest-v3-cloud.yml`. AutoTest records the real cloud guest fingerprint and writes `device-profile.json`, `cloud-device-fingerprint.json`, and `device-profile-assessment.json` into the uploaded reports. Each variant's `metrics.json` includes the profile ID and `NOT_EMULATED` marker. The comparison report names the reference hardware and the actual cloud execution environment separately.
+
+It deliberately does not change AutoTest's current screenshot/tap resolution or GPU mode, because doing so without migrating and validating the automation would invalidate its coordinates and comparisons.
 
 ### How to use it
 
