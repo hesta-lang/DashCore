@@ -282,6 +282,7 @@ jobs:
             --mod-file "$MOD" \
             --base-dir /sdcard/Android/media/com.geode.launcher \
             --report-dir "$REPORT_DIR" \
+            --repetitions 3 \
             --device-profile profiles/huawei-y9s.json
 
       - name: Upload AutoTest v4.4 reports
