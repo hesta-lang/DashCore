@@ -44,6 +44,10 @@ def collect_device_fingerprint(serial: str) -> dict[str, Any]:
     refresh_match = re.search(r"(?:refreshRate|mRefreshRate|fps)[=: ]+([0-9]+(?:\.[0-9]+)?)",
                               display_dump, re.IGNORECASE)
     renderer_match = re.search(r"(?:GLES:\s*|OpenGL ES\s+)([^\r\n]+)", sf_dump, re.IGNORECASE)
+    mem_match = re.search(r"^MemTotal:\s*(\d+)\s*kB", meminfo, re.MULTILINE)
+    cpu_model_match = re.search(r"^(?:model name|Hardware|Processor)\s*:\s*(.+)$",
+                                cpuinfo, re.MULTILINE | re.IGNORECASE)
+    logical_cores = len(re.findall(r"^processor\s*:", cpuinfo, re.MULTILINE))
     return {
         "manufacturer": prop("ro.product.manufacturer"),
         "model": prop("ro.product.model"),
