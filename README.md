@@ -4,7 +4,7 @@ DashCore is an Android64 mod for Geometry Dash that investigates rendering perfo
 
 The long-term goal is to reduce unnecessary rendering work and stuttering on Android while keeping Geometry Dash's original gameplay, physics, controls, menus, and visual behavior intact.
 
-**Current status:** DashCore 0.9.1-beta includes a conservative fast path in its CCNode::visit hook. Its visibility analysis remains diagnostic/read-only and live object culling is hard-disabled.
+**Current status:** DashCore 0.9.2-alpha is a physical-device review build. It adds a Geode `General Enable` master switch. When OFF, the mod remains loaded but bypasses all DashCore hooks and optional startup behavior. The conservative fast path is retained when ON. Its visibility analysis remains diagnostic/read-only and live object culling is hard-disabled.
 
 ## Compatibility
 
@@ -106,3 +106,12 @@ AutoTest v3.9 usa coordenadas nativas de las capturas 1920×1080: OK (960,793), 
 - It confirms the selected mode from the mod log, waits for both 600-frame diagnostic windows to finish, and only then measures a separate 20-second process-CPU observation. Android gfxinfo framestats is collected as a best-effort frame-pacing signal when available.
 - The SurfaceFlinger call used by AutoTest v4.1 has been removed; missing frame-stat data is reported as unavailable rather than failing the test.
 - The A/B comparison does not enable or evaluate live culling. Live culling remains hard-disabled, and the cloud x86_64 + ARM-translation result is not a physical Huawei/Mali-G51 benchmark.
+
+
+## 0.9.2-alpha — physical-device review and General Enable
+
+- Adds the Geode setting **General Enable** (default ON).
+- When OFF, DashCore remains installed and loaded by Geode, but its CCNode visit, PlayLayer, MenuLayer, and CCDirector hooks immediately delegate to the original game implementations. It also skips profiling, diagnostic probes, last-level recording, and automatic last-level startup loading.
+- When ON, existing DashCore behavior is enabled, including the conservative CCNode fast path and the existing optional last-level startup setting.
+- To compare on a physical Android device, keep the same installed .geode file and restart Geometry Dash after changing General Enable. Compare ON versus OFF using the same level, route, settings, and attempt conditions.
+- This is an **alpha review build**, not a stable release. Live render culling remains hard-disabled; the setting does not enable experimental culling.
