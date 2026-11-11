@@ -84,6 +84,14 @@ Useful log entries include `SCENE-GRAPH`, `GPU-INPUT-CLASSIFICATION`, `OBJECT-GE
 - The profile is descriptive and diagnostic only. AutoTest does not force the emulator's resolution, density, ABI, CPU, GPU or RAM to match the phone. Existing screenshots, tap coordinates, game navigation and frame-collection logic remain unchanged.
 - A cloud benchmark can detect comparative regressions in the same emulator, but it is not a measurement of Kirin 710F / Mali-G51 performance. Physical Huawei logs remain necessary for device-specific validation.
 
+## Kirin 710F CPU calibration for AutoTest
+
+- AutoTest now includes a small Android ARM64 CPU probe that records the actual CPU topology and per-core integer throughput of its cloud guest.
+- The separate **Kirin CPU Profile Tool** workflow builds a Termux-ready artifact, so the same probe can be run locally on the physical Huawei Y9s.
+- It identifies Cortex-A73/A53 from ARM CPU part IDs when exposed; otherwise it reports frequency/capacity clusters only as candidates.
+- No CPU throttle, clock override, or governor change is applied before a physical Y9s reference measurement is collected and reviewed.
+- See [Kirin CPU calibration](docs/KIRIN-CPU-CALIBRATION.md). Cloud measurements remain cloud measurements and must not be presented as Kirin 710F results.
+
 ## Physical Huawei Y9s validation
 
 The cloud A/B benchmark is not a physical-device performance result. Before claiming an optimization, run the controlled five-pair ON/OFF procedure on the Huawei Y9s using the same installed `.geode` package, the same level and route, and **Performance Diagnostics OFF** during timed runs. Toggle **General Enable** and fully restart Geometry Dash between runs. The procedure, result sheet, thermal controls, and separate diagnostic-log pass are documented in [Physical Huawei Y9s A/B validation](docs/PHYSICAL-HUAWEI-Y9S-VALIDATION.md).
