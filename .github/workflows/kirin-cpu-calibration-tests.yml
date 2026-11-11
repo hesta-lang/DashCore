@@ -1,0 +1,83 @@
+name: Kirin CPU calibration tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/kirin_cpu_profile.py"
+      - "scripts/compare_kirin_cpu_profiles.py"
+      - "scripts/test_kirin_cpu_profile.py"
+      - "scripts/test_compare_kirin_cpu_profiles.py"
+      - "profiles/huawei-y9s.json"
+      - "docs/KIRIN-CPU-CALIBRATION.md"
+      - ".github/workflows/autotest-v3-cloud.yml"
+      - ".github/workflows/kirin-cpu-calibration-tests.yml"
+  pull_request:
+    paths:
+      - "scripts/kirin_cpu_profile.py"
+      - "scripts/compare_kirin_cpu_profiles.py"
+      - "scripts/test_kirin_cpu_profile.py"
+      - "scripts/test_compare_kirin_cpu_profiles.py"
+      - "profiles/huawei-y9s.json"
+      - "docs/KIRIN-CPU-CALIBRATION.md"
+      - ".github/workflows/autotest-v3-cloud.yml"
+      - ".github/workflows/kirin-cpu-calibration-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate physical/cloud CPU calibration data
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out DashCore
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile calibration scripts
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            scripts/kirin_cpu_profile.py \
+            scripts/compare_kirin_cpu_profiles.py \
+            scripts/test_kirin_cpu_profile.py \
+            scripts/test_compare_kirin_cpu_profiles.py
+
+      - name: Run CPU profiler unit tests
+        run: python scripts/test_kirin_cpu_profile.py
+
+      - name: Run physical/cloud comparison tests
+        run: python scripts/test_compare_kirin_cpu_profiles.py
+
+      - name: Validate physical Huawei Y9s calibration record
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          profile = json.loads(Path("profiles/huawei-y9s.json").read_text())
+          assert profile["profile_id"] == "huawei-y9s"
+          cpu = profile["cpu_execution_model"]
+          measured = cpu["physical_measurements"]
+          assert measured["benchmark_id"] == "dashcore-kirin-cpu-v1"
+          assert measured["device_identity"]["cpu_affinity_successful"] is True
+          assert measured["device_identity"]["cpu_throttle_applied"] is False
+          assert measured["reference_sample_id"] == "rested-idle-2026-11-11"
+          assert cpu["calibration"]["minimum_repetitions"] == 3
+          assert measured["core_inventory"]["Cortex-A53"]["cpu_ids"] == [0, 1, 2, 3]
+          assert measured["core_inventory"]["Cortex-A73"]["cpu_ids"] == [4, 5, 6, 7]
+          samples = {item["sample_id"]: item for item in measured["samples"]}
+          reference = samples[measured["reference_sample_id"]]
+          assert reference["repetitions"] == 3
+          assert len(reference["run_iterations_per_second"]["all_allowed_cores_concurrent"]) == 3
+          assert measured["interpretation"]["thermal_testing_required_for_current_calibration"] is False
+          assert measured["interpretation"]["cpu_budget_derived"] is False
+          print("Huawei Y9s physical CPU reference is structurally valid.")
+          PY
