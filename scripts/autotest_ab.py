@@ -368,11 +368,28 @@ def wait_for_state(serial: str, mode: str, label: str, destination: pathlib.Path
         attempt += 1
         last_text = take_state_screenshot(serial, mode, f"{label}-{attempt}", destination)
         if predicate(last_text):
-            screenshot(serial, f"dashcore-{mode.lower()}-{label}-confirmed.png", destination)
-            confirmed_text = screenshot_text(destination)
-            if predicate(confirmed_text):
-                (destination.parent / f"{label}-confirmed-ocr.txt").write_text(confirmed_text + "\n")
-                return confirmed_text
+            # The first OCR match is already a valid state observation. A second
+            # OCR pass can miss transient HUD text even when the game state has
+            # not changed; never discard a positive detection for that reason.
+            confirmed_path = destination.with_name(f"{label}-confirmed.png")
+            screenshot(
+                serial,
+                f"dashcore-{mode.lower()}-{label}-confirmed.png",
+                confirmed_path,
+            )
+            confirmed_text = screenshot_text(confirmed_path)
+            accepted_text = confirmed_text if predicate(confirmed_text) else last_text
+            (destination.parent / f"{label}-confirmed-ocr.txt").write_text(
+                accepted_text + "\n"
+            )
+            (destination.parent / f"{label}-confirmation.json").write_text(
+                json.dumps({
+                    "initial_detection": True,
+                    "confirmation_ocr_match": bool(predicate(confirmed_text)),
+                    "accepted_source": "confirmation" if predicate(confirmed_text) else "initial_detection",
+                }, indent=2) + "\n"
+            )
+            return accepted_text
         time.sleep(interval_s)
     raise RuntimeError(f"{mode}: timed out waiting for {label}; last OCR text: {last_text[:500]!r}")
 
