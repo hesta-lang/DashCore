@@ -203,7 +203,8 @@ jobs:
       - name: Validate Huawei Y9s profile, FPS script and timestamp parser
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/autotest_ab.py
+          python3 -m py_compile scripts/autotest_ab.py scripts/kirin_autotest_calibration.py
+          python3 scripts/test_kirin_autotest_calibration.py
           python3 - <<'PY'
           import importlib.util
           from PIL import Image, ImageDraw
@@ -224,7 +225,16 @@ jobs:
           assert profile_check["comparison"]["android_api"] == "DIFFERENT", profile_check
           assert profile_check["comparison"]["arm64_abi"] == "ARM64_ABI_AVAILABLE", profile_check
           assert profile_check["comparison"]["display_resolution"] == "DIFFERENT", profile_check
-          print("Huawei Y9s reference-profile validation passed; emulator is explicitly NOT_EMULATED.")
+          cpu_reference = profile_check["cpu_calibration_reference"]
+          assert cpu_reference["status"] == "PHYSICAL_REFERENCE_CONTEXT_ONLY", cpu_reference
+          assert cpu_reference["selected_sample"]["sample_id"] == "rested-idle-2026-11-11", cpu_reference
+          assert cpu_reference["median_iterations_per_second"]["higher_capacity_single_core"] == 197569556.742, cpu_reference
+          assert cpu_reference["median_iterations_per_second"]["lower_capacity_single_core"] == 137366098.765, cpu_reference
+          assert cpu_reference["median_iterations_per_second"]["all_allowed_cores_concurrent"] == 1339436928.836, cpu_reference
+          assert cpu_reference["interpretation"]["hardware_equivalence"] == "NOT_EMULATED", cpu_reference
+          assert cpu_reference["interpretation"]["cpu_budget_derived"] is False, cpu_reference
+          assert cpu_reference["interpretation"]["cloud_cpu_limits_applied"] is False, cpu_reference
+          print("Huawei Y9s reference-profile and physical CPU calibration validation passed; emulator is explicitly NOT_EMULATED.")
           period = 16_666_667
           rows = ["16666667"]
           # Keep generated presentation timestamps strictly after the refresh-period header.
