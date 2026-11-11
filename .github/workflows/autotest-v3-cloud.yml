@@ -238,10 +238,10 @@ jobs:
           anomalous_rows.insert(8, f"{7*period} {7*period-14_900_000} {7*period-14_900_000}")
           anomaly_result = module.parse_surfaceflinger_latency("\n".join(anomalous_rows))
           assert anomaly_result.get("available") is True, anomaly_result
-          assert anomaly_result["timing_anomaly_detected"] is True, anomaly_result
-          assert anomaly_result["timing_anomaly_count"] == 2, anomaly_result
-          assert 59.0 <= anomaly_result["max_fps"] <= 61.0, anomaly_result
-          assert anomaly_result["interval_count"] == 18, anomaly_result
+          assert anomaly_result["timing_anomaly_detected"] is False, anomaly_result
+          assert anomaly_result["timing_anomaly_count"] == 0, anomaly_result
+          assert anomaly_result["max_fps"] > 60.0, anomaly_result
+          assert anomaly_result["interval_count"] == 20, anomaly_result
           invalid = module.parse_surfaceflinger_latency(
               "16666667\\n" + "\n".join([f"{2**63-1} {2**63-1} {2**63-1}"] * 20)
           )
@@ -261,7 +261,7 @@ jobs:
           assert landscape_tap == (960, 792, 1920, 1080), landscape_tap
           portrait_tap = module.map_screenshot_point_to_input(540, 960, 1080, 1920, 1080, 1920)
           assert portrait_tap == (540, 960, 1080, 1920), portrait_tap
-          print("SurfaceFlinger parser self-test passed, including sub-refresh anomaly rejection.")
+          print("SurfaceFlinger parser self-test passed; sub-refresh intervals are retained for unlocked-FPS measurement.")
           print(f"Geometry Dash NOTICE button detector self-test passed: {center}.")
           print(f"Landscape ADB input coordinate mapping self-test passed: {landscape_tap}.")
           print(f"Portrait ADB input coordinate mapping self-test passed: {portrait_tap}.")
