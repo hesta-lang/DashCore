@@ -63,10 +63,11 @@
       "Do not label cloud-emulator results as physical Huawei Y9s FPS.",
       "Keep the existing AutoTest screenshot/tap coordinate system unchanged until the test workflow is explicitly migrated to a new display profile.",
       "A valid ON/OFF pair must use the same emulator image, level, route, attempt stimulus and sampling window.",
-      "Physical-device logs remain the authority for Kirin CPU scheduling, Mali-G51 rendering, thermal throttling and real frame pacing.",
       "Kirin CPU profiling uses the same ARM64 integer workload on the cloud guest and the physical Y9s; only the local Y9s result is accepted as the CPU reference.",
       "The profiler respects the process Cpus_allowed_list and reports when Android cpusets prevent access to one or more online cores.",
-      "No virtual CPU frequency or system CPU quota is imposed until a physical Y9s throughput reference is collected and reviewed."
+      "Physical CPU throughput samples from the Huawei Y9s are recorded under cpu_execution_model.physical_measurements; cloud comparisons are descriptive and are not FPS.",
+      "Temperature is not measured by the CPU probe and is not a gate for the current calibration stage; one-point frequency readings must not be treated as sustained frequencies.",
+      "No virtual CPU frequency, governor, scheduler policy or system CPU quota is imposed by the calibration workflow."
     ]
   },
   "cpu_execution_model": {
@@ -88,16 +89,218 @@
         "scheduler capacity"
       ],
       "frequency_match_tolerance_percent": 10,
-      "minimum_repetitions": 2,
+      "minimum_repetitions": 3,
       "requires_physical_huawei_y9s_measurement": true
     },
     "emulator_limits": {
-      "current_status": "REFERENCE_PROFILE_ONLY",
+      "current_status": "PHYSICAL_REFERENCE_CAPTURED_CLOUD_COMPARISON_PENDING",
       "generic_android_emulator_recreates_kirin_scheduler": false,
       "per_cluster_frequency_scaling_recreated": false,
       "heterogeneous_cpu_capacity_recreated": false,
       "cpu_throttle_before_physical_calibration": false,
-      "reason": "A virtual CPU count or nominal clock value does not reproduce the Kirin 710F big.LITTLE scheduler, DVFS, cache hierarchy, memory subsystem, vendor kernel, or thermals."
+      "reason": "The physical Huawei Y9s reference is recorded. Compare an ARM64 cloud-guest run with that reference before proposing any emulator-side CPU budget; comparison does not establish full Kirin equivalence.",
+      "cpu_budget_derived_from_measurements": false
+    },
+    "physical_measurements": {
+      "benchmark_id": "dashcore-kirin-cpu-v1",
+      "observed_date": "2026-11-11",
+      "source": "User-provided local Termux reports from the physical Huawei Y9s (HUAWEI STK-LX3, SoC reported as kirin710).",
+      "device_identity": {
+        "manufacturer": "HUAWEI",
+        "model": "STK-LX3",
+        "soc_reported": "kirin710",
+        "android_release": "10",
+        "android_api_level": 29,
+        "primary_abi": "arm64-v8a",
+        "online_cpu_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "process_allowed_cpu_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "cpu_affinity_successful": true,
+        "cpu_emulation": "NOT_EMULATED",
+        "cpu_throttle_applied": false
+      },
+      "core_inventory": {
+        "Cortex-A53": {
+          "cpu_ids": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "max_frequency_mhz": 1709,
+          "cpu_capacity": 486
+        },
+        "Cortex-A73": {
+          "cpu_ids": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "max_frequency_mhz": 2189,
+          "cpu_capacity": 1024
+        },
+        "cluster_ids_exposed": false
+      },
+      "reference_sample_id": "rested-idle-2026-11-11",
+      "samples": [
+        {
+          "sample_id": "initial-exploratory-2026-11-11",
+          "role": "exploratory",
+          "condition": "initial_physical_sample_conditions_unspecified",
+          "duration_ms": 2500,
+          "repetitions": 2,
+          "frequency_snapshot_mhz": {
+            "Cortex-A53": 480,
+            "Cortex-A73": 1824
+          },
+          "run_iterations_per_second": {
+            "higher_capacity_single_core": [
+              164713198.613,
+              179827245.012
+            ],
+            "lower_capacity_single_core": [
+              135206983.583,
+              147901773.36
+            ],
+            "all_allowed_cores_concurrent": [
+              1190580405.669,
+              1254968730.006
+            ]
+          },
+          "notes": [
+            "Frequency values are point-in-time observations, not frequencies measured throughout the benchmark."
+          ]
+        },
+        {
+          "sample_id": "variable-repeatability-2026-11-11",
+          "role": "exploratory",
+          "condition": "sample_conditions_not_instrumented",
+          "duration_ms": 4000,
+          "repetitions": 3,
+          "frequency_snapshot_mhz": {
+            "Cortex-A53": 1325,
+            "Cortex-A73": 2189
+          },
+          "run_iterations_per_second": {
+            "higher_capacity_single_core": [
+              187165622.912,
+              190232526.492,
+              174249348.73
+            ],
+            "lower_capacity_single_core": [
+              136950827.261,
+              137194478.165,
+              133083588.173
+            ],
+            "all_allowed_cores_concurrent": [
+              1159386722.55,
+              1039556325.885,
+              992475164.478
+            ]
+          },
+          "notes": [
+            "All-core throughput declined across repetitions; cause was not measured and is not attributed to temperature."
+          ]
+        },
+        {
+          "sample_id": "rested-idle-2026-11-11",
+          "role": "selected_physical_reference",
+          "condition": "idle_after_requested_rest_interval",
+          "duration_ms": 4000,
+          "repetitions": 3,
+          "frequency_snapshot_mhz": {
+            "Cortex-A53": 480,
+            "Cortex-A73": 2189
+          },
+          "run_iterations_per_second": {
+            "higher_capacity_single_core": [
+              197569556.742,
+              197427122.905,
+              197653220.911
+            ],
+            "lower_capacity_single_core": [
+              137366098.765,
+              139418460.636,
+              136518247.162
+            ],
+            "all_allowed_cores_concurrent": [
+              1339436928.836,
+              1373751443.87,
+              1336082444.228
+            ]
+          },
+          "notes": [
+            "Selected as the current physical CPU throughput reference because its three repetitions were stable.",
+            "Frequency readings are a snapshot and do not establish sustained operating frequency.",
+            "Temperature was not instrumented."
+          ]
+        },
+        {
+          "sample_id": "post-game-session-2026-11-11",
+          "role": "post_game_observation",
+          "condition": "benchmark_run_after_geometry_dash_session",
+          "duration_ms": 4000,
+          "repetitions": 3,
+          "frequency_snapshot_mhz": {
+            "Cortex-A53": 1325,
+            "Cortex-A73": 2189
+          },
+          "run_iterations_per_second": {
+            "higher_capacity_single_core": [
+              188620308.833,
+              185679557.737,
+              167789783.631
+            ],
+            "lower_capacity_single_core": [
+              138546694.893,
+              140412781.76,
+              143616593.904
+            ],
+            "all_allowed_cores_concurrent": [
+              1135331808.336,
+              1090133531.862,
+              1098997548.686
+            ]
+          },
+          "notes": [
+            "Observed after a Geometry Dash session; exact game duration and device temperature were not recorded.",
+            "The difference from the selected idle reference is descriptive and cannot be attributed to thermal throttling alone."
+          ]
+        }
+      ],
+      "interpretation": {
+        "post_game_vs_idle_median_change_percent": {
+          "higher_capacity_single_core": -6.02,
+          "lower_capacity_single_core": 2.22,
+          "all_allowed_cores_concurrent": -17.95
+        },
+        "thermal_state_measured": false,
+        "thermal_testing_required_for_current_calibration": false,
+        "cpu_budget_derived": false,
+        "notes": [
+          "The selected rested-idle sample is the current numerical reference; rested describes the test sequence, not a measured thermal state.",
+          "The post-game sample has approximately 17.95% lower all-core throughput than the selected idle reference, but this single comparison does not identify the cause.",
+          "The CPU benchmark is an integer-throughput microbenchmark and is not a Geometry Dash FPS measurement."
+        ]
+      }
     }
   }
 }
