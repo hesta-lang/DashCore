@@ -84,6 +84,12 @@ Useful log entries include `SCENE-GRAPH`, `GPU-INPUT-CLASSIFICATION`, `OBJECT-GE
 - The profile is descriptive and diagnostic only. AutoTest does not force the emulator's resolution, density, ABI, CPU, GPU or RAM to match the phone. Existing screenshots, tap coordinates, game navigation and frame-collection logic remain unchanged.
 - A cloud benchmark can detect comparative regressions in the same emulator, but it is not a measurement of Kirin 710F / Mali-G51 performance. Physical Huawei logs remain necessary for device-specific validation.
 
+## Physical Huawei Y9s validation
+
+The cloud A/B benchmark is not a physical-device performance result. Before claiming an optimization, run the controlled five-pair ON/OFF procedure on the Huawei Y9s using the same installed `.geode` package, the same level and route, and **Performance Diagnostics OFF** during timed runs. Toggle **General Enable** and fully restart Geometry Dash between runs. The procedure, result sheet, thermal controls, and separate diagnostic-log pass are documented in [Physical Huawei Y9s A/B validation](docs/PHYSICAL-HUAWEI-Y9S-VALIDATION.md).
+
+Manual observation can identify repeatable stutters but does not provide exact FPS. Keep the build at `alpha` until physical-device evidence demonstrates a repeatable improvement without visual or gameplay regressions.
+
 ## Build target
 
 DashCore is built for Android64 / arm64-v8a through GitHub Actions, targeting Geometry Dash 2.2081 and Geode 5.11.2.
