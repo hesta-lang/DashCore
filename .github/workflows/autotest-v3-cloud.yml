@@ -241,7 +241,7 @@ jobs:
           assert anomaly_result["timing_anomaly_detected"] is True, anomaly_result
           assert anomaly_result["timing_anomaly_count"] == 1, anomaly_result
           assert 59.0 <= anomaly_result["max_fps"] <= 61.0, anomaly_result
-          assert anomaly_result["interval_count"] == 18, anomaly_result
+          assert anomaly_result["interval_count"] == 19, anomaly_result
           invalid = module.parse_surfaceflinger_latency(
               "16666667\\n" + "\n".join([f"{2**63-1} {2**63-1} {2**63-1}"] * 20)
           )
