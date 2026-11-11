@@ -62,6 +62,12 @@ Useful log entries include `SCENE-GRAPH`, `GPU-INPUT-CLASSIFICATION`, `OBJECT-GE
 - A runtime PASS requires DashCore's `PlayLayer::setupHasCompleted` hook to appear in the collected Geode log. If the game remains open but no gameplay hook appears, the result is INCONCLUSIVE rather than a false PASS. Tap coordinates are validated against the captured PNG dimensions and sent in the current rotated logical coordinate space; `adb shell wm size` is recorded for diagnostics, not used to scale landscape taps.
 - This is a cloud smoke test, not a substitute for physical-device playtesting on the Huawei STK-LX3 / Mali-G51. Live culling remains hard-disabled.
 
+## Huawei Y9s reference profile
+
+- The initial device profile is stored in `profiles/huawei-y9s.json`; its assumptions and limits are documented in `profiles/README.md`.
+- It records the Huawei Y9s target (Kirin 710F, Mali-G51 MP4, 6 GB RAM, Android 10/API 29, 2340×1080/60 Hz) separately from settings that a cloud emulator can approximate.
+- This is a **reference/calibration profile**, not a claim that the cloud emulator reproduces the phone's CPU, GPU, thermal behavior, or physical FPS. AutoTest's existing screenshot/tap coordinates are intentionally unchanged until an explicit workflow migration is validated.
+
 ## Build target
 
 DashCore is built for Android64 / arm64-v8a through GitHub Actions, targeting Geometry Dash 2.2081 and Geode 5.11.2.
