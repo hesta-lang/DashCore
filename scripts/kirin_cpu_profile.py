@@ -356,6 +356,8 @@ def main() -> int:
     report_dir.mkdir(parents=True, exist_ok=True)
 
     online_text = target.read_file("/sys/devices/system/cpu/online") or ""
+    status_text = target.read_file("/proc/self/status") or ""
+    allowed_match = re.search(r"^Cpus_allowed_list:\s*(\S+)", status_text, re.MULTILINE)
     try:
         online_cpus = parse_cpu_list(online_text)
     except ValueError:
@@ -370,7 +372,13 @@ def main() -> int:
     if not online_cpus:
         raise RuntimeError("Could not discover online CPU IDs on the Android target.")
 
+    allowed_cpus = parse_cpu_list(allowed_match.group(1)) if allowed_match else online_cpus
+    allowed_cpus = sorted(set(online_cpus).intersection(allowed_cpus))
+    if not allowed_cpus:
+        raise RuntimeError("The current Android process has no online CPUs in its allowed cpuset.")
+
     core_rows = collect_core_rows(target, online_cpus, cpuinfo_records)
+    allowed_core_rows = [row for row in core_rows if row["cpu"] in allowed_cpus]
     grouping = group_cpus(core_rows)
     binary_path = target.install_binary(args.binary)
 
@@ -388,11 +396,13 @@ def main() -> int:
         ordered = sorted(groups, key=lambda item: item.get("max_frequency_khz", 0))
         low_cpus, high_cpus = ordered[0]["cpus"], ordered[-1]["cpus"]
 
-    if high_cpus:
-        test_sets.append(("higher_capacity_single_core", [high_cpus[0]]))
-    if low_cpus:
-        test_sets.append(("lower_capacity_single_core", [low_cpus[0]]))
-    test_sets.append(("all_online_cores_concurrent", online_cpus))
+    high_allowed = sorted(set(high_cpus).intersection(allowed_cpus))
+    low_allowed = sorted(set(low_cpus).intersection(allowed_cpus))
+    if high_allowed:
+        test_sets.append(("higher_capacity_single_core", [high_allowed[0]]))
+    if low_allowed:
+        test_sets.append(("lower_capacity_single_core", [low_allowed[0]]))
+    test_sets.append(("all_allowed_cores_concurrent", allowed_cpus))
 
     runs: list[dict[str, Any]] = []
     for repetition in range(1, args.repetitions + 1):
@@ -435,7 +445,10 @@ def main() -> int:
         "observed_device": actual,
         "cpu_inventory": {
             "online_cpu_list": online_cpus,
+            "process_allowed_cpu_list": allowed_cpus,
+            "cpuset_restriction_detected": allowed_cpus != online_cpus,
             "cores": core_rows,
+            "allowed_cores": allowed_core_rows,
             "grouping": grouping,
         },
         "topology_assessment": topology,
@@ -486,6 +499,7 @@ def main() -> int:
         f"- Observed device: {actual.get('manufacturer')} {actual.get('model')}",
         f"- SoC reported: {actual.get('soc_model') or actual.get('hardware')}",
         f"- Online CPUs: {','.join(map(str, online_cpus))}",
+        f"- CPUs available to profiler process: {','.join(map(str, allowed_cpus))}",
         f"- Topology assessment: **{topology['status']}**",
         f"- Huawei Y9s identity confirmed: **{topology['huawei_y9s_identity_confirmed']}**",
         f"- CPU affinity successful: **{all_affinity}**",
