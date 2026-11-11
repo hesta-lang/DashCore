@@ -5,6 +5,7 @@ import argparse, csv, json, math, pathlib, re, shlex, statistics, subprocess, sy
 from PIL import Image
 from typing import Any
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from kirin_autotest_calibration import build_physical_cpu_reference
 
 def load_device_profile(path: pathlib.Path) -> dict[str, Any]:
