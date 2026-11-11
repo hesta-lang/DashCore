@@ -67,20 +67,38 @@ jobs:
           PY
 
       - name: Compile Android ARM64/API 29 executable
+        env:
+          NDK_VERSION: "27.2.12479018"
         run: |
           set -euo pipefail
-          NDK_DIR="$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
-          if [ -z "$NDK_DIR" ]; then
-            echo "::error::Android NDK was not installed."
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$SDK_ROOT" ]; then
+            echo "::error::Android SDK root is missing (ANDROID_HOME/ANDROID_SDK_ROOT)."
+            exit 1
+          fi
+          NDK_DIR="$SDK_ROOT/ndk/$NDK_VERSION"
+          if [ ! -d "$NDK_DIR" ]; then
+            echo "::error::Expected Android NDK $NDK_VERSION at $NDK_DIR"
+            echo "Installed NDK directories:"
+            find "$SDK_ROOT/ndk" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null || true
             exit 1
           fi
           TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          "$TOOLCHAIN/aarch64-linux-android29-clang" \
-            -O2 -std=c11 -Wall -Wextra -Werror -pthread -fPIE -pie \
+          CC="$TOOLCHAIN/aarch64-linux-android29-clang"
+          if [ ! -x "$CC" ]; then
+            echo "::error::Android ARM64 API 29 compiler not found: $CC"
+            exit 1
+          fi
+          "$CC" --version
+          "$CC" -O2 -std=c11 -Wall -Wextra -Werror -pthread -fPIE -pie \
             tools/kirin_cpu_bench.c -o build/kirin_cpu_bench
           file build/kirin_cpu_bench
-          readelf -h build/kirin_cpu_bench | grep -E "Class:|Machine:"
-
+          readelf -h build/kirin_cpu_bench | tee build/android-elf-header.txt
+          grep -q "Class:.*ELF64" build/android-elf-header.txt
+          grep -q "Machine:.*AArch64" build/android-elf-header.txt
+          grep -q "Type:.*DYN" build/android-elf-header.txt
+          echo "Android ARM64/API 29 executable compiled and verified."
+          
       - name: Package Termux-ready profiling tool
         run: |
           set -euo pipefail
