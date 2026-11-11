@@ -1,11 +1,11 @@
+# DashCore — Android rendering optimization
+
 ## 0.9.3-alpha — lower runtime overhead by default
 
 - Disables optional timing instrumentation and diagnostic scene/GPU scans by default.
 - Keeps the original Geometry Dash renderer and gameplay paths unchanged.
 - Exposes **Performance Diagnostics** in Geode settings for opt-in profiling.
 - Live render culling remains hard-disabled. The change reduces work added by DashCore; it is not yet a verified FPS uplift on the physical Huawei Y9s.
-
-# DashCore — Android rendering optimization
 
 DashCore is an Android64 mod for Geometry Dash that investigates rendering performance and prepares a safer, Bismuth-inspired visibility optimization path. It measures frame and scene costs, inspects GameObjects and their bounds, and compares CPU visibility calculations with an OpenGL ES compute-shader implementation.
 
