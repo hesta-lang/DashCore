@@ -236,7 +236,7 @@ jobs:
           anomalous_rows = ["16666667"]
           anomalous_rows += [f"{i*period} {i*period} {i*period}" for i in range(1, 20)]
           anomalous_rows.insert(8, f"{7*period} {7*period-14_900_000} {7*period-14_900_000}")
-          anomaly_result = module.parse_surfaceflinger_latency("\\n".join(anomalous_rows))
+          anomaly_result = module.parse_surfaceflinger_latency("\n".join(anomalous_rows))
           assert anomaly_result.get("available") is True, anomaly_result
           assert anomaly_result["timing_anomaly_detected"] is True, anomaly_result
           assert anomaly_result["timing_anomaly_count"] == 1, anomaly_result
