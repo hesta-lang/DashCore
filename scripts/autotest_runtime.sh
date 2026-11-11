@@ -63,7 +63,9 @@ adb_ready
   echo "SDK=$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
   echo "Release=$(adb shell getprop ro.build.version.release | tr -d '\r')"
   echo "ABI=$(adb shell getprop ro.product.cpu.abi | tr -d '\r')"
+  echo "ABIs=$(adb shell getprop ro.product.cpu.abilist | tr -d '\r')"
   echo "NativeBridge=$(adb shell getprop ro.dalvik.vm.native.bridge | tr -d '\r')"
+  echo "BuildFingerprint=$(adb shell getprop ro.build.fingerprint | tr -d '\r')"
 } | tee "$REPORT_DIR/device.txt"
 
 test -s "$APK_PATH"
@@ -219,7 +221,7 @@ report = {
     ],
     "limitations": [
         "This is an Android emulator smoke test, not a physical Huawei/Mali-G51 test.",
-        "The emulator uses Android 10 API 29 on native ARM64 with software graphics.",
+        "The runtime uses an Android 11 API 30 managed cloud emulator with x86_64 execution and ARM64 native-library translation; this is not native ARM64 hardware or a Kirin 710F emulation.",
         "DashCore load is only confirmed if its identifier appears in collected Geode logs.",
         "A successful launch does not validate gameplay rendering, trigger safety, frame pacing, or GPU performance.",
     ],
