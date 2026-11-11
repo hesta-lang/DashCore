@@ -35,3 +35,23 @@ It deliberately does not change AutoTest's current screenshot/tap resolution or 
 5. Validate the same build on the physical Y9s and retain its Geode log for hardware-specific conclusions.
 
 Before applying a density override, capture the actual device density (wm density) from the phone. Do not infer density from the pixel resolution.
+
+
+## Kirin CPU calibration
+
+The CPU reference now has an executable calibration path documented in
+[docs/KIRIN-CPU-CALIBRATION.md](../docs/KIRIN-CPU-CALIBRATION.md).
+AutoTest builds the ARM64 probe from tools/kirin_cpu_bench.c and runs it on
+the cloud Android guest. The separate workflow Kirin CPU Profile Tool creates
+the Termux-ready artifact for the physical Huawei Y9s.
+
+The probe discovers online CPUs, the current process cpuset, ARM CPU part IDs,
+frequency limits, CPU capacity, and per-core integer throughput. It does not
+change CPU clocks or apply a system-wide CPU quota. Results from the cloud
+guest are diagnostics only; only a local report from the physical Y9s can be
+used as the CPU calibration reference.
+
+No heterogeneous CPU model or frequency cap is claimed. An eight-vCPU Android
+guest with 6 GB RAM is still not a Kirin 710F because it lacks the Kirin
+cluster-aware scheduler, real A73/A53 silicon, DVFS, memory subsystem, vendor
+kernel and thermal behavior.
