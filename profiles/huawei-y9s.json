@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "profile_id": "huawei-y9s",
+  "display_name": "Huawei Y9s",
+  "purpose": "Reference hardware profile for DashCore AutoTest calibration. This profile records the target device and defines safe emulator-side approximations; it does not claim to emulate the Kirin SoC or Mali GPU.",
+  "device": {
+    "manufacturer": "Huawei",
+    "model": "Y9s",
+    "soc": {
+      "name": "HiSilicon Kirin 710F",
+      "cpu_architecture": "ARMv8-A",
+      "cpu_topology": {
+        "big_cores": 4,
+        "big_core_family": "Cortex-A73",
+        "big_core_nominal_mhz": 2200,
+        "little_cores": 4,
+        "little_core_family": "Cortex-A53",
+        "little_core_nominal_mhz": 1700
+      }
+    },
+    "gpu": {
+      "name": "ARM Mali-G51 MP4",
+      "emulator_equivalent": false,
+      "notes": "GPU identity is reference metadata only. Android emulator rendering uses the host/virtual GPU and is not a Mali-G51 performance simulation."
+    },
+    "memory": {
+      "physical_ram_mb": 6144,
+      "emulator_target_ram_mb": 6144,
+      "note": "Guest RAM capacity is approximated; available RAM, memory bandwidth, compression and Android process pressure will differ from the phone."
+    }
+  },
+  "android": {
+    "version": "10",
+    "api_level": 29,
+    "abi": "arm64-v8a"
+  },
+  "display": {
+    "width_px": 2340,
+    "height_px": 1080,
+    "orientation_for_gameplay": "landscape",
+    "refresh_rate_hz": 60,
+    "density_dpi": null,
+    "density_note": "Unknown; capture from the physical device before setting emulator density."
+  },
+  "benchmark": {
+    "profile_name": "huawei-y9s",
+    "resolution_mode": "recorded-target-only",
+    "emulator_resolution_override": false,
+    "emulator_gpu_override": "host",
+    "require_same_level_and_route": true,
+    "require_gameplay_confirmation": true,
+    "require_general_enable_ab_pair": true,
+    "sample_window_frames": 600,
+    "compare_metrics": [
+      "post_update_callback_cost",
+      "draw_scene_callback_cost",
+      "callback_interval_p50",
+      "callback_interval_p95",
+      "callback_gaps_over_50ms",
+      "callback_gaps_over_100ms"
+    ],
+    "notes": [
+      "Do not label cloud-emulator results as physical Huawei Y9s FPS.",
+      "Keep the existing AutoTest screenshot/tap coordinate system unchanged until the test workflow is explicitly migrated to a new display profile.",
+      "A valid ON/OFF pair must use the same emulator image, level, route, attempt stimulus and sampling window.",
+      "Physical-device logs remain the authority for Kirin CPU scheduling, Mali-G51 rendering, thermal throttling and real frame pacing."
+    ]
+  }
+}
