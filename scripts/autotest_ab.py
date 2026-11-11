@@ -692,6 +692,8 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
         "- Hardware equivalence: **NOT EMULATED**.",
         f"- Reference SoC/GPU: {target['soc']} / {target['gpu']}.",
         f"- Actual cloud guest: {observed.get('manufacturer') or 'unknown'} {observed.get('model') or 'unknown'}; Android {observed.get('android_release') or 'unknown'} (API {observed.get('android_api_level') or 'unknown'}); ABI {observed.get('primary_abi') or 'unknown'}.",
+        f"- Guest CPU: {observed.get('cpu_model_reported') or observed.get('hardware') or 'unknown'} ({observed.get('cpu_logical_cores') or 'unknown'} logical cores); guest RAM: {observed.get('memory_total_mb') or 'unknown'} MB.",
+        f"- Guest graphics: {observed.get('surfaceflinger_renderer') or observed.get('egl_implementation') or 'renderer unavailable'}; native bridge: {observed.get('native_bridge') or 'unreported'}.",
         f"- Reference display: {target_size}px; guest wm size: {observed_size}px; refresh-rate observation: {observed.get('display_refresh_rate_hz') or 'unavailable'} Hz.",
         f"- Profile comparisons: API={comparison['android_api']}; ARM64 ABI={comparison['arm64_abi']}; resolution={comparison['display_resolution']}.",
         "- The profile is used for identification and report labeling only; no emulator CPU/GPU, resolution, density or memory overrides are applied.",
