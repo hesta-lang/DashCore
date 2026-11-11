@@ -68,6 +68,15 @@ Useful log entries include `SCENE-GRAPH`, `GPU-INPUT-CLASSIFICATION`, `OBJECT-GE
 - It records the Huawei Y9s target (Kirin 710F, Mali-G51 MP4, 6 GB RAM, Android 10/API 29, 2340×1080/60 Hz) separately from settings that a cloud emulator can approximate.
 - This is a **reference/calibration profile**, not a claim that the cloud emulator reproduces the phone's CPU, GPU, thermal behavior, or physical FPS. AutoTest's existing screenshot/tap coordinates are intentionally unchanged until an explicit workflow migration is validated.
 
+## AutoTest integration — Huawei Y9s reference profile
+
+- AutoTest now loads `profiles/huawei-y9s.json` before the baseline/with-DashCore A/B run and validates its schema.
+- It records the actual cloud guest separately: Android build/API, model and board properties, ABI/native bridge, CPU information, guest RAM, `wm size`, `wm density`, reported refresh rate, and the SurfaceFlinger renderer when exposed.
+- The reports include `device-profile.json`, `cloud-device-fingerprint.json`, and `device-profile-assessment.json`, plus the profile ID and `NOT_EMULATED` marker in each variant's `metrics.json`.
+- The Markdown/JSON comparison report identifies the Y9s as the reference target and the Pixel cloud emulator as the execution environment. It shows API/ABI/resolution observations instead of claiming the emulator is a Y9s.
+- The profile is descriptive and diagnostic only. AutoTest does not force the emulator's resolution, density, ABI, CPU, GPU or RAM to match the phone. Existing screenshots, tap coordinates, game navigation and frame-collection logic remain unchanged.
+- A cloud benchmark can detect comparative regressions in the same emulator, but it is not a measurement of Kirin 710F / Mali-G51 performance. Physical Huawei logs remain necessary for device-specific validation.
+
 ## Build target
 
 DashCore is built for Android64 / arm64-v8a through GitHub Actions, targeting Geometry Dash 2.2081 and Geode 5.11.2.
