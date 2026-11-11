@@ -8,6 +8,9 @@ on:
       - "scripts/compare_kirin_cpu_profiles.py"
       - "scripts/test_kirin_cpu_profile.py"
       - "scripts/test_compare_kirin_cpu_profiles.py"
+      - "scripts/kirin_autotest_calibration.py"
+      - "scripts/test_kirin_autotest_calibration.py"
+      - "scripts/autotest_ab.py"
       - "profiles/huawei-y9s.json"
       - "docs/KIRIN-CPU-CALIBRATION.md"
       - ".github/workflows/autotest-v3-cloud.yml"
@@ -48,13 +51,19 @@ jobs:
             scripts/kirin_cpu_profile.py \
             scripts/compare_kirin_cpu_profiles.py \
             scripts/test_kirin_cpu_profile.py \
-            scripts/test_compare_kirin_cpu_profiles.py
+            scripts/test_compare_kirin_cpu_profiles.py \
+            scripts/kirin_autotest_calibration.py \
+            scripts/test_kirin_autotest_calibration.py \
+            scripts/autotest_ab.py
 
       - name: Run CPU profiler unit tests
         run: python scripts/test_kirin_cpu_profile.py
 
       - name: Run physical/cloud comparison tests
         run: python scripts/test_compare_kirin_cpu_profiles.py
+
+      - name: Run AutoTest physical-reference integration tests
+        run: python scripts/test_kirin_autotest_calibration.py
 
       - name: Validate physical Huawei Y9s calibration record
         run: |
