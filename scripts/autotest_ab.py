@@ -5,6 +5,8 @@ import argparse, csv, json, math, pathlib, re, shlex, statistics, subprocess, sy
 from PIL import Image
 from typing import Any
 
+from kirin_autotest_calibration import build_physical_cpu_reference
+
 def load_device_profile(path: pathlib.Path) -> dict[str, Any]:
     """Load and validate a reference-device profile without changing emulator settings."""
     if not path.is_file():
@@ -130,6 +132,7 @@ def assess_device_profile(profile: dict[str, Any], actual: dict[str, Any]) -> di
             "guest_memory_total_mb": actual.get("memory_total_mb"),
             "guest_cpu_logical_cores": actual.get("cpu_logical_cores")
         },
+        "cpu_calibration_reference": build_physical_cpu_reference(profile),
         "limitations": [
             "The cloud Pixel emulator is not a Kirin 710F CPU or Mali-G51 MP4 GPU.",
             "Cloud CPU scheduling, GPU drivers, memory bandwidth, thermals and physical frame pacing differ from the Huawei Y9s.",
@@ -723,6 +726,11 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
     target = profile_report["target"]
     observed = profile_report["observed_cloud_guest"]
     comparison = profile_report["comparison"]
+    cpu_reference = profile_report["cpu_calibration_reference"]
+    cpu_medians = cpu_reference["median_iterations_per_second"]
+    cpu_inventory = cpu_reference["core_inventory"]
+    a73_ids = ", ".join(map(str, cpu_inventory.get("Cortex-A73", {}).get("cpu_ids", []))) or "unreported"
+    a53_ids = ", ".join(map(str, cpu_inventory.get("Cortex-A53", {}).get("cpu_ids", []))) or "unreported"
     target_size = "×".join(map(str, target["display_px"]))
     observed_size = "×".join(map(str, observed["wm_size_reported_px"])) if observed.get("wm_size_reported_px") else "unavailable"
     lines = [
@@ -737,7 +745,14 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
         f"- Guest graphics: {observed.get('surfaceflinger_renderer') or observed.get('egl_implementation') or 'renderer unavailable'}; native bridge: {observed.get('native_bridge') or 'unreported'}.",
         f"- Reference display: {target_size}px; guest wm size: {observed_size}px; refresh-rate observation: {observed.get('display_refresh_rate_hz') or 'unavailable'} Hz.",
         f"- Profile comparisons: API={comparison['android_api']}; ARM64 ABI={comparison['arm64_abi']}; resolution={comparison['display_resolution']}.",
-        "- The profile is used for identification and report labeling only; no emulator CPU/GPU, resolution, density or memory overrides are applied.",
+        "- The reference profile supplies device identity and a separately labeled physical CPU reference; no emulator CPU/GPU, resolution, density or memory overrides are applied.",
+        "",
+        "## Physical CPU reference (context only)",
+        f"- Physical sample: **{cpu_reference['selected_sample']['sample_id']}**; {cpu_reference['selected_sample']['duration_ms']} ms × {cpu_reference['selected_sample']['repetitions']} repetitions.",
+        f"- Cortex-A73 high-capacity candidate (CPU IDs {a73_ids}): **{cpu_medians['higher_capacity_single_core'] / 1_000_000:.2f} M iterations/s** median.",
+        f"- Cortex-A53 lower-capacity candidate (CPU IDs {a53_ids}): **{cpu_medians['lower_capacity_single_core'] / 1_000_000:.2f} M iterations/s** median.",
+        f"- All allowed cores concurrent: **{cpu_medians['all_allowed_cores_concurrent'] / 1_000_000:.2f} M iterations/s** median.",
+        "- This is the measured physical Huawei Y9s reference, not a cloud CPU result, FPS score, or scaling factor. No CPU quota, clock, affinity, or FPS normalization is derived from it.",
         "",
         *[f"- Limitation: {item}" for item in profile_report["limitations"]],
         "",
@@ -781,6 +796,7 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
     (out / "fps-comparison.json").write_text(json.dumps({
         "status": "VALID" if valid else "INCOMPLETE",
         "device_profile": profile_report,
+        "cpu_calibration_reference": cpu_reference,
         "maximum_fps_difference": max_delta, "average_fps_difference": avg_delta,
         "without_dashcore": baseline, "with_dashcore": enabled
     }, indent=2) + "\n")
@@ -869,8 +885,10 @@ def main() -> int:
             if baseline_avg and enabled_avg is not None else None
         ),
         "device_profile": args.device_profile_assessment,
+        "cpu_calibration_reference": args.device_profile_assessment["cpu_calibration_reference"],
         "repetitions": paired_results,
-        "physical_huawei_y9s_validation": "PENDING",
+        "physical_huawei_y9s_validation": "NOT_RUN_CLOUD_ONLY",
+        "physical_fps_validation_required_before_non_alpha_release": True,
     }
     (report_root / "fps-repeated-summary.json").write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8"
@@ -885,7 +903,8 @@ def main() -> int:
         f"- Median average FPS without DashCore: **{baseline_avg if baseline_avg is not None else 'unavailable'}**",
         f"- Median average FPS with DashCore: **{enabled_avg if enabled_avg is not None else 'unavailable'}**",
         f"- Median average-FPS change: **{summary['median_average_fps_change_percent'] if summary['median_average_fps_change_percent'] is not None else 'unavailable'}%**",
-        "- Physical Huawei Y9s validation: **PENDING**.", "",
+        "- Physical Huawei Y9s FPS validation: **NOT RUN (this workflow is cloud-only)**.",
+        f"- Physical CPU reference sample: **{summary['cpu_calibration_reference']['selected_sample']['sample_id']}**; medians are included for context only.", "",
         "| Repetition | Status | Baseline avg FPS | DashCore avg FPS |",
         "|---:|---|---:|---:|",
     ]
