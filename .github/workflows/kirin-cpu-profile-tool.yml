@@ -1,0 +1,107 @@
+name: Kirin CPU Profile Tool
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "tools/kirin_cpu_bench.c"
+      - "tools/run-kirin-cpu-profile-termux.sh"
+      - "scripts/kirin_cpu_profile.py"
+      - "scripts/test_kirin_cpu_profile.py"
+      - "profiles/huawei-y9s.json"
+      - ".github/workflows/kirin-cpu-profile-tool.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-tool:
+    name: Build and validate Android ARM64 CPU profiler
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Android NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "ndk;27.2.12479018"
+
+      - name: Validate Python profiler
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/kirin_cpu_profile.py
+          python -m unittest scripts/test_kirin_cpu_profile.py -v
+
+      - name: Compile and smoke-test native CPU workload on runner
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          cc -O2 -std=c11 -Wall -Wextra -Werror -pthread \
+            tools/kirin_cpu_bench.c -o build/kirin_cpu_bench_host
+          CPU_ID="$(python - <<'PY'
+          import re
+          text = open("/proc/self/status", encoding="utf-8").read()
+          match = re.search(r"^Cpus_allowed_list:\s*(\S+)", text, re.MULTILINE)
+          if not match:
+              raise SystemExit("Could not read runner process CPU affinity.")
+          first = match.group(1).split(",")[0].split("-")[0]
+          print(first)
+          PY
+          )"
+          build/kirin_cpu_bench_host --cpus "$CPU_ID" --duration-ms 500 \
+            | tee build/host-smoke-test.jsonl
+          python - <<'PY'
+          import json
+          rows = [json.loads(line) for line in open("build/host-smoke-test.jsonl")]
+          assert len(rows) == 1 and rows[0]["affinity_ok"] is True, rows
+          assert rows[0]["iterations"] > 0, rows
+          print("Native benchmark smoke test passed.")
+          PY
+
+      - name: Compile Android ARM64/API 29 executable
+        run: |
+          set -euo pipefail
+          NDK_DIR="$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          if [ -z "$NDK_DIR" ]; then
+            echo "::error::Android NDK was not installed."
+            exit 1
+          fi
+          TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          "$TOOLCHAIN/aarch64-linux-android29-clang" \
+            -O2 -std=c11 -Wall -Wextra -Werror -pthread -fPIE -pie \
+            tools/kirin_cpu_bench.c -o build/kirin_cpu_bench
+          file build/kirin_cpu_bench
+          readelf -h build/kirin_cpu_bench | grep -E "Class:|Machine:"
+
+      - name: Package Termux-ready profiling tool
+        run: |
+          set -euo pipefail
+          OUT="dist/DashCore-Kirin-CPU-Profile-Tool"
+          mkdir -p "$OUT"
+          cp build/kirin_cpu_bench "$OUT/kirin_cpu_bench"
+          cp scripts/kirin_cpu_profile.py "$OUT/kirin_cpu_profile.py"
+          cp profiles/huawei-y9s.json "$OUT/huawei-y9s.json"
+          cp tools/run-kirin-cpu-profile-termux.sh "$OUT/run-kirin-cpu-profile-termux.sh"
+          cp docs/KIRIN-CPU-CALIBRATION.md "$OUT/README.md"
+          chmod 700 "$OUT/kirin_cpu_bench" "$OUT/run-kirin-cpu-profile-termux.sh"
+          (cd dist && zip -qr DashCore-Kirin-CPU-Profile-Tool.zip DashCore-Kirin-CPU-Profile-Tool)
+          sha256sum dist/DashCore-Kirin-CPU-Profile-Tool.zip \
+            > dist/DashCore-Kirin-CPU-Profile-Tool.sha256
+
+      - name: Upload Android CPU profile tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: DashCore-Kirin-CPU-Profile-Tool
+          path: |
+            dist/DashCore-Kirin-CPU-Profile-Tool.zip
+            dist/DashCore-Kirin-CPU-Profile-Tool.sha256
+          if-no-files-found: error
+          retention-days: 30
