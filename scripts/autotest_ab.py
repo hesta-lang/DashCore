@@ -215,7 +215,7 @@ def parse_gfxinfo(path: pathlib.Path) -> dict[str, Any]:
     }
 
 def parse_surfaceflinger_latency(text: str) -> dict[str, Any]:
-    """Parse SurfaceFlinger timestamps and flag sub-refresh timing anomalies."""
+    """Parse SurfaceFlinger presentation timestamps without imposing a refresh-rate FPS cap."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     refresh_ns = None
     if lines:
@@ -234,13 +234,10 @@ def parse_surfaceflinger_latency(text: str) -> dict[str, Any]:
     present_ns = sorted(set(present_ns))
     raw_intervals = [(b-a)/1_000_000.0 for a, b in zip(present_ns, present_ns[1:])
                      if b > a and 0.1 <= (b-a)/1_000_000.0 <= 1000.0]
-    # Substantially sub-refresh intervals are timestamp anomalies, not displayed FPS.
-    # Allow small timestamp jitter, but reject intervals materially below a refresh period.
-    anomaly_floor_ms = (refresh_ns / 1_000_000.0 * 0.90) if refresh_ns else None
-    anomalous = ([value for value in raw_intervals if value < anomaly_floor_ms]
-                 if anomaly_floor_ms is not None else [])
-    intervals = ([value for value in raw_intervals if value >= anomaly_floor_ms]
-                 if anomaly_floor_ms is not None else raw_intervals)
+    # Surface presentation intervals are not capped by the panel refresh rate.
+    # Keep sub-refresh intervals: they may represent valid unlocked frame production.
+    anomalous = []
+    intervals = raw_intervals
     anomaly_fields = {
         "raw_interval_count": len(raw_intervals),
         "timing_anomaly_count": len(anomalous),
