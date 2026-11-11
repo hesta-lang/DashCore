@@ -2,10 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-DURATION_MS="$DASHCORE_CPU_DURATION_MS"
-REPETITIONS="$DASHCORE_CPU_REPETITIONS"
-[ -n "$DURATION_MS" ] || DURATION_MS=2500
-[ -n "$REPETITIONS" ] || REPETITIONS=2
+DURATION_MS="${DASHCORE_CPU_DURATION_MS:-2500}"
+REPETITIONS="${DASHCORE_CPU_REPETITIONS:-2}"
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "Python 3 is required. In Termux run: pkg install python"
