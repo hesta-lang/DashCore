@@ -235,7 +235,8 @@ def parse_surfaceflinger_latency(text: str) -> dict[str, Any]:
     raw_intervals = [(b-a)/1_000_000.0 for a, b in zip(present_ns, present_ns[1:])
                      if b > a and 0.1 <= (b-a)/1_000_000.0 <= 1000.0]
     # Substantially sub-refresh intervals are timestamp anomalies, not displayed FPS.
-    anomaly_floor_ms = (refresh_ns / 1_000_000.0 * 0.75) if refresh_ns else None
+    # Allow small timestamp jitter, but reject intervals materially below a refresh period.
+    anomaly_floor_ms = (refresh_ns / 1_000_000.0 * 0.90) if refresh_ns else None
     anomalous = ([value for value in raw_intervals if value < anomaly_floor_ms]
                  if anomaly_floor_ms is not None else [])
     intervals = ([value for value in raw_intervals if value >= anomaly_floor_ms]
