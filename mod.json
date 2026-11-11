@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.9.2-alpha",
+  "version": "0.9.3-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.9.2-alpha review build: adds a General Enable master switch to bypass all DashCore hooks while keeping the mod loaded. Conservative CCNode fast path remains; live render culling stays hard-disabled.",
+  "description": "DashCore 0.9.3-alpha: reduces runtime overhead by disabling performance diagnostics by default while preserving the original Geometry Dash renderer. Experimental live render culling remains hard-disabled.",
   "tags": [
     "optimizations",
     "performance"
@@ -22,7 +22,7 @@
     "experimental-render-culling": {
       "type": "bool",
       "name": "Experimental render culling (locked off)",
-      "description": "Not available in this beta. Live object hiding remains hard-disabled until camera-space bounds and trigger behavior are validated.",
+      "description": "Unavailable in this alpha build. Live object hiding remains hard-disabled until camera-space bounds and trigger behavior are validated.",
       "default": false
     },
     "load-last-level": {
@@ -30,6 +30,12 @@
       "name": "Load last played level on startup",
       "description": "Automatically opens the last supported standard level after the main menu loads. If it cannot be found, the main menu remains available.",
       "default": true
+    },
+    "diagnostics-enable": {
+      "type": "bool",
+      "name": "Performance Diagnostics",
+      "description": "Enables the 600-frame timing sample, scene-graph scans and one-time GLES probes. Keep OFF during normal play to avoid diagnostic CPU/GPU overhead; turn ON only when collecting a Geode log.",
+      "default": false
     }
   }
 }
