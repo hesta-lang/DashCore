@@ -1,0 +1,94 @@
+name: Build OptGod (Android64)
+
+on:
+  push:
+    branches: ["**"]
+    # The .geode artifact is unchanged by documentation-only edits.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
+      - ".github/workflows/build-android64.yml"
+      - ".github/workflows/autotest-v3-cloud.yml"
+  workflow_dispatch:
+
+# Avoid spending free Actions minutes on obsolete builds from the same branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Cppcheck and CPU profile unit tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
+          cppcheck \
+            --enable=warning,performance,portability \
+            --inline-suppr \
+            --error-exitcode=1 \
+            --language=c++ \
+            --std=c++20 \
+            --suppress=missingIncludeSystem \
+            --suppress=syntaxError:src/main.cpp \
+            src
+          cppcheck \
+            --enable=warning,performance,portability \
+            --error-exitcode=1 \
+            --language=c \
+            --std=c11 \
+            --suppress=missingIncludeSystem \
+            tools/kirin_cpu_bench.c
+          python3 -m py_compile scripts/kirin_cpu_profile.py scripts/test_kirin_cpu_profile.py
+          python3 -m unittest scripts/test_kirin_cpu_profile.py -v
+
+      - name: Build Geode mod for Android64
+        id: build
+        uses: ./.github/actions/build-geode-mod
+        with:
+          target: Android64
+          sdk: given
+          android-min-sdk: 29
+          build-config: Release
+          # LTO increases link time; disable it for faster CI builds.
+          # Runtime behavior is unchanged; the resulting binary may be slightly larger.
+          use-lto: false
+
+      # Keep diagnostics in the build job so they cannot leave the whole
+      # workflow queued after the .geode artifact has already been produced.
+      - name: Build diagnostics
+        if: always()
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          BUILD_OUTPUT: ${{ steps.build.outputs.build-output }}
+        run: |
+          echo "## Android64 build diagnostics" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: `$GITHUB_SHA`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Ref: `$GITHUB_REF`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Runner: `$RUNNER_OS / $RUNNER_ARCH`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Build outcome: **$BUILD_OUTCOME**" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build outcome: $BUILD_OUTCOME"
+          echo "Runner: $RUNNER_OS / $RUNNER_ARCH"
+          if [ -n "$BUILD_OUTPUT" ] && [ -d "$BUILD_OUTPUT" ]; then
+            echo "Build output directory: $BUILD_OUTPUT"
+            find "$BUILD_OUTPUT" -maxdepth 2 -type f -name '*.geode' -print -exec stat -c 'Artifact size: %s bytes' {} \;
+          else
+            echo "Build output directory was not produced."
+            echo "- Build output directory: not produced" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload .geode artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OptGod-Android64
+          path: ${{ steps.build.outputs.build-output }}/*.geode
+          if-no-files-found: error
