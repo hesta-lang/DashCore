@@ -50,6 +50,7 @@ def collect_device_fingerprint(serial: str) -> dict[str, Any]:
     for cpu_key in ("model name", "Hardware", "Processor"):
         for candidate in re.finditer(
             rf"^{re.escape(cpu_key)}\s*:\s*(.+)$",
+            cpuinfo,
             re.MULTILINE | re.IGNORECASE
         ):
             value = candidate.group(1).strip()
