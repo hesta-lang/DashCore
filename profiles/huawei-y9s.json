@@ -63,7 +63,41 @@
       "Do not label cloud-emulator results as physical Huawei Y9s FPS.",
       "Keep the existing AutoTest screenshot/tap coordinate system unchanged until the test workflow is explicitly migrated to a new display profile.",
       "A valid ON/OFF pair must use the same emulator image, level, route, attempt stimulus and sampling window.",
-      "Physical-device logs remain the authority for Kirin CPU scheduling, Mali-G51 rendering, thermal throttling and real frame pacing."
+      "Physical-device logs remain the authority for Kirin CPU scheduling, Mali-G51 rendering, thermal throttling and real frame pacing.",
+      "Kirin CPU profiling uses the same ARM64 integer workload on the cloud guest and the physical Y9s; only the local Y9s result is accepted as the CPU reference.",
+      "The profiler respects the process Cpus_allowed_list and reports when Android cpusets prevent access to one or more online cores.",
+      "No virtual CPU frequency or system CPU quota is imposed until a physical Y9s throughput reference is collected and reviewed."
     ]
+  },
+  "cpu_execution_model": {
+    "reference_topology": {
+      "big_cores": 4,
+      "big_core_family": "Cortex-A73",
+      "big_core_nominal_mhz": 2200,
+      "little_cores": 4,
+      "little_core_family": "Cortex-A53",
+      "little_core_nominal_mhz": 1700,
+      "logical_cpu_count": 8
+    },
+    "calibration": {
+      "benchmark_id": "dashcore-kirin-cpu-v1",
+      "workload": "pinned ARM64 integer-throughput probe",
+      "discovery_priority": [
+        "ARM CPU part IDs",
+        "per-CPU maximum frequency",
+        "scheduler capacity"
+      ],
+      "frequency_match_tolerance_percent": 10,
+      "minimum_repetitions": 2,
+      "requires_physical_huawei_y9s_measurement": true
+    },
+    "emulator_limits": {
+      "current_status": "REFERENCE_PROFILE_ONLY",
+      "generic_android_emulator_recreates_kirin_scheduler": false,
+      "per_cluster_frequency_scaling_recreated": false,
+      "heterogeneous_cpu_capacity_recreated": false,
+      "cpu_throttle_before_physical_calibration": false,
+      "reason": "A virtual CPU count or nominal clock value does not reproduce the Kirin 710F big.LITTLE scheduler, DVFS, cache hierarchy, memory subsystem, vendor kernel, or thermals."
+    }
   }
 }
