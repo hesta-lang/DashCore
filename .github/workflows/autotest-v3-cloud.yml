@@ -354,4 +354,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-# Repetition trigger: benchmark repeat 2; no test or build behavior changes.
+# CPU calibration compares three cloud repetitions with the stored physical Huawei Y9s reference.
