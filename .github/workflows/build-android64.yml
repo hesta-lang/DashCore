@@ -26,6 +26,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Run Cppcheck and CPU profile unit tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
+          cppcheck \
+            --enable=warning,performance,portability \
+            --inline-suppr \
+            --error-exitcode=1 \
+            --language=c++ \
+            --std=c++20 \
+            --suppress=missingIncludeSystem \
+            --suppress=syntaxError:src/main.cpp \
+            src
+          cppcheck \
+            --enable=warning,performance,portability \
+            --error-exitcode=1 \
+            --language=c \
+            --std=c11 \
+            --suppress=missingIncludeSystem \
+            tools/kirin_cpu_bench.c
+          python3 -m py_compile scripts/kirin_cpu_profile.py scripts/test_kirin_cpu_profile.py
+          python3 -m unittest scripts/test_kirin_cpu_profile.py -v
+
       - name: Build Geode mod for Android64
         id: build
         uses: ./.github/actions/build-geode-mod
