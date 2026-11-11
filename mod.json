@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.9.3-alpha",
+  "version": "0.9.4-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.9.3-alpha: reduces runtime overhead by disabling performance diagnostics by default while preserving the original Geometry Dash renderer. Experimental live render culling remains hard-disabled.",
+  "description": "DashCore 0.9.4-alpha: removes high-frequency diagnostic hook overhead during normal play; diagnostic hooks activate only when requested. The original Geometry Dash renderer remains unchanged and live render culling stays hard-disabled.",
   "tags": [
     "optimizations",
     "performance"
@@ -34,7 +34,7 @@
     "diagnostics-enable": {
       "type": "bool",
       "name": "Performance Diagnostics",
-      "description": "Enables the 600-frame timing sample, scene-graph scans and one-time GLES probes. Keep OFF during normal play to avoid diagnostic CPU/GPU overhead; turn ON only when collecting a Geode log.",
+      "description": "Enables the 600-frame timing sample, scene-graph scans and one-time GLES probes. When OFF, high-frequency diagnostic hooks are not installed, removing their per-frame/per-node detour overhead. Turn ON only when collecting a Geode log.",
       "default": false
     }
   }
