@@ -1,3 +1,10 @@
+## 0.9.4-alpha — remove inactive high-frequency diagnostic hooks
+- Makes the `CCNode::visit`, `PlayLayer::postUpdate`, and `CCDirector::drawScene` hooks opt-in at the Geode hook level.
+- When **Performance Diagnostics** is OFF, these hooks are not auto-enabled, removing DashCore's detour from the per-node and per-frame execution paths during normal play.
+- When diagnostics are ON, DashCore explicitly enables the three hooks for the existing 600-frame profile and read-only scene/GLES probes.
+- Keeps the original Geometry Dash renderer, object updates, draw order, physics, triggers, controls, and level data unchanged. Live render culling remains hard-disabled.
+- This is an alpha optimization candidate; FPS gains are not claimed until cloud A/B and physical Huawei Y9s validation complete.
+
 ## 0.9.3-alpha — reduce diagnostic overhead during normal play
 - Makes performance diagnostics opt-in and OFF by default. Normal gameplay no longer runs the 600-frame callback timers, sampled CCNode visit timing, full scene-graph scans, object-bounds inspections, or one-shot GLES diagnostic probes.
 - Preserves the original Geometry Dash update and rendering paths. The diagnostics can be enabled from Geode's **Performance Diagnostics** setting when a Geode log is needed.
