@@ -49,7 +49,7 @@ def collect_device_fingerprint(serial: str) -> dict[str, Any]:
     # Emulators may expose "Processor: 0", which is a core index, not a CPU model.
     for cpu_key in ("model name", "Hardware", "Processor"):
         for candidate in re.finditer(
-            rf"^{re.escape(cpu_key)}\\s*:\\s*(.+)$", cpuinfo,
+            rf"^{re.escape(cpu_key)}\s*:\s*(.+)$",
             re.MULTILINE | re.IGNORECASE
         ):
             value = candidate.group(1).strip()
