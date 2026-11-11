@@ -96,7 +96,7 @@ namespace {
 
     void enableDiagnosticHook(Hook* hook, char const* name) {
         if (!hook) {
-            log::error("DashCore 0.9.4-alpha: diagnostic hook '{}' was not registered.", name);
+            log::error("DashCore 0.9.5-alpha: diagnostic hook '{}' was not registered.", name);
             return;
         }
         auto result = hook->enable();
@@ -110,38 +110,66 @@ namespace {
     // First experimental stage: skip only the draw traversal of distant,
     // off-screen GameObjects. Effects and triggers are always protected;
     // grouped objects are protected near the player and eligible when far away.
+    // Bismuth-inspired conservative CPU frustum culling for static objects.
+    // Use the complete Cocos world transform and the visible viewport. Any
+    // uncertain, animated, grouped, trigger, or effect object stays on vanilla rendering.
     bool shouldCullObject(GameObject* object) {
-        if (!object || object->m_classType == GameObjectClassType::Effect || object->isTrigger()) {
+        if (!object || object->m_classType == GameObjectClassType::Effect ||
+            object->isTrigger() || object->m_groupCount > 0 ||
+            object->getHasRotateAction()) {
             return false;
         }
 
-        auto parent = object->getParent();
-        if (!parent) return false;
+        auto* director = cocos2d::CCDirector::sharedDirector();
+        if (!director) return false;
 
-        auto bounds = object->getBoundingRect();
-        auto const x1 = bounds.origin.x;
-        auto const y1 = bounds.origin.y;
-        auto const x2 = x1 + bounds.size.width;
-        auto const y2 = y1 + bounds.size.height;
+        auto const size = object->getContentSize();
+        auto const anchor = object->getAnchorPoint();
+        if (!std::isfinite(size.width) || !std::isfinite(size.height) ||
+            size.width <= 0.f || size.height <= 0.f ||
+            !std::isfinite(anchor.x) || !std::isfinite(anchor.y)) {
+            return false;
+        }
 
-        auto const p1 = parent->convertToWorldSpace({ x1, y1 });
-        auto const p2 = parent->convertToWorldSpace({ x2, y1 });
-        auto const p3 = parent->convertToWorldSpace({ x1, y2 });
-        auto const p4 = parent->convertToWorldSpace({ x2, y2 });
+        auto const x1 = -anchor.x * size.width;
+        auto const y1 = -anchor.y * size.height;
+        auto const x2 = x1 + size.width;
+        auto const y2 = y1 + size.height;
+
+        // Transform all four corners through the object's complete node chain.
+        auto const p1 = object->convertToWorldSpace({ x1, y1 });
+        auto const p2 = object->convertToWorldSpace({ x2, y1 });
+        auto const p3 = object->convertToWorldSpace({ x1, y2 });
+        auto const p4 = object->convertToWorldSpace({ x2, y2 });
 
         auto const minX = std::min({ p1.x, p2.x, p3.x, p4.x });
         auto const maxX = std::max({ p1.x, p2.x, p3.x, p4.x });
         auto const minY = std::min({ p1.y, p2.y, p3.y, p4.y });
         auto const maxY = std::max({ p1.y, p2.y, p3.y, p4.y });
+        if (!std::isfinite(minX) || !std::isfinite(maxX) ||
+            !std::isfinite(minY) || !std::isfinite(maxY) ||
+            minX > maxX || minY > maxY) {
+            return false;
+        }
 
-        auto const screen = cocos2d::CCDirector::sharedDirector()->getWinSize();
-        // Keep a generous guard band so nearby off-screen objects are already
-        // drawn before camera movement brings them into view.
-        auto const marginX = screen.width * 0.75f;
-        auto const marginY = screen.height * 0.75f;
+        auto const origin = director->getVisibleOrigin();
+        auto const viewport = director->getVisibleSize();
+        if (!std::isfinite(origin.x) || !std::isfinite(origin.y) ||
+            !std::isfinite(viewport.width) || !std::isfinite(viewport.height) ||
+            viewport.width <= 0.f || viewport.height <= 0.f) {
+            return false;
+        }
 
-        return maxX < -marginX || minX > screen.width + marginX ||
-               maxY < -marginY || minY > screen.height + marginY;
+        // A 125% guard band avoids culling objects that are about to enter view.
+        auto const marginX = viewport.width * 1.25f;
+        auto const marginY = viewport.height * 1.25f;
+        auto const viewMinX = origin.x - marginX;
+        auto const viewMinY = origin.y - marginY;
+        auto const viewMaxX = origin.x + viewport.width + marginX;
+        auto const viewMaxY = origin.y + viewport.height + marginY;
+
+        return maxX < viewMinX || minX > viewMaxX ||
+               maxY < viewMinY || minY > viewMaxY;
     }
 
     // Grouped objects can be moved or rotated by triggers. Keep them visible
@@ -876,6 +904,10 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
             g_profile.nodeVisitReported = true;
         }
         auto visitBase = [&]() {
+            if (!sampleVisit) {
+                CCNode::visit();
+                return;
+            }
             auto const visitStart = Clock::now();
             CCNode::visit();
             auto const visitUs = static_cast<std::int64_t>(
@@ -892,9 +924,9 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
             }
         };
 
-        // With live culling disabled, perform RTTI and classification only on
-        // diagnostic sample frames. If culling is ever enabled in a future
-        // validated build, classification still runs each frame as required.
+        // With culling disabled, perform RTTI and classification only on
+        // diagnostic sample frames. When experimental culling is enabled,
+        // classify each object visit but time only diagnostic samples.
         if (!g_cullingEnabled && !sampleVisit) {
             CCNode::visit();
             return;
@@ -911,8 +943,8 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
         bool const isEffect = object->m_classType == GameObjectClassType::Effect;
         bool const isTrigger = object->isTrigger();
         bool const isGrouped = object->m_groupCount > 0;
-        bool const groupedNearPlayer = isGrouped && isGroupedObjectNearPlayer(object);
-        bool const eligible = !isEffect && !isTrigger && !groupedNearPlayer;
+        bool const hasRotateAction = object->getHasRotateAction();
+        bool const eligible = !isEffect && !isTrigger && !isGrouped && !hasRotateAction;
 
         // Every diagnostic category is counted on exactly the same sampled
         // visits, so the totals are comparable instead of mixing one-frame
@@ -922,7 +954,7 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
                 ++g_profile.protectedEffectObjects;
             } else if (isTrigger) {
                 ++g_profile.protectedTriggerObjects;
-            } else if (groupedNearPlayer) {
+            } else if (isGrouped || hasRotateAction) {
                 ++g_profile.protectedGroupedNearObjects;
             } else {
                 ++g_profile.eligibleObjects;
@@ -936,8 +968,8 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
             return;
         }
 
-        // This branch is deliberately unreachable in 0.9.2-alpha: live culling is
-        // hard-disabled until the object collector and bounds are validated.
+        // Only ordinary, ungrouped, non-animated objects can be skipped.
+        // Triggers, effects, grouped objects and rotating objects retain vanilla draws.
         if (eligible && shouldCullObject(object)) {
             if (sampleVisit) {
                 ++g_profile.culledObjects;
@@ -965,6 +997,7 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         if (!g_generalEnabled) return PlayLayer::init(level, useReplay, dontCreateObjects);
         g_profile = {};
         g_gpuObjectProbeStarted = false;
+        g_cullingEnabled = false;
         g_lastEngineInitFlag = dontCreateObjects;
         if (!g_diagnosticsEnabled) {
             bool const result = PlayLayer::init(level, useReplay, dontCreateObjects);
@@ -998,7 +1031,10 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         }
         if (!g_diagnosticsEnabled) {
             PlayLayer::setupHasCompleted();
-            log::info("DashCore 0.9.4-alpha: setupHasCompleted (performance diagnostics OFF).");
+            g_cullingRequested = Mod::get()->getSettingValue<bool>("experimental-render-culling");
+            g_cullingEnabled = g_cullingRequested;
+            log::info("DashCore 0.9.5-alpha: setupHasCompleted; diagnostics=OFF, static-culling-requested={}, static-culling-active={}.",
+                g_cullingRequested, g_cullingEnabled);
             return;
         }
         auto const start = Clock::now();
@@ -1010,12 +1046,12 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         g_profile = {};
         g_profile.layer = this;
         g_cullingRequested = Mod::get()->getSettingValue<bool>("experimental-render-culling");
-        // The experimental option controls the live CCNode::visit culling.
-        // It remains opt-in while grouped-object behavior is validated.
-        g_cullingEnabled = false; // 0.9.2-alpha safety lock: never alter live rendering.
+        // Culling is opt-in and limited to ordinary, ungrouped, non-animated objects.
+        // All uncertain object classes continue through the original renderer.
+        g_cullingEnabled = g_cullingRequested;
         g_profile.engineInitFlag = g_lastEngineInitFlag;
         log::info(
-            "DashCore 0.9.4-alpha: setupHasCompleted={}us ({}ms); culling-requested={}, culling-active={}, engineInitFlag={} (raw engine argument; not a gameplay-mode detector). Live render culling is hard-disabled in 0.9.2-alpha while scene coverage and bounds are validated.",
+            "DashCore 0.9.4-alpha: setupHasCompleted={}us ({}ms); culling-requested={}, culling-active={}, engineInitFlag={} (raw engine argument; not a gameplay-mode detector). Experimental static-object culling is opt-in; protected objects always use vanilla rendering.",
             elapsedUs, elapsedUs / 1000, g_cullingRequested, g_cullingEnabled,
             g_profile.engineInitFlag
         );
@@ -1267,6 +1303,7 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
 $on_mod(Loaded) {
     g_generalEnabled = Mod::get()->getSettingValue<bool>("general-enable");
     g_diagnosticsEnabled = Mod::get()->getSettingValue<bool>("diagnostics-enable");
+    g_cullingRequested = Mod::get()->getSettingValue<bool>("experimental-render-culling");
     log::info("DashCore 0.9.4-alpha GENERAL-ENABLE: {}.", g_generalEnabled ? "ON" : "OFF");
     log::info("DashCore 0.9.4-alpha PERFORMANCE-DIAGNOSTICS: {}.",
         g_diagnosticsEnabled ? "ON" : "OFF");
@@ -1291,12 +1328,16 @@ $on_mod(Loaded) {
         hasModeOverride ? "file" : "default",
         modePath.string()
     );
-    if (g_generalEnabled && g_diagnosticsEnabled) {
-        enableDiagnosticHook(g_nodeVisitHook, "CCNode::visit");
-        enableDiagnosticHook(g_postUpdateHook, "PlayLayer::postUpdate");
-        enableDiagnosticHook(g_drawSceneHook, "CCDirector::drawScene");
+    if (g_generalEnabled) {
+        if (g_diagnosticsEnabled || g_cullingRequested) {
+            enableDiagnosticHook(g_nodeVisitHook, "CCNode::visit");
+        }
+        if (g_diagnosticsEnabled) {
+            enableDiagnosticHook(g_postUpdateHook, "PlayLayer::postUpdate");
+            enableDiagnosticHook(g_drawSceneHook, "CCDirector::drawScene");
+        }
     } else {
-        log::info("DashCore 0.9.4-alpha: high-frequency diagnostic hooks remain disabled; normal gameplay uses the original Cocos paths.");
+        log::info("DashCore 0.9.5-alpha: all DashCore hooks remain disabled by General Enable.");
     }
     log::info(
         "DashCore 0.9.4-alpha: diagnostics are opt-in; live render culling remains hard-disabled."
