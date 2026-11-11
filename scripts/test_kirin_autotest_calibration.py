@@ -2,9 +2,16 @@
 """Unit tests for the physical CPU reference consumed by AutoTest."""
 from __future__ import annotations
 
+import importlib.util
+import pathlib
 import unittest
 
 from kirin_autotest_calibration import build_physical_cpu_reference
+
+AUTOTEST_PATH = pathlib.Path(__file__).with_name("autotest_ab.py")
+AUTOTEST_SPEC = importlib.util.spec_from_file_location("autotest_ab", AUTOTEST_PATH)
+AUTOTEST = importlib.util.module_from_spec(AUTOTEST_SPEC)
+AUTOTEST_SPEC.loader.exec_module(AUTOTEST)
 
 
 def make_profile():
@@ -16,6 +23,8 @@ def make_profile():
             "model": "Y9s",
             "soc": {"name": "HiSilicon Kirin 710F"},
         },
+        "android": {"version": "10", "api_level": 29, "abi": "arm64-v8a"},
+        "display": {"width_px": 2340, "height_px": 1080, "refresh_rate_hz": 60},
         "cpu_execution_model": {
             "calibration": {"minimum_repetitions": 3},
             "physical_measurements": {
@@ -83,6 +92,25 @@ class PhysicalCpuReferenceTests(unittest.TestCase):
         sample["run_iterations_per_second"]["all_allowed_cores_concurrent"][1] = float("nan")
         with self.assertRaises(ValueError):
             build_physical_cpu_reference(profile)
+
+    def test_autotest_assessment_embeds_physical_reference_without_emulation(self):
+        profile = make_profile()
+        actual_guest = {
+            "android_api_level": "30",
+            "primary_abi": "arm64-v8a",
+            "supported_abis": "arm64-v8a,armeabi-v7a",
+            "wm_size_reported_px": [1080, 1920],
+        }
+        assessment = AUTOTEST.assess_device_profile(profile, actual_guest)
+        reference = assessment["cpu_calibration_reference"]
+        self.assertEqual(assessment["hardware_equivalence"], "NOT_EMULATED")
+        self.assertEqual(reference["selected_sample"]["sample_id"], "idle")
+        self.assertEqual(
+            reference["median_iterations_per_second"]["higher_capacity_single_core"],
+            197.5,
+        )
+        self.assertFalse(reference["interpretation"]["cpu_budget_derived"])
+        self.assertFalse(reference["interpretation"]["fps_normalization_applied"])
 
 
 if __name__ == "__main__":
