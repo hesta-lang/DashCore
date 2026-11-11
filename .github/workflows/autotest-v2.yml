@@ -221,10 +221,10 @@ jobs:
           SERIAL="$(adb devices | awk '$2=="device"{print $1;exit}')"
           [ -n "$SERIAL" ] || { echo "::error::No cloud Android device connected."; exit 1; }
           adb -s "$SERIAL" wait-for-device
-          SDK="$(adb -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\\r')"
-          ABI="$(adb -s "$SERIAL" shell getprop ro.product.cpu.abi | tr -d '\\r')"
-          ABIS="$(adb -s "$SERIAL" shell getprop ro.product.cpu.abilist | tr -d '\\r')"
-          BRIDGE="$(adb -s "$SERIAL" shell getprop ro.dalvik.vm.native.bridge | tr -d '\\r')"
+          SDK="$(adb -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')"
+          ABI="$(adb -s "$SERIAL" shell getprop ro.product.cpu.abi | tr -d '\r')"
+          ABIS="$(adb -s "$SERIAL" shell getprop ro.product.cpu.abilist | tr -d '\r')"
+          BRIDGE="$(adb -s "$SERIAL" shell getprop ro.dalvik.vm.native.bridge | tr -d '\r')"
           {
             echo "Android SDK: $SDK"
             echo "Primary ABI: $ABI"
