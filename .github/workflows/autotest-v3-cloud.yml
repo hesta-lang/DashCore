@@ -200,7 +200,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends tesseract-ocr
           python3 -m pip install --disable-pip-version-check pillow
 
-      - name: Validate FPS benchmark script and timestamp parser
+      - name: Validate Huawei Y9s profile, FPS script and timestamp parser
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/autotest_ab.py
@@ -210,6 +210,21 @@ jobs:
           spec = importlib.util.spec_from_file_location("autotest_ab", "scripts/autotest_ab.py")
           module = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(module)
+          from pathlib import Path
+          profile = module.load_device_profile(Path("profiles/huawei-y9s.json"))
+          assert profile["profile_id"] == "huawei-y9s", profile.get("profile_id")
+          sample_guest = {
+              "android_api_level": "30",
+              "primary_abi": "arm64-v8a",
+              "supported_abis": "arm64-v8a,armeabi-v7a",
+              "wm_size_reported_px": [1080, 1920],
+          }
+          profile_check = module.assess_device_profile(profile, sample_guest)
+          assert profile_check["hardware_equivalence"] == "NOT_EMULATED", profile_check
+          assert profile_check["comparison"]["android_api"] == "DIFFERENT", profile_check
+          assert profile_check["comparison"]["arm64_abi"] == "ARM64_ABI_AVAILABLE", profile_check
+          assert profile_check["comparison"]["display_resolution"] == "DIFFERENT", profile_check
+          print("Huawei Y9s reference-profile validation passed; emulator is explicitly NOT_EMULATED.")
           period = 16_666_667
           rows = ["16666667"]
           rows += [f"{i*period} {i*period} {i*period}" for i in range(1, 20)]
@@ -254,9 +269,10 @@ jobs:
             --serial "$SERIAL" \
             --mod-file "$MOD" \
             --base-dir /sdcard/Android/media/com.geode.launcher \
-            --report-dir "$REPORT_DIR"
+            --report-dir "$REPORT_DIR" \
+            --device-profile profiles/huawei-y9s.json
 
-      - name: Upload AutoTest v4.3 reports
+      - name: Upload AutoTest v4.4 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
