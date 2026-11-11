@@ -242,7 +242,7 @@ def parse_surfaceflinger_latency(text: str) -> dict[str, Any]:
         "raw_interval_count": len(raw_intervals),
         "timing_anomaly_count": len(anomalous),
         "timing_anomaly_detected": bool(anomalous),
-        "timing_anomaly_threshold_ms": anomaly_floor_ms,
+        "timing_anomaly_threshold_ms": None,
     }
     if len(intervals) < 10:
         return {"available": False,
