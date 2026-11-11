@@ -24,10 +24,9 @@ jobs:
   android-runtime:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     name: Install, launch and inspect DashCore on Android
-    # Android Emulator's Linux host package is x86_64-only. Use Apple's
-    # native ARM64 macOS runner, which ships with the macOS ARM emulator tools,
-    # to run an ARM64 Android image without Linux ARM host incompatibilities.
-    runs-on: macos-15
+    # Use the same managed cloud emulator provider as AutoTest v3.
+    # macOS-hosted ARM64 AVDs fail here because nested HVF virtualization is unavailable.
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       LAUNCHER_APK_URL: ${{ inputs.launcher_apk_url }}
@@ -41,17 +40,10 @@ jobs:
         with:
           ref: main
 
-      - name: Verify Apple Silicon runner
-        run: |
-          set -euo pipefail
-          echo "Runner: $(uname -a)"
-          echo "macOS: $(sw_vers -productVersion)"
-          ARCH="$(uname -m)"
-          echo "Host architecture: $ARCH"
-          if [ "$ARCH" != "arm64" ]; then
-            echo "::error::AutoTest requires an Apple Silicon ARM64 host; got $ARCH."
-            exit 1
-          fi
+      - name: Set up Android SDK and platform tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools build-tools;35.0.0'
 
       - name: Select completed DashCore build
         id: triggered-build
@@ -194,30 +186,54 @@ jobs:
           test -s test-input/geode-launcher.apk
           file test-input/geode-launcher.apk
 
-      - name: Run Android 10 ARM64 emulator on Apple Silicon
+      - name: Start Android 11 cloud emulator with ARM64 translation
+        id: cloud
         if: ${{ steps.apk-source.outputs.available == 'true' }}
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: emulator-wtf/actions/use-emulator@v1.2.6
         with:
-          # Match the user's Android 10 / API 29 device and avoid Android 11+
-          # scoped-storage restrictions. macos-14 is an Apple Silicon ARM64
-          # runner, so the ARM64 system image can execute natively.
-          api-level: 29
-          target: google_apis
-          arch: arm64-v8a
-          profile: pixel_2
-          cores: 3
-          ram-size: 3072M
-          heap-size: 512M
-          # Explicitly provision writable shared storage; without this, /sdcard/Android
-          # was missing/unmounted and both Geode mod paths failed with EACCES.
-          sdcard-path-or-size: 3G
-          disk-size: 8G
-          emulator-boot-timeout: 600
-          # GitHub-hosted macOS runners do not expose nested virtualization.
-          # Force software CPU emulation instead of relying on HVF acceleration.
-          emulator-options: -no-window -accel off -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          disable-animations: true
-          script: bash scripts/autotest_runtime.sh
+          api-token: ${{ secrets.EW_API_TOKEN }}
+          devices: |
+            model=Pixel2,version=30
+          max-time-limit: 25m
+          record-video: true
+          outputs-dir: reports/runtime/cloud-session
+
+      - name: Connect cloud emulator and verify ARM64 translation
+        if: ${{ steps.apk-source.outputs.available == 'true' }}
+        env:
+          ADB_PORTS: ${{ steps.cloud.outputs.adb_attached }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ADB_PORTS" ]; then
+            echo "::error::Cloud emulator did not provide an ADB port."
+            exit 1
+          fi
+          IFS=',' read -ra PORTS <<< "$ADB_PORTS"
+          for port in "${PORTS[@]}"; do
+            adb connect "127.0.0.1:$port"
+          done
+          SERIAL="$(adb devices | awk '$2=="device"{print $1;exit}')"
+          [ -n "$SERIAL" ] || { echo "::error::No cloud Android device connected."; exit 1; }
+          adb -s "$SERIAL" wait-for-device
+          SDK="$(adb -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\\r')"
+          ABI="$(adb -s "$SERIAL" shell getprop ro.product.cpu.abi | tr -d '\\r')"
+          ABIS="$(adb -s "$SERIAL" shell getprop ro.product.cpu.abilist | tr -d '\\r')"
+          BRIDGE="$(adb -s "$SERIAL" shell getprop ro.dalvik.vm.native.bridge | tr -d '\\r')"
+          {
+            echo "Android SDK: $SDK"
+            echo "Primary ABI: $ABI"
+            echo "Supported ABIs: $ABIS"
+            echo "Native bridge: ${BRIDGE:-<empty>}"
+          } | tee reports/runtime/device.txt
+          if [ "$SDK" -lt 30 ] || ! printf '%s' "$ABIS" | grep -q 'arm64-v8a' || [ -z "$BRIDGE" ] || [ "$BRIDGE" = "0" ]; then
+            echo "::error::Cloud device does not provide the required Android 11+ ARM64 native-library translation."
+            exit 1
+          fi
+          echo "ANDROID_SERIAL=$SERIAL" >> "$GITHUB_ENV"
+
+      - name: Install, launch and inspect DashCore
+        if: ${{ steps.apk-source.outputs.available == 'true' }}
+        run: bash scripts/autotest_runtime.sh
 
       - name: Publish runtime logs and screenshots
         if: always()
