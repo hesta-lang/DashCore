@@ -34,9 +34,9 @@ static void *run_worker(void *opaque) {
     cpu_set_t cpus;
     CPU_ZERO(&cpus);
     CPU_SET(result->cpu_id, &cpus);
-    result->affinity_error = pthread_setaffinity_np(
-        pthread_self(), sizeof(cpus), &cpus
-    );
+    result->affinity_error = (sched_setaffinity(
+        0, sizeof(cpus), &cpus
+    ) == 0) ? 0 : errno;
 
     while (atomic_load_explicit(&start_workers, memory_order_acquire) == 0) {
         sched_yield();
