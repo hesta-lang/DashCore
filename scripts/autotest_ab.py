@@ -687,7 +687,7 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
     lines = [
         "# DashCore AutoTest — FPS baseline vs mod", "",
         "## Device profile", "",
-        f"- Reference profile: **{profile_report['display_name']}** (\`{profile_report['profile_id']}\`)",
+        f'- Reference profile: **{profile_report["display_name"]}** (ID: {profile_report["profile_id"]})',
         "- Execution target: **cloud Android emulator**, not a physical Huawei Y9s.",
         "- Hardware equivalence: **NOT EMULATED**.",
         f"- Reference SoC/GPU: {target['soc']} / {target['gpu']}.",
