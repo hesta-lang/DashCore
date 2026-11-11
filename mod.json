@@ -22,7 +22,7 @@
     "experimental-render-culling": {
       "type": "bool",
       "name": "Experimental static-object culling (alpha)",
-      "description": "Opt-in Bismuth-inspired CPU visibility culling for ordinary static objects outside an expanded viewport. Triggers, effects, grouped objects, rotating objects and invalid bounds remain visible. Experimental; keep OFF if you notice missing objects or visual changes.",
+      "description": "Opt-in Bismuth-inspired CPU visibility culling for ordinary static objects outside an expanded viewport. Triggers, effects, grouped objects, rotating objects and invalid bounds remain visible. Restart Geometry Dash after changing this setting. Experimental; keep OFF if you notice missing objects or visual changes.",
       "default": false
     },
     "load-last-level": {
