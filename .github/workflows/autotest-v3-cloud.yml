@@ -73,7 +73,7 @@ jobs:
       - name: Prepare Android platform tools
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools build-tools;35.0.0'
+          packages: 'platform-tools build-tools;35.0.0 ndk;27.2.12479018'
 
       - name: Download and validate DashCore package
         uses: actions/download-artifact@v4
@@ -284,6 +284,43 @@ jobs:
             --report-dir "$REPORT_DIR" \
             --repetitions 3 \
             --device-profile profiles/huawei-y9s.json
+
+      - name: Profile cloud CPU and package physical Kirin calibration tool
+        if: always()
+        env:
+          SERIAL: ${{ steps.device.outputs.serial }}
+        run: |
+          set -euo pipefail
+          TOOL_DIR="$REPORT_DIR/kirin-cpu-profile-tool"
+          CLOUD_DIR="$REPORT_DIR/kirin-cpu-profile-cloud"
+          mkdir -p "$TOOL_DIR" "$CLOUD_DIR"
+          NDK_DIR="$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          if [ -z "$NDK_DIR" ]; then
+            echo "::warning::Android NDK unavailable; skipping cloud CPU profile."
+            printf '%s\n' "Android NDK unavailable; no cloud CPU profile was collected." > "$CLOUD_DIR/skipped.txt"
+          else
+            TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin"
+            "$TOOLCHAIN/aarch64-linux-android29-clang" \
+              -O2 -std=c11 -Wall -Wextra -Werror -pthread -fPIE -pie \
+              tools/kirin_cpu_bench.c -o "$TOOL_DIR/kirin_cpu_bench"
+            cp scripts/kirin_cpu_profile.py "$TOOL_DIR/kirin_cpu_profile.py"
+            cp profiles/huawei-y9s.json "$TOOL_DIR/huawei-y9s.json"
+            cp tools/run-kirin-cpu-profile-termux.sh "$TOOL_DIR/run-kirin-cpu-profile-termux.sh"
+            cp docs/KIRIN-CPU-CALIBRATION.md "$TOOL_DIR/README.md"
+            chmod 700 "$TOOL_DIR/kirin_cpu_bench" "$TOOL_DIR/run-kirin-cpu-profile-termux.sh"
+            if [ -n "$SERIAL" ] && python3 scripts/kirin_cpu_profile.py \
+              --serial "$SERIAL" \
+              --binary "$TOOL_DIR/kirin_cpu_bench" \
+              --profile profiles/huawei-y9s.json \
+              --report-dir "$CLOUD_DIR" \
+              --duration-ms 1500 \
+              --repetitions 1; then
+              echo "Cloud CPU profile completed. This is not a physical Huawei Y9s measurement."
+            else
+              echo "::warning::Cloud CPU probe could not complete; the physical-device tool is still packaged."
+              printf '%s\n' "Cloud CPU probe unavailable. Run the packaged tool locally on the Huawei Y9s." > "$CLOUD_DIR/skipped.txt"
+            fi
+          fi
 
       - name: Upload AutoTest v4.4 reports
         if: always()
