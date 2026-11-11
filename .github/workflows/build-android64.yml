@@ -1,4 +1,4 @@
-name: Build DashCore (Android64)
+name: Build OptGod (Android64)
 
 on:
   push:
@@ -64,6 +64,6 @@ jobs:
       - name: Upload .geode artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-Android64
+          name: OptGod-Android64
           path: ${{ steps.build.outputs.build-output }}/*.geode
           if-no-files-found: error
