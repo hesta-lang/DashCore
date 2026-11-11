@@ -32,3 +32,12 @@ jobs:
             --suppress=missingIncludeSystem \
             --suppress=syntaxError:src/main.cpp \
             src
+          cppcheck \
+            --enable=warning,performance,portability \
+            --error-exitcode=1 \
+            --language=c \
+            --std=c11 \
+            --suppress=missingIncludeSystem \
+            tools/kirin_cpu_bench.c
+          python3 -m py_compile scripts/kirin_cpu_profile.py scripts/test_kirin_cpu_profile.py
+          python3 -m unittest scripts/test_kirin_cpu_profile.py -v
