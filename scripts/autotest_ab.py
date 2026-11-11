@@ -37,6 +37,8 @@ def collect_device_fingerprint(serial: str) -> dict[str, Any]:
     wm_density = shell(serial, "wm density", check=False, timeout=30).strip()
     display_dump = shell(serial, "dumpsys display", check=False, timeout=45)
     sf_dump = shell(serial, "dumpsys SurfaceFlinger", check=False, timeout=45)
+    cpuinfo = shell(serial, "cat /proc/cpuinfo", check=False, timeout=30)
+    meminfo = shell(serial, "cat /proc/meminfo", check=False, timeout=30)
     size_matches = re.findall(r"(?:Override|Physical) size:\s*(\d+)x(\d+)", wm_size)
     density_matches = re.findall(r"(?:Override|Physical) density:\s*(\d+)", wm_density)
     refresh_match = re.search(r"(?:refreshRate|mRefreshRate|fps)[=: ]+([0-9]+(?:\.[0-9]+)?)",
@@ -62,6 +64,9 @@ def collect_device_fingerprint(serial: str) -> dict[str, Any]:
         "wm_density_dpi": int(density_matches[-1]) if density_matches else None,
         "display_refresh_rate_hz": float(refresh_match.group(1)) if refresh_match else None,
         "surfaceflinger_renderer": renderer_match.group(1).strip() if renderer_match else None,
+        "cpu_model_reported": cpu_model_match.group(1).strip() if cpu_model_match else None,
+        "cpu_logical_cores": logical_cores or None,
+        "memory_total_mb": round(int(mem_match.group(1)) / 1024) if mem_match else None,
         "fingerprint_scope": "cloud Android guest only; host GPU/CPU and physical phone thermals are not reproduced"
     }
 
@@ -92,6 +97,7 @@ def assess_device_profile(profile: dict[str, Any], actual: dict[str, Any]) -> di
             "manufacturer": profile["device"].get("manufacturer"),
             "model": profile["device"].get("model"),
             "soc": profile["device"].get("soc", {}).get("name"),
+            "cpu_topology": profile["device"].get("soc", {}).get("cpu_topology"),
             "gpu": profile["device"].get("gpu", {}).get("name"),
             "physical_ram_mb": profile["device"].get("memory", {}).get("physical_ram_mb"),
             "android_release": target_android.get("version"),
@@ -104,7 +110,9 @@ def assess_device_profile(profile: dict[str, Any], actual: dict[str, Any]) -> di
         "comparison": {
             "android_api": api_status,
             "arm64_abi": abi_status,
-            "display_resolution": resolution_status
+            "display_resolution": resolution_status,
+            "guest_memory_total_mb": actual.get("memory_total_mb"),
+            "guest_cpu_logical_cores": actual.get("cpu_logical_cores")
         },
         "limitations": [
             "The cloud Pixel emulator is not a Kirin 710F CPU or Mali-G51 MP4 GPU.",
@@ -639,6 +647,7 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[
     crash = bool(re.search(r"FATAL EXCEPTION|Fatal signal|SIGABRT|SIGSEGV|has died", crash_text, re.IGNORECASE))
     data = {"mode": mode, "mod_enabled": mod_enabled, "device_profile_id": args.device_profile_data["profile_id"],
             "execution_environment": "cloud_android_emulator", "hardware_equivalence": "NOT_EMULATED",
+            "device_profile_assessment": args.device_profile_assessment,
             "gfxinfo": gfx,
             "surfaceflinger": surface_metrics, "surfaceflinger_candidate_count": len(surface_layers),
             "cpu_observation": observation, "crash_detected": crash,
@@ -717,7 +726,7 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
         "- Maximum FPS is the inverse of the shortest observed presentation interval; average and minimum FPS are derived from the mean and longest interval. At least 10 real frame intervals are required.",
         "- Frame-time outliers are reported separately so a brief FPS peak cannot hide stuttering.",
         "- CPU utilization is process CPU time divided by device-measured elapsed time, expressed relative to one CPU core.",
-        "- This cloud emulator is x86_64 with ARM translation; it is not a physical Huawei STK-LX3 / Mali-G51 measurement.",
+        "- Cloud guest CPU/ABI/GPU information is reported in device-profile-assessment.json; this is not a physical Huawei Y9s or Mali-G51 measurement.",
         "- Geometry Dash cloud APK version is recorded separately; cloud results are comparative signals, not a guarantee of physical-device performance.", "",
         "A result is VALID only when both passes positively verify the in-level ATTEMPT HUD (not the level-select 0% labels), provide at least 10 plausible presentation intervals and CPU samples, and neither pass reports a crash. INT64_MAX sentinel timestamps and intervals outside 0.1–1000 ms are rejected. Raw layer listings and latency dumps are included for diagnosis."
     ]
