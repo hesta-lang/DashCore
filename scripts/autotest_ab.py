@@ -888,7 +888,9 @@ def main() -> int:
         "device_profile": args.device_profile_assessment,
         "cpu_calibration_reference": args.device_profile_assessment["cpu_calibration_reference"],
         "repetitions": paired_results,
-        "physical_huawei_y9s_validation": "NOT_RUN_CLOUD_ONLY",
+        "physical_huawei_y9s_validation": "CPU_REFERENCE_CAPTURED_FPS_NOT_RUN",
+        "physical_huawei_y9s_cpu_reference_validation": "CAPTURED",
+        "physical_huawei_y9s_fps_validation": "NOT_RUN_CLOUD_ONLY",
         "physical_fps_validation_required_before_non_alpha_release": True,
     }
     (report_root / "fps-repeated-summary.json").write_text(
