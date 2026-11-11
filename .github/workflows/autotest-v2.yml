@@ -1,6 +1,12 @@
 name: DashCore AutoTest v2 - Android Runtime
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/autotest-v2.yml"
+      - "scripts/autotest_runtime.sh"
+      - "scripts/autotest_geode.py"
   workflow_run:
     workflows: ["Build OptGod (Android64)"]
     types: [completed]
@@ -22,7 +28,7 @@ concurrency:
 
 jobs:
   android-runtime:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
     name: Install, launch and inspect DashCore on Android
     # Use the same managed cloud emulator provider as AutoTest v3.
     # macOS-hosted ARM64 AVDs fail here because nested HVF virtualization is unavailable.
@@ -54,7 +60,7 @@ jobs:
 
       - name: Find latest successful DashCore build for manual run
         id: latest-build
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
