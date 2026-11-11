@@ -1,44 +1,43 @@
 # Kirin Profile Helper (Termux)
 
-Herramienta auxiliar para ejecutar el perfilador de CPU de DashCore directamente en un Android ARM64, incluido el Huawei Y9s.
+Asistente para compilar y ejecutar el perfilador de CPU de DashCore directamente en un Android ARM64, incluido el Huawei Y9s.
 
 ## Requisitos
 
-- Termux instalado desde una fuente compatible.
+- Termux instalado.
 - Conexión a Internet.
-- Acceso de lectura/escritura al almacenamiento privado de Termux.
-- Arquitectura ARM64 para ejecutar el binario de perfilado.
+- Arquitectura Android ARM64 compatible con el benchmark.
+- Espacio libre para instalar clang y Python.
 
 ## Instalación y ejecución
 
-Abre Termux y ejecuta este bloque:
+Abre Termux y copia el bloque completo:
 
 ```bash
 pkg update
-pkg install -y curl python unzip
+pkg install -y curl python clang
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/hesta-lang/DashCore/main/tools/install-kirin-profile-termux.sh)"
 ```
 
 El asistente:
-1. Consulta los artefactos públicos de GitHub Actions de DashCore.
-2. Descarga el artefacto vigente más reciente llamado `DashCore-Kirin-CPU-Profile-Tool`.
-3. Extrae los archivos en `$HOME/dashcore-kirin-profile`, sin depender de la carpeta Download ni de ZArchiver.
-4. Comprueba que existan el binario ARM64, el perfil JSON y el script Python.
-5. Ejecuta el perfil local y guarda los informes en `$HOME/dashcore-kirin-profile/results`.
+1. Descarga las fuentes públicas de DashCore desde GitHub Raw.
+2. Compila el benchmark nativo en el propio teléfono usando Clang.
+3. Verifica los archivos y la sintaxis Python.
+4. Ejecuta el perfil local del dispositivo.
+5. Guarda los informes en `$HOME/dashcore-kirin-profile/results`.
+
+No descarga artefactos de GitHub Actions, por lo que evita el error HTTP 401 de la API de artifacts. Tampoco requiere ZArchiver ni extraer ZIP manualmente.
 
 ## Ajustar duración
 
-Por defecto usa 2500 ms por prueba y 2 repeticiones. Se puede ajustar antes de ejecutar:
+Por defecto usa 2500 ms por prueba y 2 repeticiones. Para una medición más larga:
 
 ```bash
 DASHCORE_CPU_DURATION_MS=4000 DASHCORE_CPU_REPETITIONS=3 bash -c "$(curl -fsSL https://raw.githubusercontent.com/hesta-lang/DashCore/main/tools/install-kirin-profile-termux.sh)"
 ```
 
-## Notas
+## Límites y seguridad
 
-- No requiere descargar ni extraer manualmente el ZIP de Actions.
-- El repositorio debe ser público o Termux debe disponer de autenticación compatible para consultar artefactos privados.
-- Los artefactos de GitHub Actions pueden expirar según la política de retención del repositorio.
-- El perfil mide el procesador físico disponible; no convierte un emulador en una recreación completa del Kirin 710F.
-- No aplica límites de CPU, cambios de gobernador ni ajustes térmicos al teléfono.
-- Comparte los archivos `kirin-cpu-profile.json` y `kirin-cpu-profile.md` generados para analizar los resultados.
+- Solo compila y ejecuta un benchmark; no cambia frecuencias, gobernador, afinidad global, límites térmicos ni configuración persistente.
+- El perfil mide el procesador físico disponible; no convierte AutoTest ni un emulador en una recreación completa del Kirin 710F.
+- Comparte `kirin-cpu-profile.json` y `kirin-cpu-profile.md` para analizar los resultados.
