@@ -1,4 +1,4 @@
-name: Build OptGod (Android64)
+name: Build DashCore (Android64)
 
 on:
   push:
@@ -13,10 +13,10 @@ on:
       - ".github/workflows/autotest-v3-cloud.yml"
   workflow_dispatch:
 
-# Avoid spending free Actions minutes on obsolete builds from the same branch.
+# Keep the build workflow isolated from the retired workflow and let an active build finish.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: dashcore-android64-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
