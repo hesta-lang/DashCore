@@ -82,6 +82,7 @@ namespace {
     StartupProfile g_profile;
     bool g_fastPathEnabled = true; // Default production behavior; AutoTest overrides this at startup.
     bool g_generalEnabled = true; // Master switch: keep the mod loaded but bypass all DashCore behavior.
+    bool g_diagnosticsEnabled = false; // Expensive profiling and scene/GPU probes are opt-in.
     bool g_cullingEnabled = false;
     bool g_cullingRequested = false;
     bool g_lastEngineInitFlag = false;
@@ -823,7 +824,7 @@ namespace {
 // with Geode's runtime type information before applying the culling test.
 class $modify(OptGodCCNode, cocos2d::CCNode) {
     void visit() {
-        if (!g_generalEnabled) {
+        if (!g_generalEnabled || (!g_diagnosticsEnabled && !g_cullingEnabled)) {
             CCNode::visit();
             return;
         }
@@ -926,6 +927,11 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         g_profile = {};
         g_gpuObjectProbeStarted = false;
         g_lastEngineInitFlag = dontCreateObjects;
+        if (!g_diagnosticsEnabled) {
+            bool const result = PlayLayer::init(level, useReplay, dontCreateObjects);
+            if (result) rememberLastPlayedLevel(level);
+            return result;
+        }
 
         auto const start = Clock::now();
         bool const result = PlayLayer::init(level, useReplay, dontCreateObjects);
@@ -951,6 +957,11 @@ class $modify(OptGodPlayLayer, PlayLayer) {
             PlayLayer::setupHasCompleted();
             return;
         }
+        if (!g_diagnosticsEnabled) {
+            PlayLayer::setupHasCompleted();
+            log::info("DashCore 0.9.3-alpha: setupHasCompleted (performance diagnostics OFF).");
+            return;
+        }
         auto const start = Clock::now();
         PlayLayer::setupHasCompleted();
         auto const elapsedUs = static_cast<std::int64_t>(
@@ -972,7 +983,7 @@ class $modify(OptGodPlayLayer, PlayLayer) {
     }
 
     void postUpdate(float dt) {
-        if (!g_generalEnabled) {
+        if (!g_generalEnabled || !g_diagnosticsEnabled) {
             PlayLayer::postUpdate(dt);
             return;
         }
@@ -1071,7 +1082,7 @@ class $modify(OptGodMenuLayer, MenuLayer) {
 
 class $modify(OptGodDirector, cocos2d::CCDirector) {
     void drawScene() {
-        if (!g_generalEnabled) {
+        if (!g_generalEnabled || !g_diagnosticsEnabled) {
             CCDirector::drawScene();
             return;
         }
@@ -1206,7 +1217,10 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
 
 $on_mod(Loaded) {
     g_generalEnabled = Mod::get()->getSettingValue<bool>("general-enable");
-    log::info("DashCore 0.9.2-alpha GENERAL-ENABLE: {}.", g_generalEnabled ? "ON" : "OFF");
+    g_diagnosticsEnabled = Mod::get()->getSettingValue<bool>("diagnostics-enable");
+    log::info("DashCore 0.9.3-alpha GENERAL-ENABLE: {}.", g_generalEnabled ? "ON" : "OFF");
+    log::info("DashCore 0.9.3-alpha PERFORMANCE-DIAGNOSTICS: {}.",
+        g_diagnosticsEnabled ? "ON" : "OFF");
     // AutoTest can compare the same binary in ON/OFF mode after a full restart.
     // Missing or unrecognized files keep the production default enabled.
     auto const modePath = Mod::get()->getConfigDir(true) / "fast-path-mode.txt";
@@ -1219,16 +1233,16 @@ $on_mod(Loaded) {
         } else if (requestedMode == "on" || requestedMode == "1") {
             g_fastPathEnabled = true;
         } else {
-            log::warn("DashCore 0.9.2-alpha FAST-PATH: unknown mode '{}'; keeping default ON.", requestedMode);
+            log::warn("DashCore 0.9.3-alpha FAST-PATH: unknown mode '{}'; keeping default ON.", requestedMode);
         }
     }
     log::info(
-        "DashCore 0.9.2-alpha FAST-PATH: mode={}, source={}, config={}.",
+        "DashCore 0.9.3-alpha FAST-PATH: mode={}, source={}, config={}.",
         g_fastPathEnabled ? "ON" : "OFF",
         hasModeOverride ? "file" : "default",
         modePath.string()
     );
     log::info(
-        "DashCore 0.9.2-alpha final validation: live culling remains hard-disabled; object samples and GPU dispatch/readback timings are diagnostic only."
+        "DashCore 0.9.3-alpha: diagnostics are opt-in; live render culling remains hard-disabled."
     );
 }
