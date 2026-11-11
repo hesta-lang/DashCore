@@ -3,7 +3,7 @@ name: DashCore AutoTest - FPS Without Mod vs With DashCore
 
 on:
   workflow_run:
-    workflows: ["Build OptGod (Android64)"]
+    workflows: ["Build DashCore (Android64)"]
     types: [completed]
     branches: [main]
   workflow_dispatch:
