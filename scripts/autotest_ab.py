@@ -45,8 +45,19 @@ def collect_device_fingerprint(serial: str) -> dict[str, Any]:
                               display_dump, re.IGNORECASE)
     renderer_match = re.search(r"(?:GLES:\s*|OpenGL ES\s+)([^\r\n]+)", sf_dump, re.IGNORECASE)
     mem_match = re.search(r"^MemTotal:\s*(\d+)\s*kB", meminfo, re.MULTILINE)
-    cpu_model_match = re.search(r"^(?:model name|Hardware|Processor)\s*:\s*(.+)$",
-                                cpuinfo, re.MULTILINE | re.IGNORECASE)
+    cpu_model_match = None
+    # Emulators may expose "Processor: 0", which is a core index, not a CPU model.
+    for cpu_key in ("model name", "Hardware", "Processor"):
+        for candidate in re.finditer(
+            rf"^{re.escape(cpu_key)}\\s*:\\s*(.+)$", cpuinfo,
+            re.MULTILINE | re.IGNORECASE
+        ):
+            value = candidate.group(1).strip()
+            if value and not value.isdigit():
+                cpu_model_match = candidate
+                break
+        if cpu_model_match:
+            break
     logical_cores = len(re.findall(r"^processor\s*:", cpuinfo, re.MULTILINE))
     return {
         "manufacturer": prop("ro.product.manufacturer"),
@@ -203,7 +214,7 @@ def parse_gfxinfo(path: pathlib.Path) -> dict[str, Any]:
     }
 
 def parse_surfaceflinger_latency(text: str) -> dict[str, Any]:
-    """Parse SurfaceFlinger --latency output (refresh period + desired/present/ready ns)."""
+    """Parse SurfaceFlinger timestamps and flag sub-refresh timing anomalies."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     refresh_ns = None
     if lines:
@@ -214,18 +225,31 @@ def parse_surfaceflinger_latency(text: str) -> dict[str, Any]:
         fields = line.split()
         if len(fields) < 2: continue
         try:
-            # SurfaceFlinger reports desiredPresentTime, actualPresentTime, frameReadyTime.
-            stamp = int(fields[1])
+            stamp = int(fields[1])  # actualPresentTime
         except ValueError:
             continue
-        # SurfaceFlinger uses INT64_MAX as an invalid/unavailable timestamp.
-        if 0 < stamp < (2**63 - 1): present_ns.append(stamp)
+        if 0 < stamp < (2**63 - 1):
+            present_ns.append(stamp)
     present_ns = sorted(set(present_ns))
-    intervals = [(b-a)/1_000_000.0 for a, b in zip(present_ns, present_ns[1:])
-                 if b > a and 0.1 <= (b-a)/1_000_000.0 <= 1000.0]
+    raw_intervals = [(b-a)/1_000_000.0 for a, b in zip(present_ns, present_ns[1:])
+                     if b > a and 0.1 <= (b-a)/1_000_000.0 <= 1000.0]
+    # Substantially sub-refresh intervals are timestamp anomalies, not displayed FPS.
+    anomaly_floor_ms = (refresh_ns / 1_000_000.0 * 0.75) if refresh_ns else None
+    anomalous = ([value for value in raw_intervals if value < anomaly_floor_ms]
+                 if anomaly_floor_ms is not None else [])
+    intervals = ([value for value in raw_intervals if value >= anomaly_floor_ms]
+                 if anomaly_floor_ms is not None else raw_intervals)
+    anomaly_fields = {
+        "raw_interval_count": len(raw_intervals),
+        "timing_anomaly_count": len(anomalous),
+        "timing_anomaly_detected": bool(anomalous),
+        "timing_anomaly_threshold_ms": anomaly_floor_ms,
+    }
     if len(intervals) < 10:
-        return {"available": False, "reason": f"Insufficient SurfaceFlinger frames ({len(intervals)} intervals)",
-                "frame_count": len(present_ns), "refresh_period_ns": refresh_ns}
+        return {"available": False,
+                "reason": f"Insufficient plausible SurfaceFlinger frames ({len(intervals)} intervals; {len(anomalous)} timing anomalies)",
+                "frame_count": len(present_ns), "refresh_period_ns": refresh_ns,
+                **anomaly_fields}
     mean_ms, min_ms, max_ms = statistics.mean(intervals), min(intervals), max(intervals)
     return {
         "available": True, "source": "SurfaceFlinger actualPresentTime",
@@ -237,6 +261,7 @@ def parse_surfaceflinger_latency(text: str) -> dict[str, Any]:
         "p95_frame_ms": percentile(intervals, .95),
         "over_50ms": sum(value > 50.0 for value in intervals),
         "over_100ms": sum(value > 100.0 for value in intervals),
+        **anomaly_fields,
     }
 
 def prepare_surfaceflinger(serial: str, mode_dir: pathlib.Path) -> list[str]:
