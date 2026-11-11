@@ -1,3 +1,11 @@
+## 0.9.5-alpha — conservative Bismuth-inspired static-object culling
+- Adds an opt-in CPU frustum-culling path inspired by Bismuth's object visibility stage, adapted to Geometry Dash's existing Cocos renderer and Android GLES environment.
+- Computes bounds from the GameObject's local content rectangle through its complete Cocos world transform and compares them with the visible viewport plus a 125% guard band.
+- Culls only ordinary, ungrouped, non-trigger, non-effect, non-rotating objects. Grouped objects remain protected because trigger-driven transforms are not mirrored by this adapter.
+- Missing/invalid dimensions, non-finite transforms, and invalid viewport data always fall back to vanilla drawing.
+- The option is OFF by default. The original Geometry Dash renderer, draw order, gameplay, physics, trigger execution, and menus remain in control.
+- This is an experimental alpha feature, not a validated optimization release. Cloud tests do not replace physical Huawei Y9s / Mali-G51 visual and performance validation.
+
 ## 0.9.4-alpha — remove inactive high-frequency diagnostic hooks
 - Makes the `CCNode::visit`, `PlayLayer::postUpdate`, and `CCDirector::drawScene` hooks opt-in at the Geode hook level.
 - When **Performance Diagnostics** is OFF, these hooks are not auto-enabled, removing DashCore's detour from the per-node and per-frame execution paths during normal play.
