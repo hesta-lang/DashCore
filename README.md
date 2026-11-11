@@ -1,10 +1,17 @@
+## 0.9.3-alpha — lower runtime overhead by default
+
+- Disables optional timing instrumentation and diagnostic scene/GPU scans by default.
+- Keeps the original Geometry Dash renderer and gameplay paths unchanged.
+- Exposes **Performance Diagnostics** in Geode settings for opt-in profiling.
+- Live render culling remains hard-disabled. The change reduces work added by DashCore; it is not yet a verified FPS uplift on the physical Huawei Y9s.
+
 # DashCore — Android rendering optimization
 
 DashCore is an Android64 mod for Geometry Dash that investigates rendering performance and prepares a safer, Bismuth-inspired visibility optimization path. It measures frame and scene costs, inspects GameObjects and their bounds, and compares CPU visibility calculations with an OpenGL ES compute-shader implementation.
 
 The long-term goal is to reduce unnecessary rendering work and stuttering on Android while keeping Geometry Dash's original gameplay, physics, controls, menus, and visual behavior intact.
 
-**Current status:** DashCore 0.9.2-alpha is a physical-device review build. It adds a Geode `General Enable` master switch. When OFF, the mod remains loaded but bypasses all DashCore hooks and optional startup behavior. The conservative fast path is retained when ON. Its visibility analysis remains diagnostic/read-only and live object culling is hard-disabled.
+**Current status:** DashCore 0.9.3-alpha is a conservative optimization review build. Performance Diagnostics are OFF by default, so normal play skips DashCore's 600-frame profiling window, scene-graph/bounds scans and one-shot GLES probes. Turn **Performance Diagnostics** ON only when collecting a diagnostic Geode log. The `General Enable` master switch remains available. Live object culling is still hard-disabled.
 
 ## Compatibility
 
@@ -15,13 +22,13 @@ The long-term goal is to reduce unnecessary rendering work and stuttering on And
 
 ## What DashCore does
 
-- Samples frame timing and reports rendering/update performance indicators.
-- Inspects the PlayLayer scene graph and counts GameObjects by class and object ID.
-- Examines object bounds using local content dimensions and Cocos node transforms through the parent hierarchy.
+- Optionally samples frame timing and reports rendering/update performance indicators when **Performance Diagnostics** is enabled.
+- Optionally inspects the PlayLayer scene graph and counts GameObjects by class and object ID.
+- Optionally examines object bounds using local content dimensions and Cocos node transforms through the parent hierarchy.
 - Treats objects with missing parents, invalid dimensions, or non-finite transformed coordinates conservatively.
 - Identifies trigger candidates using native GameObject predicates and records bounded diagnostic samples.
 - Keeps triggers, effects, and grouped objects protected in the diagnostic visibility mask because their behavior can depend on runtime changes.
-- Uses an OpenGL ES 3.1+ compute shader to compare GPU visibility calculations against a CPU reference.
+- Optionally uses an OpenGL ES 3.1+ compute shader to compare GPU visibility calculations against a CPU reference.
 - Reports diagnostic coverage and timing so the data can be reviewed before any optimization is enabled.
 
 ## What the diagnostics do — and do not — prove
@@ -39,9 +46,9 @@ Scene bounds are not yet fully validated against the game's camera translation a
 
 ## Validation procedure
 
-1. Install the Android64 diagnostic build from the successful GitHub Actions workflow.
-2. Keep any experimental render-culling option disabled.
-3. Open a normal level and play long enough for the frame-sampling window to complete (approximately 10 seconds at 60 FPS).
+1. Install the Android64 alpha build from the successful GitHub Actions workflow.
+2. Keep **Experimental render culling** disabled.
+3. Turn **Performance Diagnostics** ON only for a diagnostic session, then open a normal level and play long enough for the frame-sampling window to complete (approximately 10 seconds at 60 FPS). Turn it OFF again for normal play.
 4. Where possible, test a level containing move, rotate, scale, alpha, toggle, color, and pulse triggers, as well as grouped objects.
 5. Repeat on another level and provide the complete Geode log.
 6. Report crashes, flicker, missing objects, late appearances, or unusual stuttering.
