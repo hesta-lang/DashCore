@@ -1,3 +1,9 @@
+## 0.9.3-alpha — reduce diagnostic overhead during normal play
+- Makes performance diagnostics opt-in and OFF by default. Normal gameplay no longer runs the 600-frame callback timers, sampled CCNode visit timing, full scene-graph scans, object-bounds inspections, or one-shot GLES diagnostic probes.
+- Preserves the original Geometry Dash update and rendering paths. The diagnostics can be enabled from Geode's **Performance Diagnostics** setting when a Geode log is needed.
+- Keeps **General Enable**, last-played-level behavior, and the conservative CCNode fast path. Live object culling remains hard-disabled; no objects, triggers, physics, controls, UI, or level data are altered.
+- This is a conservative alpha optimization intended to remove DashCore's own diagnostic work, not a claim that the game's base renderer or the Huawei Y9s has already gained a measured FPS increase.
+
 ## 0.8.5-alpha — trigger ID sample selection correction
 - Fixes the bounded trigger-ID sample so it records up to 24 objects for which the native `isTrigger()` predicate returns true, instead of sampling only the first 24 arbitrary GameObjects in scene traversal.
 - Keeps the complete per-object-ID census, class-type census, and explicit zero-trigger warning; these remain observations of `isTrigger()` and are not an independent proof of trigger classification.
