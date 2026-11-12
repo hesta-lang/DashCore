@@ -44,7 +44,8 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
     )
     post_update_frames = (
         int(final_update_match.group(1)) if final_update_match
-        else (max(update_progress) if update_progress else final_frames or 0)
+        else (final_frames if final_frames is not None
+              else (max(update_progress) if update_progress else 0))
     )
     sample_coverage = (
         coverage_match.group(1) if coverage_match
