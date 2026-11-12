@@ -290,11 +290,11 @@ Commit: `feat: preserve draw order in renderer batch planner`
 - `GlesCapabilities queryGlesCapabilities() noexcept` is called only while a valid GL context is current.
 - `RenderBackend` exposes initialization, resource preparation/upload, and release; it has no draw/present method in this milestone.
 
-- [ ] **Step 1: Add failing geometry tests**
+- [x] **Step 1: Add failing geometry tests**
 
 Test quad vertex/index counts, UV propagation, finite positions, index overflow rejection, unsupported descriptor exclusion, and an empty snapshot.
 
-- [ ] **Step 2: Add capability-selection tests**
+- [x] **Step 2: Add capability-selection tests**
 
 Test capability records with no compute/SSBO support, GLES 3.x without optional extensions, and unavailable context information. Expected: CPU/ordinary GLES preparation remains possible where supported; compute is never required.
 
@@ -304,19 +304,19 @@ Run the host C++ model-test command.
 
 Expected: FAIL for missing geometry/backend components.
 
-- [ ] **Step 4: Implement CPU geometry preparation**
+- [x] **Step 4: Implement CPU geometry preparation**
 
 Build geometry from owned descriptors and planned batches. Reject malformed geometry and buffer sizes that exceed the chosen index representation. Do not issue draw calls.
 
-- [ ] **Step 5: Implement runtime GLES capability detection**
+- [x] **Step 5: Implement runtime GLES capability detection**
 
 Query the current context version/extensions through GLES APIs. Do not infer capabilities from device model or assume desktop GL 4.3 features exist on Android.
 
-- [ ] **Step 6: Implement the preparation-only GLES backend**
+- [x] **Step 6: Implement the preparation-only GLES backend**
 
 Create/release required buffers and upload prepared data only when the context supports the selected path. Keep a CPU-only path for model/parity work. No shaders, compute dispatches, indirect draws, or framebuffer presentation are enabled in this task.
 
-- [ ] **Step 7: Run model tests and Android64 build; commit**
+- [ ] **Step 7: Run model tests and Android64 build for the current head; commit**
 
 Expected: host tests PASS and Android64 build succeeds without making compute/SSBO a startup requirement.
 
