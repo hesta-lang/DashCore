@@ -2,9 +2,9 @@
 
 #include "renderer/core/GlesCapabilities.hpp"
 
-#if defined(__ANDROID__)
-#include <GLES3/gl3.h>
-#endif
+// Geode's Android CCGL.h already supplies the GLES2 buffer API and
+// remaps OES vertex-array symbols. Including GLES3/gl3.h here conflicts
+// with those compatibility macros; this backend only needs GLES2 buffer calls.
 
 #include <limits>
 
