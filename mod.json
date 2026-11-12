@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.10.5-alpha",
+  "version": "0.10.6-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.10.5-alpha: adds opt-in read-only render-pipeline profiling for Cocos nodes, sprites, sprite batches and texture-atlas draw calls. Existing rendering behavior is unchanged; diagnostics and experimental culling remain OFF by default.",
+  "description": "DashCore 0.10.6-alpha: adds opt-in read-only profiling of Cocos render callbacks and GameObject child-node/sprite hierarchies. Rendering behavior remains unchanged; diagnostics and experimental culling default OFF.",
   "tags": [
     "optimizations",
     "performance"
@@ -40,7 +40,7 @@
     "render-pipeline-diagnostics": {
       "type": "bool",
       "name": "Render Pipeline Diagnostics (alpha)",
-      "description": "Collects read-only counts for CCNode::visit, CCSprite::draw, CCSpriteBatchNode::draw and CCTextureAtlas draw calls for 180 gameplay frames. Callback timings are sampled every 8 frames. Hooks remain disabled when OFF. This adds instrumentation overhead while ON; it does not change rendering or measure GPU execution time.",
+      "description": "Collects read-only Cocos render callback counts and a one-shot GameObject child-hierarchy inventory after the 180-frame gameplay sample. Reports child nodes, descendant sprites, batch-node ancestors and the largest object subtrees. The scan has per-object and total safety caps. Hooks and diagnostics remain disabled when OFF; this adds instrumentation overhead and does not measure GPU execution time.",
       "default": false
     }
   }

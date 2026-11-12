@@ -63,5 +63,43 @@ class RenderPipelineContractTests(unittest.TestCase):
         )
 
 
+    def test_object_visual_hierarchy_scan_is_present_and_bounded(self):
+        required = (
+            "struct ObjectVisualHierarchyStats",
+            "PlayLayer::m_objects",
+            "getChildrenCount()",
+            "getChildren()",
+            "CCArrayExt<GameObject, false>",
+            "typeinfo_cast<cocos2d::CCSprite*>",
+            "OBJECT-VISUAL-HIERARCHY",
+            "OBJECT-VISUAL-BUCKETS",
+            "OBJECT-VISUAL-SAMPLE",
+            "OBJECT-VISUAL-NOTE",
+            "kMaxObjectVisualNodesPerObject = 4096",
+            "kMaxObjectVisualDepth = 64",
+            "kMaxTotalObjectVisualNodes = 250000",
+            "reportObjectVisualHierarchy(g_profile.layer);",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.source)
+
+    def test_object_visual_hierarchy_helper_is_read_only(self):
+        start = self.source.index("void reportObjectVisualHierarchy")
+        end = self.source.index("void reportRendererPipeline", start)
+        helper = self.source[start:end]
+        for forbidden in (
+            "setVisible(",
+            "setPosition(",
+            "setScale(",
+            "addChild(",
+            "removeChild(",
+            "visit();",
+            "draw();",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, helper)
+
+
 if __name__ == "__main__":
     unittest.main()

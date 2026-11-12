@@ -1,3 +1,12 @@
+## 0.10.6-alpha — GameObject child/sprite hierarchy diagnostics
+- Extends the opt-in 180-frame render-pipeline profile with a one-shot read-only traversal of each GameObject in `PlayLayer::m_objects`.
+- Counts direct children, descendant Cocos nodes, descendant sprites, nested GameObjects, descendant batch nodes, parent batch-node ancestry, and maximum subtree depth.
+- Emits subtree-size buckets and up to eight largest GameObject subtrees, including object ID and class type, to expose visual fan-out.
+- Limits each GameObject traversal to 4,096 descendants and depth 64, and the complete scan to 250,000 descendants. Truncated scans and elapsed scan time are explicitly reported.
+- Per-root totals can overlap for nested GameObjects; batch-node ancestry does not prove actual atlas membership.
+- The scan runs once after the render-pipeline sample and does not change visibility, transforms, draw order, batching, gameplay, or UI.
+- Keeps all diagnostics opt-in and experimental static culling OFF by default. This is an alpha diagnostic release, not a validated optimization.
+
 ## 0.10.5-alpha — read-only render-pipeline instrumentation
 - Adds a separate OFF-by-default Render Pipeline Diagnostics setting for the Cocos/Geometry Dash rendering path.
 - Registers optional hooks for `CCNode::visit`, `CCSprite::draw`, `CCSpriteBatchNode::draw`, `CCTextureAtlas::drawQuads` and `CCTextureAtlas::drawNumberOfQuads`; all are auto-disabled until explicitly requested.

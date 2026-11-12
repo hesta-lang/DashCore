@@ -244,3 +244,19 @@ The diagnostic hooks observe:
 Counts cover the complete 180-frame sample. Durations are measured every 8th frame. Callback timings are inclusive and nested: sprite/atlas/batch work can occur under a node traversal and draw-scene callback, so their totals overlap and must not be added together. The draw-scene CPU duration is reported separately; this instrumentation does not measure GPU execution time.
 
 The hooks are registered with auto-enable OFF and are enabled only when the setting is explicitly requested. Missing required hooks reject the renderer profile rather than emitting a partial report. The normal renderer calls are always forwarded unchanged. This mode is diagnostic only and intentionally adds overhead while active; it does not enable culling or assert an FPS improvement.
+
+
+## 11. Runtime GameObject child/sprite hierarchy census in DashCore 0.10.6-alpha
+
+After the opt-in 180-frame render-pipeline sample finishes, DashCore performs one read-only traversal of the primary `PlayLayer::m_objects` collection. For each non-null `GameObject`, it inspects the Cocos child subtree through the confirmed `CCNode::getChildrenCount()` and `CCNode::getChildren()` APIs.
+
+The report separates:
+- Direct child count per GameObject.
+- Total descendant Cocos nodes and descendant `CCSprite` instances.
+- Nested GameObjects and descendant `CCSpriteBatchNode` nodes.
+- Whether the object's parent chain contains a `CCSpriteBatchNode`, plus parent depth.
+- Per-object subtree-size buckets and up to eight roots with the largest descendant-node counts.
+
+Safety bounds are 4,096 descendants per GameObject, 64 levels of descendant depth, and 250,000 descendants for the complete pass. Any traversal truncation and the scan's own elapsed time are logged. The root GameObject is excluded from its descendant counters. When one GameObject is nested inside another, its descendants can appear in both per-root totals; these totals are not unique scene-node counts. Finding a batch-node ancestor is a structural clue only and does not prove which texture atlas receives a sprite.
+
+The census is invoked once, after the 180-frame renderer sample has closed, and is not part of the measured `drawScene` interval. It does not call mutating Cocos APIs, alter visibility/transforms/z-order, submit rendering work, or modify gameplay. It is intentionally opt-in and adds a one-time CPU cost. The resulting report should guide a later targeted investigation; it does not authorize skipping `visit()`, changing batches, or claiming a performance gain.
