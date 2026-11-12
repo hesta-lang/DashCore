@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.9.8-alpha",
+  "version": "0.9.9-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.9.8-alpha: reports why each eligible object is retained or culled, with nearest guard-band candidate diagnostics after a 600+120-frame sample.",
+  "description": "DashCore 0.9.9-alpha: uses a validated parent-transformed GameObject bounding-rectangle fallback when CCNode content size is empty, with fail-open handling and telemetry.",
   "tags": [
     "optimizations",
     "performance"
