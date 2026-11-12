@@ -1,3 +1,11 @@
+## 0.9.9-alpha — GameObject bounds fallback
+- AutoTest 214 showed that all 122 eligible Stereo Madness GameObjects had invalid/empty CCNode content sizes, so the previous culling bounds path could not classify any candidate.
+- When content size is unusable, tries GameObject::getBoundingRect() and transforms its four parent-relative corners through the parent node into world space.
+- Keeps fail-open behavior: missing parent, invalid/zero bounding rectangle, invalid transformed bounds or viewport are never culled.
+- Adds contentSizeFallbacks and invalidBoundingRect telemetry; AutoTest validates and reconciles the expanded reason report.
+- Preserves the 125% guard band, object eligibility protections and OFF-by-default setting. This is still diagnostic/experimental, not a validated optimization.
+- Cloud emulator results are not physical Huawei Y9s validation.
+
 ## 0.9.8-alpha — categorized culling rejection diagnostics
 - Adds mutually exclusive per-GameObject telemetry for protected effects, triggers, grouped objects and rotating objects, plus missing director, invalid content size, invalid anchor, invalid world bounds and invalid viewport outcomes.
 - Splits safe eligible candidates into within-guard-band, offscreen-X, offscreen-Y and offscreen-both categories, with counts reconciled against the existing visited/eligible/culled totals.
