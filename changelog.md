@@ -1,3 +1,11 @@
+## 0.9.6-alpha — hook registration correction and culling A/B validation
+- Resolves optional hooks from Geode's actual registered-hook list using method display-name suffixes, avoiding hard-coded map-key assumptions for namespaced Cocos classes.
+- Explicitly keeps diagnostic hooks auto-disabled until Performance Diagnostics or the experimental culling feature requires them.
+- Adds an AutoTest-only `static-culling-mode.txt` override for repeatable culling-OFF/ON runs; the normal Geode setting remains authoritative when the file is absent.
+- Adds bounded runtime telemetry for visited, eligible, and skipped GameObjects without enabling the 600-frame diagnostic suite.
+- Expands cloud AutoTest to compare no mod, DashCore with culling OFF, and DashCore with culling ON.
+- The setting remains OFF by default. Cloud results do not validate Huawei Y9s rendering/performance; physical testing is still required.
+
 ## 0.9.5-alpha — conservative Bismuth-inspired static-object culling
 - Adds an opt-in CPU frustum-culling path inspired by Bismuth's object visibility stage, adapted to Geometry Dash's existing Cocos renderer and Android GLES environment.
 - Computes bounds from the GameObject's local content rectangle through its complete Cocos world transform and compares them with the visible viewport plus a 125% guard band.
