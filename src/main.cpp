@@ -136,8 +136,8 @@ namespace {
             if (!available.empty()) available += ", ";
             available += hook->getDisplayName();
         }
-        log::error(
-            "DashCore 0.9.6-alpha: hook '{}' is absent from the modify registry; available hooks=[{}].",
+        log::warn(
+            "DashCore 0.9.6-alpha: optional hook '{}' is absent from the modify registry; available hooks=[{}]. Dependent features will remain unavailable.",
             label, available
         );
         return nullptr;
