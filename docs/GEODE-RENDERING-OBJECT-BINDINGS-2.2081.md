@@ -181,6 +181,17 @@ Hallazgos confirmados:
 
 No deben mezclarse esas listas auxiliares con el inventario primario de objetos del nivel.
 
+### 5.5 ObjectToolbox — catálogo de objetos
+
+La clase `ObjectToolbox` forma parte de los bindings de Geometry Dash, pero su archivo inline 2.2081 solo muestra `allKeys()` dentro de bloques de compilación para Windows/iOS y devuelve `nullptr` en ese stub: [inline/ObjectToolbox.cpp](https://github.com/geode-sdk/bindings/blob/6eb417ad2810fe43188bb94b6097562b201db0fa/bindings/2.2081/inline/ObjectToolbox.cpp).
+
+Por lo tanto, `ObjectToolbox::allKeys()` **no queda validado como ruta de enumeración utilizable en Android**. Para el análisis del nivel, el camino confirmado por las implementaciones consultadas es `LevelEditorLayer::addObjectFromVector()` → `GameObject::objectFromVector()` y la colección `m_objects`.
+
+- [inline/PlayLayer.cpp](https://github.com/geode-sdk/bindings/blob/6eb417ad2810fe43188bb94b6097562b201db0fa/bindings/2.2081/inline/PlayLayer.cpp) confirma recorridos de `m_objects`, el escaneo de objetos activos guardables y funciones específicas de la partida.
+- [inline/DrawGridLayer.cpp](https://github.com/geode-sdk/bindings/blob/6eb417ad2810fe43188bb94b6097562b201db0fa/bindings/2.2081/inline/DrawGridLayer.cpp) mantiene colecciones separadas para efectos, guías y objetos de velocidad (`m_effectGameObjects`, `m_guideObjects`, `m_speedObjects`).
+
+No deben mezclarse esas listas auxiliares con el inventario primario de objetos del nivel.
+
 ## 6. Mapa de investigación priorizado para DashCore
 
 | Prioridad | APIs | Pregunta que debe responderse |
