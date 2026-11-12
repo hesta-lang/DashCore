@@ -1,3 +1,11 @@
+## 0.10.4-alpha — PlayLayer object-array coverage and player safety
+- Adds a separate diagnostic census of `PlayLayer::m_objects` and compares it with the PlayLayer child-tree traversal. AutoTest #224 found only two GameObjects in the child-tree snapshot, so the tree alone was not sufficient evidence of full level-object coverage.
+- Uses the object array for read-only GPU visibility probe inputs and a second bounds comparison; the child-tree scan remains for coverage comparison.
+- Records camera position and zoom as metadata. No unverified camera transform is applied to the bounds.
+- Explicitly protects all `PlayerObject` instances from experimental culling and adds a protected-player telemetry reason.
+- Adds AutoTest validation for `OBJECT-ARRAY` and bounded `OBJECT-ARRAY-SAMPLE` records.
+- Keeps diagnostics read-only and experimental culling OFF by default. No optimization or FPS improvement is claimed; cloud validation is not physical Huawei Y9s validation.
+
 ## 0.10.3-alpha — complete Android chrono portability fix
 - Fixes the remaining `std::chrono::microseconds` alias at the GPU-cull input collection timing site (`collectUs`) that was missed by 0.10.2-alpha and caused Android64 Clang to fail at src/main.cpp:1155.
 - Uses the same explicit `std::chrono::duration<std::int64_t, std::ratio<1, 1000000>>` type consistently across the timing code.

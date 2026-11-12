@@ -4,9 +4,10 @@ DashCore 0.8.0 adds an Android-side visibility-classification prototype, not a r
 
 ## 0.8.0 adapter stage
 
-The current adapter collects GameObjects from the PlayLayer scene tree and creates candidate bounds from each node's local content rectangle. It transforms all four corners with the node's `convertToWorldSpace` method so Cocos applies the object's and its ancestors' transforms.
+The diagnostic adapter compares two inventories: the PlayLayer Cocos child tree and the `PlayLayer::m_objects` array exposed by Geometry Dash's game-layer bindings. They are logged separately because the child tree alone may not enumerate the full level-object inventory. GPU visibility probe inputs and a second bounds comparison are built from the object array. Camera position and zoom are metadata only; no unverified camera transform is applied.
 
 Safety policy:
+- PlayerObject instances, including both player slots, are always force-visible.
 - All trigger objects are force-visible.
 - All Effect-class objects are force-visible.
 - All grouped objects are force-visible until DashCore can reproduce and validate trigger-driven group transforms.
@@ -26,7 +27,7 @@ Bismuth's desktop renderer uses desktop OpenGL entry points, shader behavior, in
 ## Next stages
 
 1. Validate 0.8.0 world-space candidate bounds against actual visible object edges on device.
-2. Verify collector coverage against the full renderable scene, not just CPU/GPU formula parity.
+2. Compare PlayLayer::m_objects against the Cocos child tree and verify collector coverage against the full renderable scene, not just CPU/GPU formula parity.
 3. Implement a read-only group-transform model before considering grouped objects for visibility filtering.
 4. Prototype chunk-based visibility windows and prefetch only after world coordinates and player/camera movement are understood.
 5. Investigate static sprite batching and draw-call reduction separately; preserve z-order, blending, color channels, pulses, glow/detail sprites, and child-node rendering.
@@ -34,4 +35,4 @@ Bismuth's desktop renderer uses desktop OpenGL entry points, shader behavior, in
 
 ## Test policy
 
-Keep `experimental-render-culling=false`. If any object appears late, disappears, flickers, or changes gameplay, stop the test and send the complete Geode log. No live culling is enabled in 0.8.0.
+Keep `experimental-render-culling=false`. The child-tree and object-array censuses are diagnostic evidence only; neither proves that every renderable sprite is safely represented. PlayerObject, triggers, effects, grouped objects, rotating objects, and invalid bounds remain protected. If any object appears late, disappears, flickers, or changes gameplay, stop the test and send the complete Geode log.

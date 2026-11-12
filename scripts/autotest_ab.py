@@ -630,7 +630,7 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
         log_text, re.IGNORECASE
     )
     reason_keys = (
-        "visited", "eligible", "protected_effect", "protected_trigger",
+        "visited", "eligible", "protected_player", "protected_effect", "protected_trigger",
         "protected_grouped", "protected_rotating", "missing_director",
         "content_size_fallbacks", "invalid_bounding_rect", "invalid_anchor", "invalid_world_bounds",
         "invalid_viewport", "within_guard_band", "offscreen_x",
@@ -638,7 +638,7 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
     )
     reason_pattern = (
         r"CULL-REASONS visited=(\d+),\s*eligible=(\d+),"
-        r"\s*protectedEffect=(\d+),\s*protectedTrigger=(\d+),"
+        r"\s*protectedPlayer=(\d+),\s*protectedEffect=(\d+),\s*protectedTrigger=(\d+),"
         r"\s*protectedGrouped=(\d+),\s*protectedRotating=(\d+),"
         r"\s*missingDirector=(\d+),\s*contentSizeFallbacks=(\d+),"
         r"\s*invalidBoundingRect=(\d+),\s*invalidAnchor=(\d+),\s*invalidWorldBounds=(\d+),"
@@ -660,7 +660,7 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
         key: 0 for key in reason_keys
     }
     protected_total = sum(reasons[key] for key in (
-        "protected_effect", "protected_trigger", "protected_grouped", "protected_rotating"
+        "protected_player", "protected_effect", "protected_trigger", "protected_grouped", "protected_rotating"
     ))
     bounds_total = sum(reasons[key] for key in (
         "missing_director", "invalid_bounding_rect", "invalid_anchor",
@@ -806,8 +806,9 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
         (variant_dir / "combined-geode-log.txt").write_text(combined_diagnostic)
         diagnostic_markers = (
             "DIAGNOSTICS-MODE", "DIAGNOSTICS-HOOKS", "DIAGNOSTIC-COST",
-            "VIEWPORT-SPACE", "OBJECT-GEOMETRY", "OBJECT-SAMPLE",
-            "OBJECT-ID", "OBJECT-TYPE", "CULL-GEOMETRY-CANDIDATE",
+            "VIEWPORT-SPACE", "OBJECT-ARRAY", "OBJECT-ARRAY-SAMPLE",
+            "OBJECT-GEOMETRY", "OBJECT-SAMPLE", "OBJECT-ID", "OBJECT-TYPE",
+            "CULL-GEOMETRY-CANDIDATE",
             "CULL-GEOMETRY-VIEWPORT", "CULL-GEOMETRY-RECT-CORNERS",
             "CULL-GEOMETRY-PARENT",
         )
@@ -821,6 +822,7 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
         }
         required_markers = (
             "DIAGNOSTICS-HOOKS", "DIAGNOSTIC-COST", "VIEWPORT-SPACE",
+            "OBJECT-ARRAY", "OBJECT-ARRAY-SAMPLE",
             "OBJECT-GEOMETRY", "OBJECT-SAMPLE", "OBJECT-ID", "OBJECT-TYPE",
             "CULL-GEOMETRY-CANDIDATE", "CULL-GEOMETRY-VIEWPORT",
             "CULL-GEOMETRY-RECT-CORNERS", "CULL-GEOMETRY-PARENT",
@@ -835,6 +837,8 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
             "marker_counts": marker_counts,
             "candidate_lines": [line for line in diagnostic_lines if "CULL-GEOMETRY-CANDIDATE" in line],
             "parent_chain_lines": [line for line in diagnostic_lines if "CULL-GEOMETRY-PARENT" in line],
+            "object_array_lines": [line for line in diagnostic_lines if "OBJECT-ARRAY:" in line],
+            "object_array_sample_lines": [line for line in diagnostic_lines if "OBJECT-ARRAY-SAMPLE" in line],
             "object_geometry_lines": [line for line in diagnostic_lines if "OBJECT-GEOMETRY" in line],
             "object_id_lines": [line for line in diagnostic_lines if "OBJECT-ID" in line],
             "object_type_lines": [line for line in diagnostic_lines if "OBJECT-TYPE" in line],
@@ -1131,7 +1135,8 @@ def write_culling_report(args: argparse.Namespace, disabled: dict[str, Any],
         f"- Eligible static GameObjects: {on_runtime.get('eligible_objects')}",
         f"- Culled GameObjects: {on_runtime.get('culled_objects')}",
         f"- Per-reason diagnostic present / internally consistent: {on_runtime.get('reason_report_found')} / {on_runtime.get('reason_totals_match')}",
-        f"- Protected objects (effect/trigger/grouped/rotating): {on_runtime.get('protected_objects_total')}",
+        f"- Protected objects (player/effect/trigger/grouped/rotating): {on_runtime.get('protected_objects_total')}",
+        f"- Protected player visits: {on_runtime.get('reason_counts', {}).get('protected_player', 0)}",
         f"- Eligible objects classified by bounds reason: {on_runtime.get('eligible_reason_total')}",
         f"- Culled-by-axis count (X/Y/both): {on_runtime.get('reason_culled_total')}",
         f"- Bounds rejection reasons: {json.dumps(on_runtime.get('reason_counts', {}), sort_keys=True)}",
