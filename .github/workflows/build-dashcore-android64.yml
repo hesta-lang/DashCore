@@ -1,5 +1,7 @@
 name: Build DashCore (Android64)
 
+# Rebuild on diagnostics-only AutoTest harness updates so workflow_run tests the exact current scripts.
+
 on:
   push:
     branches: ["**"]
