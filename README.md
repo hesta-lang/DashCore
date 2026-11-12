@@ -1,11 +1,11 @@
 # DashCore — Android rendering optimization
 
-## 0.10.8-alpha — expanded section-layout diagnostics
+## 0.10.9-alpha — update subphase timing
 
-- Expands the one-shot read-only section census to 1,024 outer slots and 32,768 cells. This covers the 824 outer slots observed in the latest physical-device sample.
-- Adds per-outer-slot distribution metrics, including cells per slot, fully versus partially scanned slots, slots containing object references, and the maximum reference count in a fully scanned slot.
-- Partial outer slots are excluded from complete-slot reference aggregates when the cell cap is reached. Pointer entries are never dereferenced, and counts are not interpreted as unique GameObjects.
-- Keeps all diagnostics OFF by default, preserves the original renderer/gameplay/UI behavior, and leaves experimental static culling OFF. This diagnostic alpha does not claim an FPS improvement.
+- Adds optional sampled timing for the active PlayLayer's inherited `GJBaseGameLayer::update(float)` callback and `PlayLayer::updateVisibility(float)`.
+- These subphase hooks are optional and discovered at runtime. If unavailable, the core renderer profile remains usable and reports their unavailable status.
+- Callback counts cover the profile window; one in every eight callbacks is timed. The callbacks can be nested, so their times are not additive and do not represent exclusive per-object cost.
+- Original game callbacks are forwarded once; no gameplay/rendering changes are made. Diagnostics and experimental culling remain OFF by default. No FPS improvement is claimed.
 
 
 ## 0.10.6-alpha — GameObject visual-hierarchy diagnostics

@@ -26,6 +26,9 @@ class RenderPipelineContractTests(unittest.TestCase):
             "CCSpriteBatchNode::draw",
             "CCTextureAtlas::drawQuads",
             "CCTextureAtlas::drawNumberOfQuads",
+            "GJBaseGameLayer::update",
+            "PlayLayer::updateVisibility",
+            "RENDER-UPDATE-SUBPHASES",
             "RENDER-PIPELINE-HOOKS",
             "RENDER-PIPELINE-NOTE",
             "PlayLayer::postUpdate",
@@ -106,6 +109,30 @@ class RenderPipelineContractTests(unittest.TestCase):
             with self.subTest(call=call):
                 self.assertIn(call, self.source)
 
+    def test_update_subphase_hooks_are_optional_and_sampled(self):
+        required = (
+            "g_baseGameLayerUpdateHook = registerOptionalHook",
+            "g_playLayerVisibilityHook = registerOptionalHook",
+            "baseGameLayerUpdate.calls % kRenderPipelineTimingStride == 0",
+            "playLayerUpdateVisibility.calls % kRenderPipelineTimingStride == 0",
+            "GJBaseGameLayer::update(dt);",
+            "PlayLayer::updateVisibility(dt);",
+            "g_baseGameLayerUpdateHookReady = ensureHook",
+            "g_playLayerVisibilityHookReady = ensureHook",
+            "RENDER-UPDATE-SUBPHASES",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.source)
+
+        # The additional hooks are optional and do not participate in the
+        # required core render-pipeline readiness expression.
+        self.assertIn(
+            "g_renderPipelineHooksReady = nodeReady && drawSceneReady && postUpdateReady &&",
+            self.source,
+        )
+        self.assertIn("atlasQuadsReady && atlasCountReady;", self.source)
+
     def test_culling_remains_default_off(self):
         self.assertIs(
             self.metadata["settings"]["experimental-render-culling"]["default"],
@@ -152,7 +179,7 @@ class RenderPipelineContractTests(unittest.TestCase):
 
 
     def test_diagnostic_release_version_and_defaults(self):
-        self.assertEqual(self.metadata["version"], "0.10.8-alpha")
+        self.assertEqual(self.metadata["version"], "0.10.9-alpha")
         self.assertIs(self.metadata["settings"]["render-pipeline-diagnostics"]["default"], False)
         self.assertIs(self.metadata["settings"]["experimental-render-culling"]["default"], False)
         self.assertIn("does not change rendering", self.metadata["settings"]["render-pipeline-diagnostics"]["description"])

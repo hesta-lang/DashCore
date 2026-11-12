@@ -293,3 +293,16 @@ A slot whose cell list is cut short by the global cell cap is reported as partia
 The census reads only container sizes and stored cell-vector sizes. It never dereferences the contained `GameObject*` pointers, changes section membership, or modifies object/render state. The outer/inner dimensions are kept as structural indices; they are not labelled X/Y without further evidence. Raw reference counts are not unique-object counts.
 
 No new hooks are added for `addToObjectsToShow`, `reorderObjectSection`, `updateAllObjectSection`, or `updateObjectSection`: the 2.2081 Android binding map still does not provide verified Android hook addresses for those paths. The scan remains one-shot and opt-in, and the increase is diagnostic coverage rather than a rendering optimization.
+
+
+## 13. Optional update-subphase timing in DashCore 0.10.9-alpha
+
+The 0.10.8-alpha physical-device log showed a 6.36 ms average and 13.97 ms maximum for `PlayLayer::postUpdate`, but that callback alone does not identify which part of the gameplay update is expensive.
+
+DashCore 0.10.9-alpha adds two optional observation points:
+- `GJBaseGameLayer::update(float)`, filtered at runtime so only the active `PlayLayer` receiver is counted.
+- `PlayLayer::updateVisibility(float)`, measured separately to identify the visibility callback's contribution.
+
+These hooks are discovered through the Geode modify registry and are not prerequisites for the existing renderer profile. If Android does not expose either hook, DashCore records its readiness as false and continues with the existing measurements. No raw Android offset is invented and no section-management methods (`addToObjectsToShow`, `reorderObjectSection`, `updateAllObjectSection`, or `updateObjectSection`) are detoured.
+
+Each callback counts calls during the 180-frame profile and times one in every eight callbacks. The callback measurements can be nested: visibility may run inside the broader base-layer update, and both can overlap other frame work. Their inclusive durations must not be summed or subtracted to claim exclusive object-update cost. The original callback is forwarded exactly once. All diagnostics remain opt-in; this release does not change gameplay, rendering, or UI and does not claim an FPS improvement.

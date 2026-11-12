@@ -1,3 +1,10 @@
+## 0.10.9-alpha — update subphase timing
+- Adds optional sampled CPU timing for the inherited `GJBaseGameLayer::update(float)` callback when its receiver is the active PlayLayer.
+- Adds optional sampled CPU timing for `PlayLayer::updateVisibility(float)` to help distinguish visibility work from the broader game-layer update callback.
+- The two hooks are discovered from Geode's modify registry and enabled only when render-pipeline diagnostics are explicitly requested. If either is unavailable, the core renderer profile still runs and logs the missing subphase.
+- Each subphase records callback count and samples one callback in every eight; timings are inclusive/nested and must not be added or subtracted as exclusive object-update cost.
+- Both callbacks forward the original implementation exactly once. No object state, section membership, rendering, gameplay, or UI behavior is changed. All diagnostics remain OFF by default; culling remains OFF. This is diagnostic-only and claims no FPS improvement.
+
 ## 0.10.8-alpha — expanded section-layout diagnostics
 - Raises the one-shot read-only section census limits from 512 to 1,024 outer slots and from 16,384 to 32,768 cells, covering the 824-slot layout observed in the latest device log.
 - Adds per-outer-slot statistics: slots with cells, fully/partially scanned slots, slots with object references, maximum cells per slot, and maximum object-reference slots in a fully scanned slot.
