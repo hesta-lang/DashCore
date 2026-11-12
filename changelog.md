@@ -2,7 +2,7 @@
 - Resolves optional hooks from Geode's actual registered-hook list using method display-name suffixes, avoiding hard-coded map-key assumptions for namespaced Cocos classes.
 - Explicitly keeps diagnostic hooks auto-disabled until Performance Diagnostics or the experimental culling feature requires them.
 - Adds an AutoTest-only `static-culling-mode.txt` override for repeatable culling-OFF/ON runs; the normal Geode setting remains authoritative when the file is absent.
-- Adds bounded runtime telemetry for visited, eligible, and skipped GameObjects without enabling the 600-frame diagnostic suite.
+- Adds bounded runtime telemetry for visited, eligible, and skipped GameObjects without enabling the 600-frame diagnostic suite; per-object counters stop after the first 120 update frames.
 - Expands cloud AutoTest to compare no mod, DashCore with culling OFF, and DashCore with culling ON.
 - The setting remains OFF by default. Cloud results do not validate Huawei Y9s rendering/performance; physical testing is still required.
 
