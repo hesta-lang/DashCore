@@ -2,6 +2,7 @@
 #include "bismuth/GLESComputeProbe.hpp"
 #include "bismuth/GLESObjectCullingProbe.hpp"
 #include <Geode/modify/PlayLayer.hpp>
+#include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/CCDirector.hpp>
 #include <Geode/modify/CCNode.hpp>
 #include <Geode/modify/CCSprite.hpp>
