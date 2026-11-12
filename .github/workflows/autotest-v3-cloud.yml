@@ -221,7 +221,11 @@ jobs:
           culling_state = module.parse_culling_runtime(sample_culling_log)
           assert culling_state["active_confirmed"] is True, culling_state
           assert culling_state["frames"] == 120 and culling_state["culled_objects"] == 12, culling_state
-          print("Culling runtime log parser self-test passed.")
+          disabled_state = module.parse_culling_runtime(
+              "setupHasCompleted; diagnostics=OFF, static-culling-requested=false, static-culling-active=false."
+          )
+          assert disabled_state["requested"] is False and disabled_state["active"] is False, disabled_state
+          print("Culling runtime ON/OFF log parser self-test passed.")
           sample_guest = {
               "android_api_level": "30",
               "primary_abi": "arm64-v8a",
