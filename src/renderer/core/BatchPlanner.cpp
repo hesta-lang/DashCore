@@ -1,6 +1,7 @@
 #include "renderer/core/BatchPlanner.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <set>
 #include <utility>
 
@@ -21,12 +22,15 @@ std::vector<std::uint32_t> buildStableDrawOrder(
     std::span<SpriteDescriptor const> sprites
 ) {
     std::vector<std::uint32_t> order;
-    if (sprites.size() > static_cast<std::size_t>(UINT32_MAX)) return order;
+    if (sprites.size() > static_cast<std::size_t>(
+            std::numeric_limits<std::uint32_t>::max())) {
+        return order;
+    }
 
     order.reserve(sprites.size());
-    for (std::uint32_t index = 0; index < sprites.size(); ++index) {
+    for (std::size_t index = 0; index < sprites.size(); ++index) {
         if (!validateSpriteDescriptor(sprites[index])) return {};
-        order.push_back(index);
+        order.push_back(static_cast<std::uint32_t>(index));
     }
 
     std::stable_sort(order.begin(), order.end(), [&](std::uint32_t left, std::uint32_t right) {
@@ -45,8 +49,13 @@ std::vector<RenderBatch> planBatches(
     std::vector<RenderBatch> batches;
     if (drawOrder.empty()) return batches;
 
+    if (drawOrder.size() > static_cast<std::size_t>(
+            std::numeric_limits<std::uint32_t>::max())) {
+        return batches;
+    }
+
     std::set<std::uint32_t> seenIndices;
-    for (std::uint32_t orderIndex = 0; orderIndex < drawOrder.size(); ++orderIndex) {
+    for (std::size_t orderIndex = 0; orderIndex < drawOrder.size(); ++orderIndex) {
         auto const spriteIndex = drawOrder[orderIndex];
         if (spriteIndex >= sprites.size() ||
             !seenIndices.insert(spriteIndex).second ||
@@ -58,7 +67,7 @@ std::vector<RenderBatch> planBatches(
         if (batches.empty() || !(batches.back().key == key)) {
             RenderBatch batch;
             batch.key = key;
-            batch.firstOrderIndex = orderIndex;
+            batch.firstOrderIndex = static_cast<std::uint32_t>(orderIndex);
             batch.spriteIndices.push_back(spriteIndex);
             batches.push_back(std::move(batch));
         } else {
