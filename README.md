@@ -1,4 +1,4 @@
-# DashCore — Experimental Android level-object renderer
+# DashCore — Experimental Renderer for Android level objects
 
 ## 0.11.0-alpha — read-only renderer foundation
 
