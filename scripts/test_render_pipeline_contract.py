@@ -61,10 +61,17 @@ class RenderPipelineContractTests(unittest.TestCase):
             "m_activeObjectsCount",
             "m_activeObjectsIndex",
             "m_sections.size()",
-            "kMaxObjectSectionOuterSlots = 512",
-            "kMaxObjectSectionCellSlots = 16384",
+            "kMaxObjectSectionOuterSlots = 1024",
+            "kMaxObjectSectionCellSlots = 32768",
             "OBJECT-SECTION-LAYOUT",
             "OBJECT-SECTION-NOTE",
+            "OBJECT-SECTION-ROWS",
+            "outerSlotsWithCellSlots",
+            "fullyScannedOuterSlots",
+            "partiallyScannedOuterSlots",
+            "outerSlotsWithObjectReferences",
+            "maxCellsPerOuterSlot",
+            "maxObjectReferencesPerOuterSlot",
             "reportObjectSectionLayout(g_profile.layer);",
         )
         for marker in required:
@@ -145,7 +152,7 @@ class RenderPipelineContractTests(unittest.TestCase):
 
 
     def test_diagnostic_release_version_and_defaults(self):
-        self.assertEqual(self.metadata["version"], "0.10.7-alpha")
+        self.assertEqual(self.metadata["version"], "0.10.8-alpha")
         self.assertIs(self.metadata["settings"]["render-pipeline-diagnostics"]["default"], False)
         self.assertIs(self.metadata["settings"]["experimental-render-culling"]["default"], False)
         self.assertIn("does not change rendering", self.metadata["settings"]["render-pipeline-diagnostics"]["description"])

@@ -275,3 +275,21 @@ Instead, the opt-in 180-frame render-pipeline sample measures the original `Play
 The census is capped at 512 outer slots and 16,384 cells. It reads only container sizes and never dereferences the `GameObject*` entries stored in section cells. Outer/inner dimensions are reported structurally; DashCore does not label them as X/Y axes without further binding/implementation evidence. The total pointer-slot count is not treated as a unique-object count.
 
 These additions are diagnostics only. The original update callback is called exactly once, no section membership or object state is changed, and renderer/gameplay/UI behavior is untouched. The first experimental optimization remains planned for `0.11.0-alpha`, after the device-side measurements identify a safe optimization target.
+
+
+## 12. Expanded outer-slot census in DashCore 0.10.8-alpha
+
+The physical-device sample contained 824 outer entries in `m_sections`, so the previous 512-slot cap stopped before the full structure could be inspected. DashCore 0.10.8-alpha raises the one-shot read-only limits to 1,024 outer slots and 32,768 cells.
+
+The report adds structural statistics for each scanned outer slot:
+- Number of slots containing at least one cell.
+- Number of fully scanned versus partially scanned slots.
+- Number of fully scanned slots with one or more stored object-reference slots.
+- Maximum cell slots in one outer slot.
+- Maximum total raw object-reference slots in a fully scanned outer slot.
+
+A slot whose cell list is cut short by the global cell cap is reported as partial. Its reference total is excluded from the complete-slot maximum and complete-slot count, preventing incomplete data from being presented as a full row total. Empty non-null slots may still be counted as fully scanned. Null outer entries are reported separately.
+
+The census reads only container sizes and stored cell-vector sizes. It never dereferences the contained `GameObject*` pointers, changes section membership, or modifies object/render state. The outer/inner dimensions are kept as structural indices; they are not labelled X/Y without further evidence. Raw reference counts are not unique-object counts.
+
+No new hooks are added for `addToObjectsToShow`, `reorderObjectSection`, `updateAllObjectSection`, or `updateObjectSection`: the 2.2081 Android binding map still does not provide verified Android hook addresses for those paths. The scan remains one-shot and opt-in, and the increase is diagnostic coverage rather than a rendering optimization.

@@ -1,3 +1,10 @@
+## 0.10.8-alpha — expanded section-layout diagnostics
+- Raises the one-shot read-only section census limits from 512 to 1,024 outer slots and from 16,384 to 32,768 cells, covering the 824-slot layout observed in the latest device log.
+- Adds per-outer-slot statistics: slots with cells, fully/partially scanned slots, slots with object references, maximum cells per slot, and maximum object-reference slots in a fully scanned slot.
+- Per-slot reference aggregates exclude incomplete partial slots when the cell cap is reached; raw pointer slots are still never dereferenced and are not treated as unique objects.
+- Keeps the 180-frame sample, update/render hooks, gameplay, renderer, and UI behavior unchanged. The larger scan remains one-shot and opt-in.
+- No new section-update hooks are added because the 2.2081 bindings still provide no verified Android addresses for those methods. Experimental static culling remains OFF by default; this is not a validated optimization and claims no FPS improvement.
+
 ## 0.10.7-alpha — update timing and object-section diagnostics
 - Adds opt-in CPU timing around the original `PlayLayer::postUpdate` callback, using the same bounded 180-gameplay-frame window as render-pipeline diagnostics.
 - Reports postUpdate callback frames, average/max CPU duration, slow callbacks and observed `dt` range separately from drawScene timing.

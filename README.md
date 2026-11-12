@@ -1,14 +1,12 @@
 # DashCore — Android rendering optimization
 
-## 0.10.7-alpha — update timing and object-section diagnostics
+## 0.10.8-alpha — expanded section-layout diagnostics
 
-- Adds bounded CPU timing around the original `PlayLayer::postUpdate` callback during the opt-in 180-frame render-pipeline sample.
-- Reports update callback count, average and maximum CPU duration, slow callbacks, and the observed `dt` range separately from draw-scene timing.
-- Adds a one-shot read-only snapshot of `m_activeObjects` and the nested `m_sections` containers: active vector slots/counters, outer section slots, scanned cells, empty/null cells, raw object-reference slots, and maximum per-cell occupancy.
-- The section scan reads container sizes only. It does not dereference stored `GameObject*` values, change object membership, or alter rendering/gameplay/UI. Caps: 512 outer slots and 16,384 cells.
-- Direct hooks for `addToObjectsToShow`, `reorderObjectSection`, and `updateAllObjectSection` are not used because the 2.2081 binding map does not provide Android hook addresses for these inline/unsupported methods.
-- All new diagnostics remain OFF by default. This is still a diagnostic-only alpha; it includes no runtime optimization and claims no FPS improvement.
-- **Planned next milestone:** `0.11.0-alpha` is the first experimental optimization release, selected only after the new measurements identify a safe target and validated on the physical Huawei Y9s.
+- Expands the one-shot read-only section census to 1,024 outer slots and 32,768 cells. This covers the 824 outer slots observed in the latest physical-device sample.
+- Adds per-outer-slot distribution metrics, including cells per slot, fully versus partially scanned slots, slots containing object references, and the maximum reference count in a fully scanned slot.
+- Partial outer slots are excluded from complete-slot reference aggregates when the cell cap is reached. Pointer entries are never dereferenced, and counts are not interpreted as unique GameObjects.
+- Keeps all diagnostics OFF by default, preserves the original renderer/gameplay/UI behavior, and leaves experimental static culling OFF. This diagnostic alpha does not claim an FPS improvement.
+
 
 ## 0.10.6-alpha — GameObject visual-hierarchy diagnostics
 

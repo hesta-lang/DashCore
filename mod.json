@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.10.7-alpha",
+  "version": "0.10.8-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.10.7-alpha: adds opt-in CPU timing for PlayLayer updates and a bounded read-only census of Geometry Dash active-object and section containers. Rendering and gameplay behavior remain unchanged; diagnostics and experimental culling default OFF.",
+  "description": "DashCore 0.10.8-alpha: expands the opt-in read-only census of Geometry Dash active-object and section containers, including per-outer-slot distribution statistics. Rendering and gameplay behavior remain unchanged; diagnostics and experimental culling default OFF.",
   "tags": [
     "optimizations",
     "performance"
