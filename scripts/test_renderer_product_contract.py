@@ -49,7 +49,8 @@ class RendererProductContract(unittest.TestCase):
         self.assertIn("experimental renderer", self.readme.lower())
         self.assertIn("read-only", self.readme.lower())
         self.assertIn("vanilla rendering", self.readme.lower())
-        self.assertNotIn("FPS improvement", self.readme)
+        self.assertNotIn("improves FPS", self.readme)
+        self.assertNotIn("increases FPS", self.readme)
         self.assertNotIn("replaces the original renderer", self.readme.lower())
 
 
