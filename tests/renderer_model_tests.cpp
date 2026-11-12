@@ -1,4 +1,5 @@
 #include "renderer/core/RendererTypes.hpp"
+#include "renderer/core/SpriteDescriptorExtractor.hpp"
 
 #include <cassert>
 #include <limits>
@@ -53,4 +54,24 @@ int main() {
     auto mismatchedOwner = valid;
     mismatchedOwner.id.owner.objectIndex += 1;
     assert(!validateSpriteDescriptor(mismatchedOwner));
+
+    SpriteDescriptor extracted{};
+    assert(extractSpriteDescriptor(valid.attributes, valid.owner, 4, {1, 22}, extracted));
+    assert(extracted.id.childIndex == 4);
+    assert(extracted.order.zLayer == 1);
+    assert(extracted.order.traversalOrder == 22);
+
+    auto changed = valid.attributes;
+    changed.transform.values[4] = 120.f;
+    changed.color.r = 17;
+    changed.opacity = 91;
+    assert(extractSpriteDescriptor(changed, valid.owner, 5, {1, 23}, extracted));
+    assert(extracted.id.childIndex == 5);
+    assert(extracted.attributes.transform.values[4] == 120.f);
+    assert(extracted.attributes.color.r == 17);
+    assert(extracted.attributes.opacity == 91);
+
+    auto unknownTextureAttributes = valid.attributes;
+    unknownTextureAttributes.textureKnown = false;
+    assert(!extractSpriteDescriptor(unknownTextureAttributes, valid.owner, 6, {1, 24}, extracted));
 }
