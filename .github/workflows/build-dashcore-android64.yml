@@ -48,10 +48,11 @@ jobs:
             --std=c11 \
             --suppress=missingIncludeSystem \
             tools/kirin_cpu_bench.c
-          python3 -m py_compile scripts/kirin_cpu_profile.py scripts/test_kirin_cpu_profile.py scripts/autotest_ab.py scripts/kirin_autotest_calibration.py scripts/test_kirin_autotest_calibration.py scripts/test_render_pipeline_contract.py
+          python3 -m py_compile scripts/kirin_cpu_profile.py scripts/test_kirin_cpu_profile.py scripts/autotest_ab.py scripts/autotest_gameplay_diagnostics.py scripts/test_gameplay_diagnostics_autotest.py scripts/kirin_autotest_calibration.py scripts/test_kirin_autotest_calibration.py scripts/test_render_pipeline_contract.py
           python3 -m unittest scripts/test_kirin_cpu_profile.py -v
           python3 scripts/test_kirin_autotest_calibration.py
           python3 scripts/test_render_pipeline_contract.py
+          python3 scripts/test_gameplay_diagnostics_autotest.py
 
       - name: Build Geode mod for Android64
         id: build

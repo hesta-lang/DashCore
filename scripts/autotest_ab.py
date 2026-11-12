@@ -707,13 +707,15 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
 
 
 def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_mode: str = "off",
-                diagnostics_mode: str = "off", geometry_diagnostics: bool = False) -> dict[str, Any]:
+                diagnostics_mode: str = "off", geometry_diagnostics: bool = False,
+                render_pipeline_mode: str = "off") -> dict[str, Any]:
     serial, base = args.serial, args.base_dir.rstrip("/")
     mod_dir = f"{base}/game/geode/mods"
     mod_remote = f"{mod_dir}/DashCore.geode"
     config_dir = f"{base}/game/geode/config/{args.mod_id}"
     culling_mode_remote = f"{config_dir}/static-culling-mode.txt"
     diagnostics_mode_remote = f"{config_dir}/diagnostics-mode.txt"
+    render_pipeline_mode_remote = f"{config_dir}/render-pipeline-mode.txt"
     log_dir = f"{base}/game/geode/logs"
     variant_dir = pathlib.Path(args.report_dir) / mode.lower().replace("_", "-")
     variant_dir.mkdir(parents=True, exist_ok=True)
@@ -728,11 +730,14 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
         shell(serial, f"test -s {shlex.quote(mod_remote)}")
         if diagnostics_mode not in ("on", "off"):
             raise ValueError(f"Unsupported diagnostics mode: {diagnostics_mode!r}")
+        if render_pipeline_mode not in ("on", "off"):
+            raise ValueError(f"Unsupported render pipeline mode: {render_pipeline_mode!r}")
         shell(serial, f"mkdir -p {shlex.quote(config_dir)}")
         shell(serial, f"printf '%s\\n' {shlex.quote(culling_mode)} > {shlex.quote(culling_mode_remote)}")
         shell(serial, f"printf '%s\\n' {shlex.quote(diagnostics_mode)} > {shlex.quote(diagnostics_mode_remote)}")
+        shell(serial, f"printf '%s\\n' {shlex.quote(render_pipeline_mode)} > {shlex.quote(render_pipeline_mode_remote)}")
     else:
-        shell(serial, f"rm -f {shlex.quote(culling_mode_remote)} {shlex.quote(diagnostics_mode_remote)}")
+        shell(serial, f"rm -f {shlex.quote(culling_mode_remote)} {shlex.quote(diagnostics_mode_remote)} {shlex.quote(render_pipeline_mode_remote)}")
     shell(serial, f"mkdir -p {shlex.quote(log_dir)} && rm -f {shlex.quote(log_dir)}/*")
     shell(serial, "logcat -c", check=False)
     shell(serial, "am start -a android.intent.action.VIEW -d geode-launcher://main/launch -p com.geode.launcher", check=False)

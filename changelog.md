@@ -1,3 +1,11 @@
+## 0.10.10-alpha — sampled update timing histograms and gameplay-only AutoTest
+- Adds mutually exclusive duration histograms to the 180-frame CPU sample for CCDirector::drawScene and PlayLayer::postUpdate, plus sampled renderer and update subphase callbacks.
+- Uses bounded ranges: 0–250 μs, 251–500 μs, 501 μs–1 ms, 1–2 ms, 2–4 ms, 4–8 ms, and over 8 ms.
+- Retains average/max/call totals. Nested callback samples remain inclusive and must not be summed; no GPU execution or exclusive per-object update cost is inferred.
+- Does not add unverified GameObject::update or section-management hooks; the 2.2081 Android binding map provides no verified Android addresses for those methods.
+- Simplifies cloud AutoTest to one real gameplay session with Render Pipeline Diagnostics ON, Performance Diagnostics OFF, and static culling OFF. No no-mod baseline or culling-ON pass is run.
+- All changes are read-only diagnostics. The original Cocos renderer, gameplay, physics, draw order, and UI remain unchanged. This remains prerelease alpha and makes no optimization/FPS claim.
+
 ## 0.10.9-alpha — update subphase timing
 - Adds optional sampled CPU timing for the inherited `GJBaseGameLayer::update(float)` callback when its receiver is the active PlayLayer.
 - Adds optional sampled CPU timing for `PlayLayer::updateVisibility(float)` to help distinguish visibility work from the broader game-layer update callback.

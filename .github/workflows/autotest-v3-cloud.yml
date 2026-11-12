@@ -1,5 +1,4 @@
-
-name: DashCore AutoTest - Baseline vs DashCore Culling OFF/ON
+name: DashCore AutoTest - Gameplay diagnostics only
 
 on:
   workflow_run:
@@ -9,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mediafire_url:
-        description: "MediaFire file-page URL for your authorized Geometry Dash APK. Can also be supplied as GEOMETRY_DASH_MEDIAFIRE_URL secret."
+        description: "MediaFire file-page URL for your authorized Geometry Dash 2.2081 APK. Can also be supplied as GEOMETRY_DASH_MEDIAFIRE_URL secret."
         required: false
         default: "https://www.mediafire.com/file/o9rk5i69nmu0nci/Geometry+Dash_2.2081.apk/file"
         type: string
@@ -19,18 +18,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: dashcore-autotest-fps
+  group: dashcore-autotest-gameplay-diagnostics
   cancel-in-progress: true
 
 jobs:
   cloud-runtime:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
-    name: Measure FPS without DashCore and with DashCore on the same Android device
+    name: Play Geometry Dash once and collect DashCore diagnostics
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       GEOMETRY_DASH_MEDIAFIRE_URL: ${{ inputs.mediafire_url || secrets.GEOMETRY_DASH_MEDIAFIRE_URL || 'https://www.mediafire.com/file/o9rk5i69nmu0nci/Geometry+Dash_2.2081.apk/file' }}
-      REPORT_DIR: reports/autotest-fps
+      REPORT_DIR: reports/autotest-gameplay-diagnostics
     steps:
       - name: Select DashCore build artifact and exact source revision
         id: build
@@ -50,19 +49,19 @@ jobs:
             echo "head_sha=$BUILD_RUN_SHA" >> "$GITHUB_OUTPUT"
           else
             python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json, os, urllib.request
-          repo = os.environ["GITHUB_REPOSITORY"]
-          token = os.environ["GH_TOKEN"]
-          url = f"https://api.github.com/repos/{repo}/actions/workflows/build-dashcore-android64.yml/runs?branch=main&status=success&per_page=20"
-          req = urllib.request.Request(url, headers={"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}"})
-          with urllib.request.urlopen(req, timeout=30) as response:
-              runs = json.load(response).get("workflow_runs", [])
-          if not runs:
-              raise SystemExit("No successful Android64 build found on main.")
-          selected = runs[0]
-          print(f"run_id={selected['id']}")
-          print(f"head_sha={selected['head_sha']}")
-          PY
+            import json, os, urllib.request
+            repo = os.environ["GITHUB_REPOSITORY"]
+            token = os.environ["GH_TOKEN"]
+            url = f"https://api.github.com/repos/{repo}/actions/workflows/build-dashcore-android64.yml/runs?branch=main&status=success&per_page=20"
+            req = urllib.request.Request(url, headers={"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}"})
+            with urllib.request.urlopen(req, timeout=30) as response:
+                runs = json.load(response).get("workflow_runs", [])
+            if not runs:
+                raise SystemExit("No successful Android64 build found on main.")
+            selected = runs[0]
+            print(f"run_id={selected['id']}")
+            print(f"head_sha={selected['head_sha']}")
+            PY
           fi
 
       - name: Checkout exact source revision used by the build
@@ -73,7 +72,7 @@ jobs:
       - name: Prepare Android platform tools
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools build-tools;35.0.0 ndk;27.2.12479018'
+          packages: 'platform-tools build-tools;35.0.0'
 
       - name: Download and validate DashCore package
         uses: actions/download-artifact@v4
@@ -148,7 +147,7 @@ jobs:
             model=Pixel2,version=30
           max-time-limit: 25m
           record-video: true
-          outputs-dir: reports/autotest-fps/cloud-session
+          outputs-dir: reports/autotest-gameplay-diagnostics/cloud-session
 
       - name: Install APKs and prepare the test device
         id: device
@@ -160,21 +159,20 @@ jobs:
             echo "::error::Cloud device did not provide an ADB port."
             exit 1
           fi
-          IFS=',' read -ra PORTS <<< "$ADB_PORTS"
-          for port in "${PORTS[@]}"; do adb connect "127.0.0.1:$port"; done
+          while IFS= read -r port; do
+            [ -n "$port" ] && adb connect "127.0.0.1:$port"
+          done < <(printf '%s' "$ADB_PORTS" | tr ',' '\n')
           SERIAL="$(adb devices | awk '$2=="device"{print $1;exit}')"
           [ -n "$SERIAL" ] || { echo "::error::No connected Android device."; exit 1; }
           adb -s "$SERIAL" wait-for-device
           prop() { adb -s "$SERIAL" shell getprop "$1" | tr -d '\r'; }
           SDK="$(prop ro.build.version.sdk)"
-          ABI="$(prop ro.product.cpu.abi)"
           ABIS="$(prop ro.product.cpu.abilist)"
           BRIDGE="$(prop ro.dalvik.vm.native.bridge)"
           {
             echo "Android SDK: $SDK"
-            echo "Primary ABI: $ABI"
             echo "Supported ABIs: $ABIS"
-            echo "Native bridge: ${BRIDGE:-<empty>}"
+            echo "Native bridge: $BRIDGE"
           } | tee "$REPORT_DIR/device.txt"
           if [ "$SDK" -lt 29 ] || ! printf '%s' "$ABIS" | grep -q 'arm64-v8a' || [ -z "$BRIDGE" ] || [ "$BRIDGE" = "0" ]; then
             echo "::error::Cloud device does not meet Android 10+ ARM64 translation requirements."
@@ -194,199 +192,39 @@ jobs:
           echo "Game package: $GAME_PACKAGE; versionName: $GAME_VERSION" | tee "$REPORT_DIR/game-version.txt"
           echo "serial=$SERIAL" >> "$GITHUB_OUTPUT"
 
-      - name: Install benchmark image reader and OCR engine
+      - name: Install gameplay screenshot OCR
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends tesseract-ocr
           python3 -m pip install --disable-pip-version-check pillow
 
-      - name: Validate Huawei Y9s profile, FPS script and timestamp parser
+      - name: Validate gameplay-only AutoTest and histogram parser
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/autotest_ab.py scripts/kirin_autotest_calibration.py
-          python3 scripts/test_kirin_autotest_calibration.py
-          python3 - <<'PY'
-          import importlib.util
-          from PIL import Image, ImageDraw
-          spec = importlib.util.spec_from_file_location("autotest_ab", "scripts/autotest_ab.py")
-          module = importlib.util.module_from_spec(spec)
-          spec.loader.exec_module(module)
-          from pathlib import Path
-          profile = module.load_device_profile(Path("profiles/huawei-y9s.json"))
-          assert profile["profile_id"] == "huawei-y9s", profile.get("profile_id")
-          sample_culling_log = """
-          setupHasCompleted; diagnostics=OFF, static-culling-requested=true, static-culling-active=true.
-          DashCore 0.9.9-alpha CULL-STATS frames=120, warmupFrames=600, visitedGameObjects=1000, eligibleObjects=500, culledObjects=12.
-          DashCore 0.10.4-alpha CULL-REASONS visited=1000, eligible=500, protectedPlayer=10, protectedEffect=90, protectedTrigger=150, protectedGrouped=200, protectedRotating=50, missingDirector=0, contentSizeFallbacks=500, invalidBoundingRect=0, invalidAnchor=0, invalidWorldBounds=0, invalidViewport=0, withinGuardBand=488, offscreenX=4, offscreenY=5, offscreenBoth=3.
-          DashCore 0.9.9-alpha CULL-NEAREST: found=true, guardClearance=2.50, objectID=42, bounds=(1.00,2.00)-(3.00,4.00).
-          """
-          culling_state = module.parse_culling_runtime(sample_culling_log)
-          assert culling_state["active_confirmed"] is True, culling_state
-          assert culling_state["warmup_frames"] == 600, culling_state
-          assert culling_state["frames"] == 120 and culling_state["culled_objects"] == 12, culling_state
-          assert culling_state["reason_report_found"] is True, culling_state
-          assert culling_state["reason_totals_match"] is True, culling_state
-          assert culling_state["reason_counts"]["protected_player"] == 10, culling_state
-          assert culling_state["protected_objects_total"] == 500, culling_state
-          assert culling_state["reason_counts"]["within_guard_band"] == 488, culling_state
-          assert culling_state["reason_counts"]["content_size_fallbacks"] == 500, culling_state
-          assert culling_state["nearest_guard_band_candidate"]["object_id"] == 42, culling_state
-          inconsistent_log = sample_culling_log.replace("offscreenBoth=3", "offscreenBoth=2")
-          inconsistent_state = module.parse_culling_runtime(inconsistent_log)
-          assert inconsistent_state["reason_totals_match"] is False, inconsistent_state
-          disabled_state = module.parse_culling_runtime(
-              "setupHasCompleted; diagnostics=OFF, static-culling-requested=false, static-culling-active=false."
-          )
-          assert disabled_state["requested"] is False and disabled_state["active"] is False, disabled_state
-          print("Culling runtime ON/OFF log parser self-test passed.")
-          sample_guest = {
-              "android_api_level": "30",
-              "primary_abi": "arm64-v8a",
-              "supported_abis": "arm64-v8a,armeabi-v7a",
-              "wm_size_reported_px": [1080, 1920],
-          }
-          profile_check = module.assess_device_profile(profile, sample_guest)
-          assert profile_check["hardware_equivalence"] == "NOT_EMULATED", profile_check
-          assert profile_check["comparison"]["android_api"] == "DIFFERENT", profile_check
-          assert profile_check["comparison"]["arm64_abi"] == "ARM64_ABI_AVAILABLE", profile_check
-          assert profile_check["comparison"]["display_resolution"] == "DIFFERENT", profile_check
-          cpu_reference = profile_check["cpu_calibration_reference"]
-          assert cpu_reference["status"] == "PHYSICAL_REFERENCE_CONTEXT_ONLY", cpu_reference
-          assert cpu_reference["selected_sample"]["sample_id"] == "rested-idle-2026-11-11", cpu_reference
-          assert cpu_reference["median_iterations_per_second"]["higher_capacity_single_core"] == 197569556.742, cpu_reference
-          assert cpu_reference["median_iterations_per_second"]["lower_capacity_single_core"] == 137366098.765, cpu_reference
-          assert cpu_reference["median_iterations_per_second"]["all_allowed_cores_concurrent"] == 1339436928.836, cpu_reference
-          assert cpu_reference["interpretation"]["hardware_equivalence"] == "NOT_EMULATED", cpu_reference
-          assert cpu_reference["interpretation"]["cpu_budget_derived"] is False, cpu_reference
-          assert cpu_reference["interpretation"]["cloud_cpu_limits_applied"] is False, cpu_reference
-          print("Huawei Y9s reference-profile and physical CPU calibration validation passed; emulator is explicitly NOT_EMULATED.")
-          period = 16_666_667
-          rows = ["16666667"]
-          # Keep generated presentation timestamps strictly after the refresh-period header.
-          # The parser may receive vendor-specific header variants, so validate the FPS
-          # invariant rather than depending on whether the header is also exposed as a sample.
-          rows += [f"{i*period} {i*period} {i*period}" for i in range(2, 21)]
-          rows += [f"{2**63-1} {2**63-1} {2**63-1}"]
-          parsed = module.parse_surfaceflinger_latency("\n".join(rows))
-          assert parsed.get("available") is True, parsed
-          assert parsed["interval_count"] >= 18, parsed
-          assert 59.0 <= parsed["average_fps"] <= 61.0, parsed
-          anomalous_rows = ["16666667"]
-          anomalous_rows += [f"{i*period} {i*period} {i*period}" for i in range(2, 21)]
-          anomalous_rows.insert(8, f"{7*period} {7*period-14_900_000} {7*period-14_900_000}")
-          anomaly_result = module.parse_surfaceflinger_latency("\n".join(anomalous_rows))
-          assert anomaly_result.get("available") is True, anomaly_result
-          assert anomaly_result["timing_anomaly_detected"] is False, anomaly_result
-          assert anomaly_result["timing_anomaly_count"] == 0, anomaly_result
-          assert anomaly_result["max_fps"] > 60.0, anomaly_result
-          assert anomaly_result["interval_count"] >= 19, anomaly_result
-          invalid = module.parse_surfaceflinger_latency(
-              "16666667\\n" + "\n".join([f"{2**63-1} {2**63-1} {2**63-1}"] * 20)
-          )
-          assert invalid.get("available") is False, invalid
-          notice = Image.new("RGB", (1920, 1080), (12, 40, 10))
-          ImageDraw.Draw(notice).rectangle((880, 752, 1040, 832), fill=(89, 220, 29))
-          center = module.detect_notice_ok_button(notice)
-          assert center is not None and abs(center[0] - 960) <= 3 and abs(center[1] - 792) <= 3, center
-          assert module.is_gameplay_text("ATTEMPT 1") is True
-          assert module.is_gameplay_text("apt 1") is True
-          assert module.is_gameplay_text("Stereo Madness normal mode 0% practice mode 0%") is False
-          assert module.is_main_menu_text("character select level editor\\nDownload mods here!") is True
-          assert module.is_main_menu_text("geomenrs) drs\\nales\\nsone oe\\n©googod &.") is False
-          wm_size = module.parse_wm_size("Physical size: 1080x1920\\n", 1920, 1080)
-          assert wm_size == (1080, 1920), wm_size
-          landscape_tap = module.map_screenshot_point_to_input(960, 792, 1920, 1080, *wm_size)
-          assert landscape_tap == (960, 792, 1920, 1080), landscape_tap
-          portrait_tap = module.map_screenshot_point_to_input(540, 960, 1080, 1920, 1080, 1920)
-          assert portrait_tap == (540, 960, 1080, 1920), portrait_tap
-          print("SurfaceFlinger parser self-test passed; sub-refresh intervals are retained for unlocked-FPS measurement.")
-          print(f"Geometry Dash NOTICE button detector self-test passed: {center}.")
-          print(f"Landscape ADB input coordinate mapping self-test passed: {landscape_tap}.")
-          print(f"Portrait ADB input coordinate mapping self-test passed: {portrait_tap}.")
-          PY
+          python3 -m py_compile scripts/autotest_ab.py scripts/autotest_gameplay_diagnostics.py scripts/test_gameplay_diagnostics_autotest.py
+          python3 scripts/test_gameplay_diagnostics_autotest.py
+          python3 scripts/test_render_pipeline_contract.py
 
-      - name: Run baseline, culling-OFF and culling-ON FPS benchmark
+      - name: Run one gameplay session and collect diagnostics
         env:
           SERIAL: ${{ steps.device.outputs.serial }}
         run: |
           set -euo pipefail
           MOD="$(find artifacts/mod -type f -name '*.geode' -print -quit)"
           [ -n "$MOD" ] || { echo "::error::DashCore .geode artifact missing."; exit 1; }
-          python3 scripts/autotest_ab.py \
+          python3 scripts/autotest_gameplay_diagnostics.py \
             --serial "$SERIAL" \
             --mod-file "$MOD" \
             --base-dir /sdcard/Android/media/com.geode.launcher \
-            --report-dir "$REPORT_DIR" \
-            --repetitions 3 \
-            --device-profile profiles/huawei-y9s.json
+            --report-dir "$REPORT_DIR"
 
-      - name: Profile cloud CPU and package physical Kirin calibration tool
-        if: always()
-        env:
-          SERIAL: ${{ steps.device.outputs.serial }}
-        run: |
-          set -euo pipefail
-          TOOL_DIR="$REPORT_DIR/kirin-cpu-profile-tool"
-          CLOUD_DIR="$REPORT_DIR/kirin-cpu-profile-cloud"
-          mkdir -p "$TOOL_DIR" "$CLOUD_DIR"
-          NDK_DIR="$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
-          if [ -z "$NDK_DIR" ]; then
-            echo "::warning::Android NDK unavailable; skipping cloud CPU profile."
-            printf '%s\n' "Android NDK unavailable; no cloud CPU profile was collected." > "$CLOUD_DIR/skipped.txt"
-          else
-            TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin"
-            "$TOOLCHAIN/aarch64-linux-android29-clang" \
-              -O2 -std=c11 -Wall -Wextra -Werror -pthread -fPIE -pie \
-              tools/kirin_cpu_bench.c -o "$TOOL_DIR/kirin_cpu_bench"
-            cp scripts/kirin_cpu_profile.py "$TOOL_DIR/kirin_cpu_profile.py"
-            cp profiles/huawei-y9s.json "$TOOL_DIR/huawei-y9s.json"
-            cp tools/run-kirin-cpu-profile-termux.sh "$TOOL_DIR/run-kirin-cpu-profile-termux.sh"
-            cp docs/KIRIN-CPU-CALIBRATION.md "$TOOL_DIR/README.md"
-            chmod 700 "$TOOL_DIR/kirin_cpu_bench" "$TOOL_DIR/run-kirin-cpu-profile-termux.sh"
-            if [ -n "$SERIAL" ] && python3 scripts/kirin_cpu_profile.py \
-              --serial "$SERIAL" \
-              --binary "$TOOL_DIR/kirin_cpu_bench" \
-              --profile profiles/huawei-y9s.json \
-              --report-dir "$CLOUD_DIR" \
-              --duration-ms 4000 \
-              --repetitions 3; then
-              echo "Cloud CPU profile completed. This is not a physical Huawei Y9s measurement."
-            else
-              echo "::warning::Cloud CPU probe could not complete; the physical-device tool is still packaged."
-              printf '%s\n' "Cloud CPU probe unavailable. Run the packaged tool locally on the Huawei Y9s." > "$CLOUD_DIR/skipped.txt"
-            fi
-          fi
-
-      - name: Compare cloud CPU with physical Huawei Y9s reference
-        if: always()
-        run: |
-          set -euo pipefail
-          CLOUD_REPORT="$REPORT_DIR/kirin-cpu-profile-cloud/kirin-cpu-profile.json"
-          COMPARISON_DIR="$REPORT_DIR/kirin-cpu-calibration-comparison"
-          if [ -s "$CLOUD_REPORT" ]; then
-            python3 -m py_compile scripts/compare_kirin_cpu_profiles.py
-            python3 scripts/compare_kirin_cpu_profiles.py \
-              --reference-profile profiles/huawei-y9s.json \
-              --cloud-report "$CLOUD_REPORT" \
-              --output-dir "$COMPARISON_DIR"
-          else
-            mkdir -p "$COMPARISON_DIR"
-            printf '%s\n' "Cloud CPU profile unavailable; no physical/cloud comparison was produced." \
-              > "$COMPARISON_DIR/skipped.txt"
-            echo "::warning::Cloud CPU comparison skipped because no cloud profile JSON exists."
-          fi
-          python3 scripts/test_kirin_cpu_profile.py
-          python3 scripts/test_compare_kirin_cpu_profiles.py
-
-      - name: Upload AutoTest v4.4 reports
+      - name: Upload gameplay diagnostics report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-FPS-Benchmark-${{ github.run_number }}
+          name: DashCore-Gameplay-Diagnostics-${{ github.run_number }}
           path: |
             reports/
-            artifacts/
+            artifacts/mod/
           if-no-files-found: warn
           retention-days: 30
-
-# CPU calibration compares three cloud repetitions with the stored physical Huawei Y9s reference.

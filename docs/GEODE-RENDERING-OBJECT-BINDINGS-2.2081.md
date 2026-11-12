@@ -306,3 +306,12 @@ DashCore 0.10.9-alpha adds two optional observation points:
 These hooks are discovered through the Geode modify registry and are not prerequisites for the existing renderer profile. If Android does not expose either hook, DashCore records its readiness as false and continues with the existing measurements. No raw Android offset is invented and no section-management methods (`addToObjectsToShow`, `reorderObjectSection`, `updateAllObjectSection`, or `updateObjectSection`) are detoured.
 
 Each callback counts calls during the 180-frame profile and times one in every eight callbacks. The callback measurements can be nested: visibility may run inside the broader base-layer update, and both can overlap other frame work. Their inclusive durations must not be summed or subtracted to claim exclusive object-update cost. The original callback is forwarded exactly once. All diagnostics remain opt-in; this release does not change gameplay, rendering, or UI and does not claim an FPS improvement.
+
+
+## 14. DashCore 0.10.10-alpha — update-duration histograms and AutoTest scope
+
+The 180-frame render-pipeline sample emits mutually exclusive CPU-duration buckets for CCDirector::drawScene and PlayLayer::postUpdate. The optional Cocos renderer, GJBaseGameLayer::update, and PlayLayer::updateVisibility hooks emit the same buckets for callbacks actually timed (one in every eight calls). Ranges are 0–250 μs, 251–500 μs, 501–1,000 μs, 1,001–2,000 μs, 2,001–4,000 μs, 4,001–8,000 μs, and above 8,000 μs.
+
+These are inclusive CPU callback measurements. They do not reveal exclusive per-object update time, and nested callbacks must not be summed. The existing binding investigation does not establish verified Android hook addresses for GameObject::update or section-management methods, so no such hooks are added.
+
+The cloud AutoTest runs a single level session with Performance Diagnostics OFF, Render Pipeline Diagnostics ON, and static culling OFF. It does not perform a no-mod baseline or culling-ON pass. The fixed tap pattern is only a gameplay stimulus, not a level-completion test. Cloud execution remains explicitly NOT EMULATED for the physical Huawei Y9s.

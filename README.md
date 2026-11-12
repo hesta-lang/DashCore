@@ -1,5 +1,14 @@
 # DashCore — Android rendering optimization
 
+## 0.10.10-alpha — update timing histograms and gameplay-only AutoTest
+
+- Adds mutually exclusive CPU-duration buckets for each measured drawScene and postUpdate frame, plus sampled Cocos renderer, base-game-layer update, and visibility callbacks.
+- Reports ranges from 0–250 μs through over 8 ms while preserving average, maximum, and callback counts.
+- Update/visibility hooks remain optional and runtime-discovered. Their timings can be nested and must not be added together; no unverified per-GameObject or section-management hook is introduced.
+- Replaces the multi-variant cloud benchmark with one gameplay-and-diagnostics pass: culling OFF, Performance Diagnostics OFF, Render Pipeline Diagnostics ON, and no A/B comparison.
+- AutoTest launches Geometry Dash, verifies the in-level HUD, supplies a simple tap pattern during the observation window, and saves Geode/logcat/frame-timing diagnostics. Cloud execution is not physical Huawei Y9s validation.
+- No rendering, gameplay, physics, draw-order, or UI behavior changes. Diagnostics and experimental culling remain OFF by default; no FPS improvement is claimed.
+
 ## 0.10.9-alpha — update subphase timing
 
 - Adds optional sampled timing for the active PlayLayer's inherited `GJBaseGameLayer::update(float)` callback and `PlayLayer::updateVisibility(float)`.

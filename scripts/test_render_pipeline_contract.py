@@ -29,6 +29,11 @@ class RenderPipelineContractTests(unittest.TestCase):
             "GJBaseGameLayer::update",
             "PlayLayer::updateVisibility",
             "RENDER-UPDATE-SUBPHASES",
+            "RENDER-TIMING-BINS",
+            "RENDER-UPDATE-BINS-NOTE",
+            "recordTimingBucket",
+            "postUpdateDurationBuckets",
+            "drawSceneDurationBuckets",
             "RENDER-PIPELINE-HOOKS",
             "RENDER-PIPELINE-NOTE",
             "PlayLayer::postUpdate",
@@ -43,6 +48,14 @@ class RenderPipelineContractTests(unittest.TestCase):
         self.assertIn("kRenderPipelineSampleFrames = 180", self.source)
         self.assertIn("kRenderPipelineTimingStride = 8", self.source)
         self.assertIn("g_rendererProfile.frames < kRenderPipelineSampleFrames", self.source)
+
+    def test_duration_histograms_have_mutually_exclusive_ranges(self):
+        for marker in (
+            "us0_250", "us251_500", "us501_1000", "us1001_2000",
+            "us2001_4000", "us4001_8000", "usOver8000",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.source)
 
     def test_renderer_diagnostics_setting_defaults_off(self):
         setting = self.metadata["settings"]["render-pipeline-diagnostics"]
@@ -179,7 +192,7 @@ class RenderPipelineContractTests(unittest.TestCase):
 
 
     def test_diagnostic_release_version_and_defaults(self):
-        self.assertEqual(self.metadata["version"], "0.10.9-alpha")
+        self.assertEqual(self.metadata["version"], "0.10.10-alpha")
         self.assertIs(self.metadata["settings"]["render-pipeline-diagnostics"]["default"], False)
         self.assertIs(self.metadata["settings"]["experimental-render-culling"]["default"], False)
         self.assertIn("does not change rendering", self.metadata["settings"]["render-pipeline-diagnostics"]["description"])
