@@ -55,6 +55,11 @@ bool GLESBackend::prepare(core::GeometryData const& geometry) {
         return false;
     }
 
+    GLint previousArrayBuffer = 0;
+    GLint previousElementArrayBuffer = 0;
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &previousArrayBuffer);
+    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &previousElementArrayBuffer);
+
     glBindBuffer(GL_ARRAY_BUFFER, m_vertexBuffer);
     glBufferData(
         GL_ARRAY_BUFFER,
@@ -71,8 +76,9 @@ bool GLESBackend::prepare(core::GeometryData const& geometry) {
         GL_DYNAMIC_DRAW
     );
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    // Do not leave Cocos2d's global buffer bindings changed.
+    glBindBuffer(GL_ARRAY_BUFFER, static_cast<GLuint>(previousArrayBuffer));
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLuint>(previousElementArrayBuffer));
     return true;
 #else
     (void)geometry;
