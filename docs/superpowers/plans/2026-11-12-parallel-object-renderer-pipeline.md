@@ -345,7 +345,7 @@ Commit: \`feat: prepare renderer geometry and GLES capabilities\`
 
 - [ ] **Step 1: Add failing integration-contract tests**
 
-Assert that the coordinator resets on a new level generation, captures only the active PlayLayer, and never registers hooks for Cocos drawing callbacks.
+Assert that the coordinator resets on a new level generation, captures only the active PlayLayer, refreshes transform/color/opacity values on successive frames, and never registers hooks for Cocos drawing callbacks.
 
 - [ ] **Step 2: Verify lifecycle hook availability**
 
@@ -353,7 +353,7 @@ Confirm exact Android64 support/signatures for the selected \`PlayLayer\` lifecy
 
 - [ ] **Step 3: Implement coordinator lifecycle**
 
-Reset collector/snapshot state at level initialization; capture after level setup completes; release owned snapshot/backend resources at the verified level-exit boundary. Preserve original callback order and call each original exactly once.
+Reset collector/snapshot state at level initialization; capture after level setup completes; refresh dynamic values after each original `PlayLayer::postUpdate(float)` call; release owned snapshot/backend resources at the verified level-exit boundary. Preserve original callback order and call each original exactly once.
 
 - [ ] **Step 4: Keep the mode read-only**
 
