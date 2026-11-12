@@ -260,3 +260,18 @@ The report separates:
 Safety bounds are 4,096 descendants per GameObject, 64 levels of descendant depth, and 250,000 descendants for the complete pass. Any traversal truncation and the scan's own elapsed time are logged. The root GameObject is excluded from its descendant counters. When one GameObject is nested inside another, its descendants can appear in both per-root totals; these totals are not unique scene-node counts. Finding a batch-node ancestor is a structural clue only and does not prove which texture atlas receives a sprite.
 
 The census is invoked once, after the 180-frame renderer sample has closed, and is not part of the measured `drawScene` interval. It does not call mutating Cocos APIs, alter visibility/transforms/z-order, submit rendering work, or modify gameplay. It is intentionally opt-in and adds a one-time CPU cost. The resulting report should guide a later targeted investigation; it does not authorize skipping `visit()`, changing batches, or claiming a performance gain.
+
+
+## DashCore 0.10.7-alpha — Android section/update measurement boundary
+
+The 2.2081 `GeometryDash.bro` map lists `addToObjectsToShow(GameObject*)` as inline and lists `reorderObjectSection(GameObject*)` / `updateAllObjectSection()` without Android addresses. The `updateObjectSection(GameObject*)` virtual entry likewise has no Android address in that map. These methods are therefore not detoured by DashCore on Android64.
+
+Instead, the opt-in 180-frame render-pipeline sample measures the original `PlayLayer::postUpdate(float)` callback, then takes a one-shot read-only snapshot of the existing `GJBaseGameLayer` containers exposed by the 2.2081 bindings:
+
+- `m_activeObjects.size()`, `m_activeObjectsCount`, and `m_activeObjectsIndex`.
+- `m_sections` outer-slot count, each non-null row's cell count, and each non-null cell's stored pointer count.
+- The number of null/empty entries, total raw pointer slots, and the maximum occupancy observed in one cell.
+
+The census is capped at 512 outer slots and 16,384 cells. It reads only container sizes and never dereferences the `GameObject*` entries stored in section cells. Outer/inner dimensions are reported structurally; DashCore does not label them as X/Y axes without further binding/implementation evidence. The total pointer-slot count is not treated as a unique-object count.
+
+These additions are diagnostics only. The original update callback is called exactly once, no section membership or object state is changed, and renderer/gameplay/UI behavior is untouched. The first experimental optimization remains planned for `0.11.0-alpha`, after the device-side measurements identify a safe optimization target.

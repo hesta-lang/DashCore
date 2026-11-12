@@ -1,3 +1,13 @@
+## 0.10.7-alpha — update timing and object-section diagnostics
+- Adds opt-in CPU timing around the original `PlayLayer::postUpdate` callback, using the same bounded 180-gameplay-frame window as render-pipeline diagnostics.
+- Reports postUpdate callback frames, average/max CPU duration, slow callbacks and observed `dt` range separately from drawScene timing.
+- Adds a one-shot read-only census of `m_activeObjects` and nested `m_sections`: active vector slots/counters, section outer slots, scanned cells, empty/null cells, raw object-reference slots and maximum per-cell occupancy.
+- The section census reads container sizes only; it never dereferences the GameObject pointers stored in cells. It is capped at 512 outer slots and 16,384 cells.
+- Makes the setup log distinguish `performance-diagnostics` from `render-pipeline-diagnostics`, avoiding the ambiguous `diagnostics=OFF` label when renderer profiling is independently enabled.
+- The 2.2081 Android binding map does not provide Android hook addresses for `addToObjectsToShow`, `reorderObjectSection`, or `updateAllObjectSection`; DashCore does not detour those methods.
+- All diagnostics remain opt-in and experimental static culling remains OFF by default. This release does not optimize rendering or claim an FPS improvement.
+- Planned: `0.11.0-alpha` will contain the first experimental optimization, selected after reviewing this device-side diagnostic data and validated on the Huawei Y9s.
+
 ## 0.10.6-alpha — GameObject child/sprite hierarchy diagnostics
 - Extends the opt-in 180-frame render-pipeline profile with a one-shot read-only traversal of each GameObject in `PlayLayer::m_objects`.
 - Counts direct children, descendant Cocos nodes, descendant sprites, nested GameObjects, descendant batch nodes, parent batch-node ancestry, and maximum subtree depth.

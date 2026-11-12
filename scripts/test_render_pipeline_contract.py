@@ -28,6 +28,9 @@ class RenderPipelineContractTests(unittest.TestCase):
             "CCTextureAtlas::drawNumberOfQuads",
             "RENDER-PIPELINE-HOOKS",
             "RENDER-PIPELINE-NOTE",
+            "PlayLayer::postUpdate",
+            "RENDER-UPDATE",
+            "recordRenderPipelineUpdate",
         )
         for marker in required:
             with self.subTest(marker=marker):
@@ -43,6 +46,46 @@ class RenderPipelineContractTests(unittest.TestCase):
         self.assertIs(setting["default"], False)
         self.assertIn("180 gameplay frames", setting["description"])
         self.assertIn("does not change rendering", setting["description"])
+
+    def test_update_timing_is_bounded_to_the_renderer_sample(self):
+        self.assertIn("updateFrames < kRenderPipelineSampleFrames", self.source)
+        self.assertIn("kRenderPipelineSampleFrames = 180", self.source)
+        self.assertIn("void postUpdate(float dt)", self.source)
+        self.assertIn("avgPostUpdateUs", self.source)
+        self.assertIn("postUpdateReady", self.source)
+
+    def test_object_section_census_is_bounded_and_read_only(self):
+        required = (
+            "struct ObjectSectionLayoutStats",
+            "m_activeObjects.size()",
+            "m_activeObjectsCount",
+            "m_activeObjectsIndex",
+            "m_sections.size()",
+            "kMaxObjectSectionOuterSlots = 512",
+            "kMaxObjectSectionCellSlots = 16384",
+            "OBJECT-SECTION-LAYOUT",
+            "OBJECT-SECTION-NOTE",
+            "reportObjectSectionLayout(g_profile.layer);",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.source)
+
+        start = self.source.index("void reportObjectSectionLayout")
+        end = self.source.index("void recordRenderPipelineUpdate", start)
+        helper = self.source[start:end]
+        for forbidden in (
+            "setVisible(",
+            "setPosition(",
+            "setScale(",
+            "addChild(",
+            "removeChild(",
+            "visit();",
+            "draw();",
+            "->set",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, helper)
 
     def test_original_renderer_calls_are_preserved(self):
         for call in (
@@ -99,6 +142,13 @@ class RenderPipelineContractTests(unittest.TestCase):
         ):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, helper)
+
+
+    def test_diagnostic_release_version_and_defaults(self):
+        self.assertEqual(self.metadata["version"], "0.10.7-alpha")
+        self.assertIs(self.metadata["settings"]["render-pipeline-diagnostics"]["default"], False)
+        self.assertIs(self.metadata["settings"]["experimental-render-culling"]["default"], False)
+        self.assertIn("does not change rendering", self.metadata["settings"]["render-pipeline-diagnostics"]["description"])
 
 
 if __name__ == "__main__":

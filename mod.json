@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.10.6-alpha",
+  "version": "0.10.7-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.10.6-alpha: adds opt-in read-only profiling of Cocos render callbacks and GameObject child-node/sprite hierarchies. Rendering behavior remains unchanged; diagnostics and experimental culling default OFF.",
+  "description": "DashCore 0.10.7-alpha: adds opt-in CPU timing for PlayLayer updates and a bounded read-only census of Geometry Dash active-object and section containers. Rendering and gameplay behavior remain unchanged; diagnostics and experimental culling default OFF.",
   "tags": [
     "optimizations",
     "performance"
@@ -40,7 +40,7 @@
     "render-pipeline-diagnostics": {
       "type": "bool",
       "name": "Render Pipeline Diagnostics (alpha)",
-      "description": "Collects read-only Cocos render callback counts during 180 gameplay frames, then performs a one-shot GameObject child-hierarchy inventory. Reports child nodes, descendant sprites, batch-node ancestors and the largest object subtrees. The scan has per-object and total safety caps. Hooks and diagnostics remain disabled when OFF; this adds instrumentation overhead, does not change rendering, and does not measure GPU execution time.",
+      "description": "Collects CPU timing for PlayLayer::postUpdate and Cocos render callbacks over a bounded 180-gameplay-frame sample, then performs read-only GameObject hierarchy and section-container censuses. Hooks remain disabled when OFF. Adds opt-in instrumentation overhead but does not change rendering, gameplay, or UI and does not measure GPU execution time.",
       "default": false
     }
   }
