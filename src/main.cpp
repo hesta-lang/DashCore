@@ -120,6 +120,7 @@ namespace {
 
     struct RenderPipelineProfile {
         bool active = false;
+        bool finalReported = false;
         bool sampleThisFrame = false;
         std::uint32_t frames = 0;
         std::uint32_t timedDrawFrames = 0;
@@ -1877,11 +1878,15 @@ namespace {
         auto const minUpdateDt = g_rendererProfile.updateFrames
             ? g_rendererProfile.minUpdateDt
             : 0.f;
+        auto const sampleCoverage = g_rendererProfile.frames >= kRenderPipelineSampleFrames
+            ? "draw-and-update"
+            : (g_rendererProfile.frames > 0 ? "partial-draw" : "update-only");
         log::info(
-            "DashCore 0.10.11-alpha RENDER-PIPELINE {}: frames={}, timedDrawFrames={}, timingStride={}, drawSceneAvgUs={:.2f}, drawSceneTotalUs={}, drawSceneMaxUs={}.",
-            stage, g_rendererProfile.frames, g_rendererProfile.timedDrawFrames,
-            kRenderPipelineTimingStride, averageDrawUs,
-            g_rendererProfile.drawSceneTotalUs, g_rendererProfile.drawSceneMaxUs
+            "DashCore 0.10.11-alpha RENDER-PIPELINE {}: frames={}, drawSceneFrames={}, postUpdateFrames={}, sampleCoverage={}, timedDrawFrames={}, timingStride={}, drawSceneAvgUs={:.2f}, drawSceneTotalUs={}, drawSceneMaxUs={}.",
+            stage, g_rendererProfile.updateFrames, g_rendererProfile.frames,
+            g_rendererProfile.updateFrames, sampleCoverage,
+            g_rendererProfile.timedDrawFrames, kRenderPipelineTimingStride,
+            averageDrawUs, g_rendererProfile.drawSceneTotalUs, g_rendererProfile.drawSceneMaxUs
         );
         log::info(
             "DashCore 0.10.11-alpha RENDER-UPDATE: frames={}, avgPostUpdateUs={:.2f}, maxPostUpdateUs={}, slowPostUpdates={}, dtMin={:.4f}, dtMax={:.4f}.",
@@ -1906,7 +1911,7 @@ namespace {
         reportTimingBuckets("GJBaseGameLayer::update (PlayLayer)", g_rendererProfile.baseGameLayerUpdate.inclusiveDurationBuckets);
         reportTimingBuckets("PlayLayer::updateVisibility", g_rendererProfile.playLayerUpdateVisibility.inclusiveDurationBuckets);
         log::info(
-            "DashCore 0.10.11-alpha RENDER-UPDATE-BINS-NOTE: histogram ranges are mutually exclusive CPU-duration buckets. drawScene and postUpdate include every frame in the 180-frame sample; renderer/update subphase buckets include timed callbacks only (one in every {} calls). Nested callback times must not be added and are not GPU timings.",
+            "DashCore 0.10.11-alpha RENDER-UPDATE-BINS-NOTE: PlayLayer::postUpdate covers all 180 sample updates; drawScene coverage is recorded separately and may be unavailable on Android. Renderer/update subphase buckets include timed callbacks only (one in every {} calls). Nested callback times must not be added and are not GPU timings.",
             kRenderPipelineTimingStride
         );
         log::info(
@@ -1914,9 +1919,22 @@ namespace {
             g_baseGameLayerUpdateHookReady, g_playLayerVisibilityHookReady
         );
         log::info(
-            "DashCore 0.10.11-alpha RENDER-PIPELINE-NOTE: Cocos callback times are inclusive and nested; do not sum them. Counts cover the complete 180-frame window while callback timing is sampled every {}th callback for each subphase. RENDER-UPDATE measures PlayLayer::postUpdate CPU time separately; the new base-layer and visibility callbacks are diagnostic subphases, not proof of exclusive object-update cost or GPU execution time.",
+            "DashCore 0.10.11-alpha RENDER-PIPELINE-NOTE: PlayLayer::postUpdate is the authoritative 180-update sample clock. CCDirector::drawScene is supplementary; zero drawSceneFrames means its callback was not observed and no draw-path coverage is claimed. Cocos callback times are inclusive and nested; do not sum them. Subphase timing samples every {}th callback and is CPU-only, not GPU execution time.",
             kRenderPipelineTimingStride
         );
+    }
+
+    void finishRendererPipelineSampleIfReady() {
+        if (!g_rendererProfile.active || g_rendererProfile.finalReported ||
+            g_rendererProfile.updateFrames < kRenderPipelineSampleFrames) {
+            return;
+        }
+
+        g_rendererProfile.finalReported = true;
+        g_rendererProfile.active = false;
+        reportRendererPipeline("FINAL");
+        reportObjectVisualHierarchy(g_profile.layer);
+        reportObjectSectionLayout(g_profile.layer);
     }
 
     void startRendererPipelineSample(PlayLayer* layer) {
@@ -2264,11 +2282,13 @@ class $modify(OptGodPlayLayer, PlayLayer) {
             (!g_diagnosticsEnabled && !g_cullingTelemetryEnabled && !rendererUpdateSample)) {
             PlayLayer::postUpdate(dt);
             recordRenderPipelineUpdate(rendererUpdateSample, rendererUpdateStart, dt);
+            finishRendererPipelineSampleIfReady();
             return;
         }
         if (!g_diagnosticsEnabled) {
             PlayLayer::postUpdate(dt);
             recordRenderPipelineUpdate(rendererUpdateSample, rendererUpdateStart, dt);
+            finishRendererPipelineSampleIfReady();
             advanceCullingTelemetry();
             return;
         }
@@ -2289,6 +2309,7 @@ class $modify(OptGodPlayLayer, PlayLayer) {
 
         PlayLayer::postUpdate(dt);
         recordRenderPipelineUpdate(rendererUpdateSample, rendererUpdateStart, dt);
+        finishRendererPipelineSampleIfReady();
         advanceCullingTelemetry();
         // Fallback if the scene stops issuing CCNode::visit callbacks.
         // Normally the first node visit after update 600 emits the final report.
@@ -2420,12 +2441,6 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
                     g_rendererProfile.frames, g_rendererProfile.updateFrames,
                     g_rendererProfile.active
                 );
-            }
-            if (g_rendererProfile.frames >= kRenderPipelineSampleFrames) {
-                g_rendererProfile.active = false;
-                reportRendererPipeline("FINAL");
-                reportObjectVisualHierarchy(g_profile.layer);
-                reportObjectSectionLayout(g_profile.layer);
             }
         }
         // Do not run the compute probe inside a measured DrawScene interval.
@@ -2649,7 +2664,10 @@ $on_mod(Loaded) {
         g_playLayerVisibilityHookReady = ensureHook(
             g_playLayerVisibilityHook, "PlayLayer::updateVisibility (visibility subphase)"
         );
-        g_renderPipelineHooksReady = nodeReady && drawSceneReady && postUpdateReady &&
+        // drawScene is supplementary: its optional hook can be enabled by
+        // Geode without receiving callbacks on the Android runtime. The
+        // confirmed postUpdate path owns sample completion.
+        g_renderPipelineHooksReady = nodeReady && postUpdateReady &&
             spriteReady && batchReady && atlasQuadsReady && atlasCountReady;
         log::info(
             "DashCore 0.10.11-alpha RENDER-PIPELINE-HOOKS: requested=true, nodeVisit={}, drawScene={}, postUpdate={}, spriteDraw={}, batchDraw={}, atlasDrawQuads={}, atlasDrawNumberOfQuads={}, baseGameLayerUpdate={}, playLayerUpdateVisibility={}, ready={}.",
