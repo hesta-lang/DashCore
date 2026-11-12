@@ -1,5 +1,5 @@
 
-name: DashCore AutoTest - FPS Without Mod vs With DashCore
+name: DashCore AutoTest - Baseline vs DashCore Culling OFF/ON
 
 on:
   workflow_run:
@@ -214,6 +214,14 @@ jobs:
           from pathlib import Path
           profile = module.load_device_profile(Path("profiles/huawei-y9s.json"))
           assert profile["profile_id"] == "huawei-y9s", profile.get("profile_id")
+          sample_culling_log = """
+          setupHasCompleted; diagnostics=OFF, static-culling-requested=true, static-culling-active=true.
+          DashCore 0.9.6-alpha CULL-STATS frames=120, visitedGameObjects=1000, eligibleObjects=500, culledObjects=12.
+          """
+          culling_state = module.parse_culling_runtime(sample_culling_log)
+          assert culling_state["active_confirmed"] is True, culling_state
+          assert culling_state["frames"] == 120 and culling_state["culled_objects"] == 12, culling_state
+          print("Culling runtime log parser self-test passed.")
           sample_guest = {
               "android_api_level": "30",
               "primary_abi": "arm64-v8a",
@@ -280,7 +288,7 @@ jobs:
           print(f"Portrait ADB input coordinate mapping self-test passed: {portrait_tap}.")
           PY
 
-      - name: Run baseline vs DashCore FPS benchmark
+      - name: Run baseline, culling-OFF and culling-ON FPS benchmark
         env:
           SERIAL: ${{ steps.device.outputs.serial }}
         run: |
