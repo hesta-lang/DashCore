@@ -31,7 +31,7 @@ jobs:
       - name: Run Cppcheck and CPU profile unit tests
         run: |
           sudo apt-get update
-          sudo apt-get install -y cppcheck
+          sudo apt-get install -y cppcheck python3-pil
           cppcheck \
             --enable=warning,performance,portability \
             --inline-suppr \
