@@ -620,7 +620,7 @@ def wait_for_main_menu(serial: str, mode: str, variant_dir: pathlib.Path,
     raise RuntimeError(f"{mode}: timed out waiting for main menu after handling NOTICE; last OCR text: {last_text[:500]!r}")
 
 def parse_culling_runtime(log_text: str) -> dict[str, Any]:
-    """Read requested/active state and telemetry from Geode logs."""
+    """Parse culling activation, sample totals, per-reason counts and nearest candidate."""
     activations = re.findall(
         r"static-culling-requested=(true|false),\s*static-culling-active=(true|false)",
         log_text, re.IGNORECASE
@@ -629,10 +629,61 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
         r"CULL-STATS frames=(\d+),\s*warmupFrames=(\d+),\s*visitedGameObjects=(\d+),\s*eligibleObjects=(\d+),\s*culledObjects=(\d+)",
         log_text, re.IGNORECASE
     )
+    reason_keys = (
+        "visited", "eligible", "protected_effect", "protected_trigger",
+        "protected_grouped", "protected_rotating", "missing_director",
+        "invalid_content_size", "invalid_anchor", "invalid_world_bounds",
+        "invalid_viewport", "within_guard_band", "offscreen_x",
+        "offscreen_y", "offscreen_both",
+    )
+    reason_pattern = (
+        r"CULL-REASONS visited=(\d+),\s*eligible=(\d+),"
+        r"\s*protectedEffect=(\d+),\s*protectedTrigger=(\d+),"
+        r"\s*protectedGrouped=(\d+),\s*protectedRotating=(\d+),"
+        r"\s*missingDirector=(\d+),\s*invalidContentSize=(\d+),"
+        r"\s*invalidAnchor=(\d+),\s*invalidWorldBounds=(\d+),"
+        r"\s*invalidViewport=(\d+),\s*withinGuardBand=(\d+),"
+        r"\s*offscreenX=(\d+),\s*offscreenY=(\d+),\s*offscreenBoth=(\d+)"
+    )
+    reason_samples = re.findall(reason_pattern, log_text, re.IGNORECASE)
+    nearest_samples = re.findall(
+        r"CULL-NEAREST: found=(true|false),\s*guardClearance=(-?[\d.]+),"
+        r"\s*objectID=(-?\d+),\s*bounds=\(([-\d.]+),([-\d.]+)\)-\(([-\d.]+),([-\d.]+)\)",
+        log_text, re.IGNORECASE
+    )
+
     requested, active = activations[-1] if activations else ("false", "false")
     frames, warmup_frames, visited, eligible, culled = (
         map(int, samples[-1]) if samples else (0, 0, 0, 0, 0)
     )
+    reasons = dict(zip(reason_keys, map(int, reason_samples[-1]))) if reason_samples else {
+        key: 0 for key in reason_keys
+    }
+    protected_total = sum(reasons[key] for key in (
+        "protected_effect", "protected_trigger", "protected_grouped", "protected_rotating"
+    ))
+    bounds_total = sum(reasons[key] for key in (
+        "missing_director", "invalid_content_size", "invalid_anchor",
+        "invalid_world_bounds", "invalid_viewport", "within_guard_band",
+        "offscreen_x", "offscreen_y", "offscreen_both"
+    ))
+    observed_culled = reasons["offscreen_x"] + reasons["offscreen_y"] + reasons["offscreen_both"]
+    reason_totals_match = bool(reason_samples and samples) and (
+        reasons["visited"] == visited
+        and reasons["eligible"] == eligible
+        and protected_total + bounds_total == visited
+        and bounds_total == eligible
+        and observed_culled == culled
+    )
+    nearest = None
+    if nearest_samples:
+        found, clearance, object_id, min_x, min_y, max_x, max_y = nearest_samples[-1]
+        nearest = {
+            "found": found.lower() == "true",
+            "guard_clearance": float(clearance),
+            "object_id": int(object_id),
+            "bounds": [float(min_x), float(min_y), float(max_x), float(max_y)],
+        }
     return {
         "activation_report_found": bool(activations),
         "requested": requested.lower() == "true",
@@ -645,6 +696,13 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
         "eligible_objects": eligible,
         "culled_objects": culled,
         "actual_culling_observed": culled > 0,
+        "reason_report_found": bool(reason_samples),
+        "reason_counts": reasons,
+        "protected_objects_total": protected_total,
+        "eligible_reason_total": bounds_total,
+        "reason_culled_total": observed_culled,
+        "reason_totals_match": reason_totals_match,
+        "nearest_guard_band_candidate": nearest,
     }
 
 
@@ -762,7 +820,10 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
         "activation_report_found": False, "requested": False, "active": False,
         "active_confirmed": False, "stats_sample_count": 0, "frames": 0,
         "visited_game_objects": 0, "eligible_objects": 0, "culled_objects": 0,
-        "actual_culling_observed": False,
+        "actual_culling_observed": False, "reason_report_found": False,
+        "reason_counts": {}, "protected_objects_total": 0,
+        "eligible_reason_total": 0, "reason_culled_total": 0,
+        "reason_totals_match": False, "nearest_guard_band_candidate": None,
     }
     (variant_dir / "combined-geode-log.txt").write_text(combined)
     screenshot(serial, f"dashcore-{mode.lower()}-final.png", variant_dir / "final-screen.png")
@@ -921,6 +982,8 @@ def write_culling_report(args: argparse.Namespace, disabled: dict[str, Any],
         and on_runtime.get("frames", 0) >= 120
         and on_runtime.get("visited_game_objects", 0) > 0
         and on_runtime.get("eligible_objects", 0) > 0
+        and on_runtime.get("reason_report_found") is True
+        and on_runtime.get("reason_totals_match") is True
     )
     actually_culled = activation_valid and on_runtime.get("culled_objects", 0) > 0
     status = (
@@ -968,6 +1031,14 @@ def write_culling_report(args: argparse.Namespace, disabled: dict[str, Any],
         f"- Visited GameObjects: {on_runtime.get('visited_game_objects')}",
         f"- Eligible static GameObjects: {on_runtime.get('eligible_objects')}",
         f"- Culled GameObjects: {on_runtime.get('culled_objects')}",
+        f"- Per-reason diagnostic present / internally consistent: {on_runtime.get('reason_report_found')} / {on_runtime.get('reason_totals_match')}",
+        f"- Protected objects (effect/trigger/grouped/rotating): {on_runtime.get('protected_objects_total')}",
+        f"- Eligible objects classified by bounds reason: {on_runtime.get('eligible_reason_total')}",
+        f"- Culled-by-axis count (X/Y/both): {on_runtime.get('reason_culled_total')}",
+        f"- Bounds rejection reasons: {json.dumps(on_runtime.get('reason_counts', {}), sort_keys=True)}",
+        f"- Nearest guard-band candidate: {json.dumps(on_runtime.get('nearest_guard_band_candidate'), sort_keys=True)}",
+        "",
+        "The per-reason report must classify every visited GameObject exactly once and reconcile eligible/culled totals with CULL-STATS. Missing or inconsistent reason telemetry makes the culling validation INCOMPLETE, not inconclusive.",
         "",
         "VALID_WITH_SKIPS requires the culling hook to be requested and active, at least 600 completed warmup frames, a separate 120-frame telemetry window, and at least one skipped GameObject. If the hook is active but the level gives no safe skip candidate, the result is INCONCLUSIVE rather than a claimed optimization.",
         "",
