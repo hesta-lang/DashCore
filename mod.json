@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.9.7-alpha",
+  "version": "0.9.8-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.9.7-alpha: samples culling behavior after a 600-frame gameplay warmup, then measures a bounded 120-frame window.",
+  "description": "DashCore 0.9.8-alpha: reports why each eligible object is retained or culled, with nearest guard-band candidate diagnostics after a 600+120-frame sample.",
   "tags": [
     "optimizations",
     "performance"
