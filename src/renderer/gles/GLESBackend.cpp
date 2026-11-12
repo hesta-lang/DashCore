@@ -15,7 +15,14 @@ bool GLESBackend::initialize() {
 
 #if defined(__ANDROID__)
     auto const* version = reinterpret_cast<char const*>(glGetString(GL_VERSION));
-    auto const* extensions = reinterpret_cast<char const*>(glGetString(GL_EXTENSIONS));
+    // GLES 3.x requires glGetStringi for extensions; this backend does not
+    // depend on optional extensions on those versions, because VBOs/VAOs are
+    // core and compute/SSBO are detected from the 3.1 version itself.
+    auto const baseCapabilities =
+        core::parseGlesCapabilities(version, nullptr, version != nullptr);
+    auto const* extensions = baseCapabilities.majorVersion < 3
+        ? reinterpret_cast<char const*>(glGetString(GL_EXTENSIONS))
+        : nullptr;
     m_capabilities = core::parseGlesCapabilities(version, extensions, version != nullptr);
     if (!m_capabilities.contextAvailable || !m_capabilities.supportsBufferObjects) {
         return false;
