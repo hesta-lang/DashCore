@@ -1,5 +1,13 @@
 # DashCore — Android rendering optimization
 
+## 0.10.12-alpha — update-clocked diagnostic completion
+
+- Completes the 180-update diagnostic sample from the confirmed `PlayLayer::postUpdate` path instead of waiting for the optional `CCDirector::drawScene` callback.
+- Reports `drawSceneFrames` and `sampleCoverage` separately. An `update-only` result is explicitly not a draw-path or GPU measurement.
+- Keeps scene hierarchy and section-container inventories read-only and bounded.
+- No rendering, gameplay, physics, draw-order, or UI changes. This is diagnostic-only; no performance improvement is claimed.
+
+
 ## 0.10.11-alpha — render-sample progress and AutoTest completion visibility
 
 - Adds sparse progress markers for the opt-in drawScene and postUpdate diagnostic sample.
