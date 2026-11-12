@@ -230,3 +230,17 @@ La evidencia consultada favorece investigar primero el renderer original de Coco
 `GameObject / sprites hijos → CCNode tree y secciones → CCSpriteBatchNode / CCTextureAtlas → draw`
 
 El inventario no modifica código de ejecución ni activa una optimización. Es la base técnica para la siguiente etapa de instrumentación y análisis.
+
+## 10. Runtime render-pipeline diagnostics in DashCore 0.10.5-alpha
+
+DashCore now has a separate Geode setting, `render-pipeline-diagnostics`, default OFF. When enabled and all optional hooks are available, it collects a single 180-frame sample after `PlayLayer::setupHasCompleted()`.
+
+The diagnostic hooks observe:
+- `CCNode::visit()`: total node traversal calls.
+- `CCSprite::draw()`: base CCSprite draw calls (derived classes that override draw without calling the base may not be counted here).
+- `CCSpriteBatchNode::draw()`: batch draw calls.
+- `CCTextureAtlas::drawQuads()` and `drawNumberOfQuads(unsigned int)`: atlas submission entry points.
+
+Counts cover the complete 180-frame sample. Durations are measured every 8th frame. Callback timings are inclusive and nested: sprite/atlas/batch work can occur under a node traversal and draw-scene callback, so their totals overlap and must not be added together. The draw-scene CPU duration is reported separately; this instrumentation does not measure GPU execution time.
+
+The hooks are registered with auto-enable OFF and are enabled only when the setting is explicitly requested. Missing required hooks reject the renderer profile rather than emitting a partial report. The normal renderer calls are always forwarded unchanged. This mode is diagnostic only and intentionally adds overhead while active; it does not enable culling or assert an FPS improvement.

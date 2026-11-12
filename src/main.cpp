@@ -1476,7 +1476,7 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
     }
 
     void visit() {
-        RenderCallScope renderCall(
+        [[maybe_unused]] RenderCallScope renderCall(
             g_rendererProfile.nodeVisit,
             g_generalEnabled && g_rendererProfile.active,
             g_rendererProfile.sampleThisFrame
@@ -1600,7 +1600,7 @@ class $modify(OptGodCCSprite, cocos2d::CCSprite) {
     }
 
     void draw() {
-        RenderCallScope renderCall(
+        [[maybe_unused]] RenderCallScope renderCall(
             g_rendererProfile.spriteDraw,
             g_generalEnabled && g_rendererProfile.active,
             g_rendererProfile.sampleThisFrame
@@ -1615,7 +1615,7 @@ class $modify(OptGodCCSpriteBatchNode, cocos2d::CCSpriteBatchNode) {
     }
 
     void draw() {
-        RenderCallScope renderCall(
+        [[maybe_unused]] RenderCallScope renderCall(
             g_rendererProfile.batchDraw,
             g_generalEnabled && g_rendererProfile.active,
             g_rendererProfile.sampleThisFrame
@@ -1633,7 +1633,7 @@ class $modify(OptGodCCTextureAtlas, cocos2d::CCTextureAtlas) {
     }
 
     void drawQuads() {
-        RenderCallScope renderCall(
+        [[maybe_unused]] RenderCallScope renderCall(
             g_rendererProfile.atlasDrawQuads,
             g_generalEnabled && g_rendererProfile.active,
             g_rendererProfile.sampleThisFrame
@@ -1642,7 +1642,7 @@ class $modify(OptGodCCTextureAtlas, cocos2d::CCTextureAtlas) {
     }
 
     void drawNumberOfQuads(unsigned int numberOfQuads) {
-        RenderCallScope renderCall(
+        [[maybe_unused]] RenderCallScope renderCall(
             g_rendererProfile.atlasDrawNumberOfQuads,
             g_generalEnabled && g_rendererProfile.active,
             g_rendererProfile.sampleThisFrame
@@ -1858,7 +1858,7 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
 
         bool const profiling = g_diagnosticsEnabled && g_profile.layer != nullptr &&
             g_profile.drawFrames < kFramesToMeasure;
-        auto const start = Clock::now();
+        auto const start = profiling ? Clock::now() : Clock::time_point{};
 
         if (profiling && g_profile.previousDrawScene.time_since_epoch().count() != 0) {
             auto const gapUs = static_cast<std::int64_t>(

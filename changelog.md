@@ -1,3 +1,11 @@
+## 0.10.5-alpha — read-only render-pipeline instrumentation
+- Adds a separate OFF-by-default Render Pipeline Diagnostics setting for the Cocos/Geometry Dash rendering path.
+- Registers optional hooks for `CCNode::visit`, `CCSprite::draw`, `CCSpriteBatchNode::draw`, `CCTextureAtlas::drawQuads` and `CCTextureAtlas::drawNumberOfQuads`; all are auto-disabled until explicitly requested.
+- Collects call counts over a bounded 180-frame gameplay sample and callback timings every 8th frame to limit measurement overhead.
+- Reports inclusive nested callback times separately; these values must not be summed and do not measure GPU execution time.
+- Does not skip or change any original rendering calls, sprite order, object visibility, gameplay, or UI. Experimental static culling remains OFF by default.
+- Adds a build-time contract test for the optional hooks and their default-off state. Android64 compilation and device validation are still required; no performance improvement is claimed.
+
 ## 0.10.4-alpha — PlayLayer object-array coverage and player safety
 - Adds a separate diagnostic census of `PlayLayer::m_objects` and compares it with the PlayLayer child-tree traversal. AutoTest #224 found only two GameObjects in the child-tree snapshot, so the tree alone was not sufficient evidence of full level-object coverage.
 - Uses the object array for read-only GPU visibility probe inputs and a second bounds comparison; the child-tree scan remains for coverage comparison.

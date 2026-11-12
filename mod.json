@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.10.4-alpha",
+  "version": "0.10.5-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.10.4-alpha: compares the PlayLayer child tree with the PlayLayer::m_objects inventory, reports camera metadata, and protects PlayerObject from experimental culling. Diagnostics are read-only; culling remains OFF by default.",
+  "description": "DashCore 0.10.5-alpha: adds opt-in read-only render-pipeline profiling for Cocos nodes, sprites, sprite batches and texture-atlas draw calls. Existing rendering behavior is unchanged; diagnostics and experimental culling remain OFF by default.",
   "tags": [
     "optimizations",
     "performance"
@@ -35,6 +35,12 @@
       "type": "bool",
       "name": "Performance Diagnostics",
       "description": "Enables the 600-frame timing sample, scene-graph scans and one-time GLES probes. When OFF, high-frequency diagnostic hooks remain registered but auto-disabled, avoiding their per-frame/per-node detour overhead. Turn ON only when collecting a Geode log.",
+      "default": false
+    },
+    "render-pipeline-diagnostics": {
+      "type": "bool",
+      "name": "Render Pipeline Diagnostics (alpha)",
+      "description": "Collects read-only counts for CCNode::visit, CCSprite::draw, CCSpriteBatchNode::draw and CCTextureAtlas draw calls for 180 gameplay frames. Callback timings are sampled every 8 frames. Hooks remain disabled when OFF. This adds instrumentation overhead while ON; it does not change rendering or measure GPU execution time.",
       "default": false
     }
   }
