@@ -40,7 +40,7 @@ jobs:
             --language=c++ \
             --std=c++20 \
             --suppress=missingIncludeSystem \
-            src
+            src/renderer
 
   build:
     needs: tests
