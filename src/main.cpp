@@ -1106,6 +1106,10 @@ class $modify(OptGodPlayLayer, PlayLayer) {
                         g_cullingFrames, g_cullingVisitedObjects,
                         g_cullingEligibleObjects, g_cullingCulledObjects
                     );
+                    // Stop per-object counters after the first bounded sample. Culling
+                    // remains active; later timed measurements avoid counter overhead.
+                    g_cullingTelemetryEnabled = false;
+                    log::info("DashCore 0.9.6-alpha CULL-TELEMETRY: first 120 update frames captured; per-object counters are now off.");
                 }
             }
             return;
