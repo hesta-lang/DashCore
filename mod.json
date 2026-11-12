@@ -40,7 +40,7 @@
     "render-pipeline-diagnostics": {
       "type": "bool",
       "name": "Render Pipeline Diagnostics (alpha)",
-      "description": "Collects a read-only 180-update CPU sample driven by PlayLayer::postUpdate, plus optional Cocos callback timings. CCDirector::drawScene is supplementary and may be unavailable on Android; the final report states draw-path coverage separately. Hooks remain disabled when OFF. This does not measure GPU execution time or change rendering, gameplay, or UI.",
+      "description": "Collects a read-only CPU sample over 180 gameplay frames, driven by PlayLayer::postUpdate, plus optional Cocos callback timings. CCDirector::drawScene is supplementary and may be unavailable on Android; the final report states draw-path coverage separately. Hooks remain disabled when OFF. It does not change rendering, gameplay, or UI and does not measure GPU execution time.",
       "default": false
     }
   }
