@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.10.1-alpha",
+  "version": "0.10.2-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.10.1-alpha: adds read-only GameObject geometry diagnostics scheduled from PlayLayer::postUpdate after 600 gameplay updates; culling remains opt-in; experimental culling remains opt-in.",
+  "description": "DashCore 0.10.2-alpha: adds read-only GameObject geometry diagnostics scheduled from PlayLayer::postUpdate after 600 gameplay updates; culling remains opt-in; experimental culling remains opt-in.",
   "tags": [
     "optimizations",
     "performance"

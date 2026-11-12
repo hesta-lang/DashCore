@@ -1,6 +1,6 @@
 # DashCore — Android rendering optimization
 
-## 0.10.1-alpha — Android geometry-scan scheduling fix
+## 0.10.2-alpha — Android geometry-scan scheduling fix
 
 - Moves the isolated, read-only scene-geometry scan to the confirmed `PlayLayer::postUpdate` hook after 600 gameplay updates.
 - Keeps `CCDirector::drawScene` as optional timing telemetry; Android builds no longer depend on that hook being invoked to produce geometry diagnostics.

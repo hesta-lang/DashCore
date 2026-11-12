@@ -1,3 +1,8 @@
+## 0.10.2-alpha — Android chrono portability fix
+- Replaces the `std::chrono::microseconds` alias at both geometry timing sites with an explicit microsecond duration type, avoiding the Android64 Clang failure reported by build #35.
+- Keeps the diagnostic scheduling change from 0.10.1-alpha; scene inspection remains read-only and experimental culling remains OFF by default.
+- Validation build only. No performance improvement is claimed; physical Huawei Y9s validation remains required.
+
 ## 0.10.1-alpha — Android diagnostic scheduling
 - Moves the final read-only scene-geometry scan from the `CCDirector::drawScene` callback to `PlayLayer::postUpdate` after 600 confirmed gameplay updates.
 - The Android AutoTest confirmed that `PlayLayer::postUpdate` ran 600 updates while the hooked `CCDirector::drawScene` callback did not reach its 600-frame completion path. This caused the previous diagnostic timeout.
