@@ -1,3 +1,11 @@
+## 0.9.8-alpha — categorized culling rejection diagnostics
+- Adds mutually exclusive per-GameObject telemetry for protected effects, triggers, grouped objects and rotating objects, plus missing director, invalid content size, invalid anchor, invalid world bounds and invalid viewport outcomes.
+- Splits safe eligible candidates into within-guard-band, offscreen-X, offscreen-Y and offscreen-both categories, with counts reconciled against the existing visited/eligible/culled totals.
+- Records the eligible GameObject closest to crossing the existing 125% guard band, including object ID, world-space bounds and clearance.
+- Extends AutoTest to parse, reconcile and report all rejection categories; missing or inconsistent diagnostic output now makes culling validation INCOMPLETE.
+- Does not change the culling threshold, eligibility rules, renderer path or default setting. Experimental culling remains OFF by default.
+- Cloud testing remains diagnostic only; physical Huawei Y9s visual and performance validation is required before any optimization claim.
+
 ## 0.9.7-alpha — delayed culling telemetry window
 - Waits for 600 completed gameplay updates after level setup before starting culling telemetry, avoiding the initial level-construction and camera-settling period.
 - Collects visited, eligible, and actually skipped GameObject counts only during the following 120 gameplay-frame visits; the sample reports its warmup and measurement windows separately.
