@@ -640,8 +640,8 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
         r"CULL-REASONS visited=(\d+),\s*eligible=(\d+),"
         r"\s*protectedEffect=(\d+),\s*protectedTrigger=(\d+),"
         r"\s*protectedGrouped=(\d+),\s*protectedRotating=(\d+),"
-        r"\s*missingDirector=(\d+),\s*invalidContentSize=(\d+),"
-        r"\s*invalidAnchor=(\d+),\s*invalidWorldBounds=(\d+),"
+        r"\s*missingDirector=(\d+),\s*contentSizeFallbacks=(\d+),"
+        r"\s*invalidBoundingRect=(\d+),\s*invalidAnchor=(\d+),\s*invalidWorldBounds=(\d+),"
         r"\s*invalidViewport=(\d+),\s*withinGuardBand=(\d+),"
         r"\s*offscreenX=(\d+),\s*offscreenY=(\d+),\s*offscreenBoth=(\d+)"
     )
@@ -663,7 +663,7 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
         "protected_effect", "protected_trigger", "protected_grouped", "protected_rotating"
     ))
     bounds_total = sum(reasons[key] for key in (
-        "missing_director", "invalid_content_size", "invalid_anchor",
+        "missing_director", "invalid_bounding_rect", "invalid_anchor",
         "invalid_world_bounds", "invalid_viewport", "within_guard_band",
         "offscreen_x", "offscreen_y", "offscreen_both"
     ))
@@ -1140,7 +1140,7 @@ def main() -> int:
     )
     reason_fields = (
         "protected_effect", "protected_trigger", "protected_grouped", "protected_rotating",
-        "missing_director", "invalid_content_size", "invalid_anchor", "invalid_world_bounds",
+        "missing_director", "content_size_fallbacks", "invalid_bounding_rect", "invalid_anchor", "invalid_world_bounds",
         "invalid_viewport", "within_guard_band", "offscreen_x", "offscreen_y", "offscreen_both",
     )
     culling_reason_totals = {
