@@ -16,6 +16,7 @@
 #include <vector>
 #include <fstream>
 #include <string>
+#include <string_view>
 
 using namespace geode::prelude;
 
@@ -87,6 +88,11 @@ namespace {
     bool g_cullingRequested = false;
     bool g_lastEngineInitFlag = false;
     bool g_gpuObjectProbeStarted = false;
+    bool g_cullingTelemetryEnabled = false;
+    std::uint64_t g_cullingFrames = 0;
+    std::uint64_t g_cullingVisitedObjects = 0;
+    std::uint64_t g_cullingEligibleObjects = 0;
+    std::uint64_t g_cullingCulledObjects = 0;
 
     // High-frequency hooks are opt-in: when diagnostics are OFF, these hooks
     // are not installed, removing their detour overhead from normal gameplay.
@@ -94,17 +100,47 @@ namespace {
     Hook* g_postUpdateHook = nullptr;
     Hook* g_drawSceneHook = nullptr;
 
-    void enableDiagnosticHook(Hook* hook, char const* name) {
+    bool enableDiagnosticHook(Hook* hook, char const* name) {
         if (!hook) {
-            log::error("DashCore 0.9.5-alpha: diagnostic hook '{}' was not registered.", name);
-            return;
+            log::warn("DashCore 0.9.6-alpha: hook '{}' is unavailable; the dependent feature remains disabled.", name);
+            return false;
         }
         auto result = hook->enable();
         if (!result) {
-            log::error("DashCore 0.9.5-alpha: could not enable diagnostic hook '{}'.", name);
-            return;
+            log::error("DashCore 0.9.6-alpha: could not enable hook '{}'.", name);
+            return false;
         }
-        log::info("DashCore 0.9.5-alpha: diagnostic hook '{}' enabled.", name);
+        log::info("DashCore 0.9.6-alpha: hook '{}' enabled.", name);
+        return true;
+    }
+
+    // Do not guess the generated hook-map key. Geode stores the actual method
+    // display name in each Modify instance; Cocos class names may be qualified.
+    template <typename Modify>
+    Hook* registerOptionalHook(Modify& self, std::string_view methodSuffix, char const* label) {
+        auto const hooks = self.getAllHooks();
+        for (auto* hook : hooks) {
+            if (hook && hook->getDisplayName().find(methodSuffix) != std::string_view::npos) {
+                hook->setAutoEnable(false);
+                log::info(
+                    "DashCore 0.9.6-alpha: registered hook '{}' with auto-enable OFF.",
+                    hook->getDisplayName()
+                );
+                return hook;
+            }
+        }
+
+        std::string available;
+        for (auto* hook : hooks) {
+            if (!hook) continue;
+            if (!available.empty()) available += ", ";
+            available += hook->getDisplayName();
+        }
+        log::error(
+            "DashCore 0.9.6-alpha: hook '{}' is absent from the modify registry; available hooks=[{}].",
+            label, available
+        );
+        return nullptr;
     }
 
     // First experimental stage: skip only the draw traversal of distant,
@@ -333,7 +369,7 @@ namespace {
 
     void reportBoundsCandidate(char const* name, BoundsCandidateStats const& s) {
         log::info(
-            "DashCore 0.9.5-alpha BOUNDS {}: objects={}, valid={}, invalid={}, visibleWithMargin={}, offscreenWithMargin={}, extents=({:.1f},{:.1f})-({:.1f},{:.1f}).",
+            "DashCore 0.9.6-alpha BOUNDS {}: objects={}, valid={}, invalid={}, visibleWithMargin={}, offscreenWithMargin={}, extents=({:.1f},{:.1f})-({:.1f},{:.1f}).",
             name, s.objects, s.valid, s.invalid, s.visible, s.offscreen,
             s.valid ? s.minX : 0.f, s.valid ? s.minY : 0.f,
             s.valid ? s.maxX : 0.f, s.valid ? s.maxY : 0.f
@@ -425,7 +461,7 @@ namespace {
                 auto const samplePos = object->getPosition();
                 auto const sampleWorld = sampleParent ? sampleParent->convertToWorldSpace(samplePos) : samplePos;
                 if (object->isTrigger() && stats.triggerSamples < 16) {
-                    log::info("DashCore 0.9.5-alpha TRIGGER-SAMPLE {}: classType={}, groups={}, parent={}, pos=({:.2f},{:.2f}), world=({:.2f},{:.2f}), rect=({:.2f},{:.2f},{:.2f},{:.2f}), scale=({:.3f},{:.3f}), rotation={:.2f}.",
+                    log::info("DashCore 0.9.6-alpha TRIGGER-SAMPLE {}: classType={}, groups={}, parent={}, pos=({:.2f},{:.2f}), world=({:.2f},{:.2f}), rect=({:.2f},{:.2f},{:.2f},{:.2f}), scale=({:.3f},{:.3f}), rotation={:.2f}.",
                         stats.triggerSamples, static_cast<int>(object->m_classType), object->m_groupCount,
                         sampleParent != nullptr, samplePos.x, samplePos.y, sampleWorld.x, sampleWorld.y,
                         rect.origin.x, rect.origin.y, rect.size.width, rect.size.height,
@@ -433,7 +469,7 @@ namespace {
                     ++stats.triggerSamples;
                 }
                 if (object->m_groupCount > 0 && stats.groupedSamples < 8) {
-                    log::info("DashCore 0.9.5-alpha GROUPED-SAMPLE {}: trigger={}, classType={}, groups={}, parent={}, pos=({:.2f},{:.2f}), world=({:.2f},{:.2f}), rect=({:.2f},{:.2f},{:.2f},{:.2f}), scale=({:.3f},{:.3f}), rotation={:.2f}.",
+                    log::info("DashCore 0.9.6-alpha GROUPED-SAMPLE {}: trigger={}, classType={}, groups={}, parent={}, pos=({:.2f},{:.2f}), world=({:.2f},{:.2f}), rect=({:.2f},{:.2f},{:.2f},{:.2f}), scale=({:.3f},{:.3f}), rotation={:.2f}.",
                         stats.groupedSamples, object->isTrigger(), static_cast<int>(object->m_classType),
                         object->m_groupCount, sampleParent != nullptr, samplePos.x, samplePos.y,
                         sampleWorld.x, sampleWorld.y, rect.origin.x, rect.origin.y, rect.size.width,
@@ -443,7 +479,7 @@ namespace {
                 // Sample IDs only after the native trigger predicate identifies a trigger;
                 // this avoids spending the bounded sample on unrelated early objects.
                 if (object->isTrigger() && objectIdSamples < 24) {
-                    log::info("DashCore 0.9.5-alpha TRIGGER-ID-SAMPLE {}: objectID={}, isTrigger={}, classType={}, groups={}, effect={}.",
+                    log::info("DashCore 0.9.6-alpha TRIGGER-ID-SAMPLE {}: objectID={}, isTrigger={}, classType={}, groups={}, effect={}.",
                         objectIdSamples, objectID, object->isTrigger(), classType,
                         object->m_groupCount, object->m_classType == GameObjectClassType::Effect);
                     ++objectIdSamples;
@@ -454,7 +490,7 @@ namespace {
                     auto const parent = object->getParent();
                     auto const anchorWorld = parent ? parent->convertToWorldSpace(pos) : pos;
                     log::info(
-                        "DashCore 0.9.5-alpha OBJECT-SAMPLE {}: trigger={}, classType={}, groups={}, parent={}, pos=({:.2f},{:.2f}), worldAnchor=({:.2f},{:.2f}), rect=({:.2f},{:.2f},{:.2f},{:.2f}), objectScale=({:.3f},{:.3f}), objectRotation={:.2f}, parentScale=({:.3f},{:.3f}), parentRotation={:.2f}.",
+                        "DashCore 0.9.6-alpha OBJECT-SAMPLE {}: trigger={}, classType={}, groups={}, parent={}, pos=({:.2f},{:.2f}), worldAnchor=({:.2f},{:.2f}), rect=({:.2f},{:.2f},{:.2f},{:.2f}), objectScale=({:.3f},{:.3f}), objectRotation={:.2f}, parentScale=({:.3f},{:.3f}), parentRotation={:.2f}.",
                         detailedSamples, object->isTrigger(),
                         static_cast<int>(object->m_classType), object->m_groupCount,
                         parent != nullptr, pos.x, pos.y, anchorWorld.x, anchorWorld.y,
@@ -548,7 +584,7 @@ namespace {
 
     void reportObjectGeometry(ObjectGeometryStats const& s) {
         log::info(
-            "DashCore 0.9.5-alpha OBJECT-GEOMETRY: scannedNodes={}, objects={}, triggers={}, triggerSamples={}, effects={}, grouped={}, groupedSamples={}, ungrouped={}, groupCountRange={}-{}, parentless={}, selfHidden={}, ancestorHidden={}, invalidRect={}, zeroRect={}, negativeRect={}, invalidContent={}, zeroContent={}, scaled={}, rotated={}, maxAbsRotation={:.2f}, scaleMagnitudeRange={:.3f}-{:.3f}, rawRectCandidateOffscreen(trigger/effect/grouped/ordinary)={}/{}/{}/{}, centerComparisons={}, centerDeltaAvg={:.3f}, centerDeltaMax={:.3f}.",
+            "DashCore 0.9.6-alpha OBJECT-GEOMETRY: scannedNodes={}, objects={}, triggers={}, triggerSamples={}, effects={}, grouped={}, groupedSamples={}, ungrouped={}, groupCountRange={}-{}, parentless={}, selfHidden={}, ancestorHidden={}, invalidRect={}, zeroRect={}, negativeRect={}, invalidContent={}, zeroContent={}, scaled={}, rotated={}, maxAbsRotation={:.2f}, scaleMagnitudeRange={:.3f}-{:.3f}, rawRectCandidateOffscreen(trigger/effect/grouped/ordinary)={}/{}/{}/{}, centerComparisons={}, centerDeltaAvg={:.3f}, centerDeltaMax={:.3f}.",
             s.scannedNodes, s.objects, s.triggers, s.triggerSamples, s.effects, s.grouped, s.groupedSamples,
             s.ungrouped, s.objects ? s.minGroupCount : 0u, s.maxGroupCount, s.parentless, s.selfHidden, s.ancestorHidden,
             s.invalidRect, s.zeroRect, s.negativeRect, s.invalidContent,
@@ -565,17 +601,17 @@ namespace {
         for (auto const& [objectID, count] : s.objectIDCounts) {
             auto const triggerIt = s.triggerObjectIDCounts.find(objectID);
             auto const triggerCount = triggerIt == s.triggerObjectIDCounts.end() ? 0u : triggerIt->second;
-            log::info("DashCore 0.9.5-alpha OBJECT-ID: objectID={}, objects={}, isTriggerTrue={}",
+            log::info("DashCore 0.9.6-alpha OBJECT-ID: objectID={}, objects={}, isTriggerTrue={}",
                 objectID, count, triggerCount);
         }
         for (auto const& [type, count] : s.classTypeCounts) {
             auto const triggerIt = s.triggerClassTypeCounts.find(type);
             auto const triggerCount = triggerIt == s.triggerClassTypeCounts.end() ? 0u : triggerIt->second;
-            log::info("DashCore 0.9.5-alpha OBJECT-TYPE: classType={}, objects={}, isTriggerTrue={}.",
+            log::info("DashCore 0.9.6-alpha OBJECT-TYPE: classType={}, objects={}, isTriggerTrue={}.",
                 type, count, triggerCount);
         }
         if (s.triggers == 0) {
-            log::info("DashCore 0.9.5-alpha TRIGGER-DIAGNOSTIC: isTrigger() returned false for every GameObject in this snapshot; this does not prove the level has no trigger objects.");
+            log::info("DashCore 0.9.6-alpha TRIGGER-DIAGNOSTIC: isTrigger() returned false for every GameObject in this snapshot; this does not prove the level has no trigger objects.");
         }
     }
 
@@ -716,7 +752,7 @@ namespace {
                 if (child) pending.emplace_back(child, entry.second + 1);
             }
         }
-        log::info("DashCore 0.9.5-alpha GPU-INPUT-CLASSIFICATION: source=node-local-content-world, all-grouped-forced-visible: objects={}, triggers={}, effects={}, grouped={}, groupedNearProtected={}, groupedFarCandidate={}, parentlessForcedVisible={}, invalidBoundsForcedVisible={}. Flags: forceVisible=bit0, trigger=bit1, effect=bit2, grouped=bit3, groupedNear=bit4, parentless=bit5, invalidBounds=bit6.",
+        log::info("DashCore 0.9.6-alpha GPU-INPUT-CLASSIFICATION: source=node-local-content-world, all-grouped-forced-visible: objects={}, triggers={}, effects={}, grouped={}, groupedNearProtected={}, groupedFarCandidate={}, parentlessForcedVisible={}, invalidBoundsForcedVisible={}. Flags: forceVisible=bit0, trigger=bit1, effect=bit2, grouped=bit3, groupedNear=bit4, parentless=bit5, invalidBounds=bit6.",
             result.size(), triggerCount, effectCount, groupedCount, groupedNearCount, groupedFarCount,
             parentlessCount, invalidBoundsCount);
         return result;
@@ -724,7 +760,7 @@ namespace {
 
     void reportSceneGraph(char const* stage) {
         log::info(
-            "DashCore 0.9.5-alpha SCENE-GRAPH {}: scans={}, nodes={}, gameObjects={}, effects={}, grouped={}, hiddenGameObjects={}, maxChildren={}, maxDepth={}, lastScan={}us, engineInitFlag={}.",
+            "DashCore 0.9.6-alpha SCENE-GRAPH {}: scans={}, nodes={}, gameObjects={}, effects={}, grouped={}, hiddenGameObjects={}, maxChildren={}, maxDepth={}, lastScan={}us, engineInitFlag={}.",
             stage, g_profile.sceneScans, g_profile.sceneNodes,
             g_profile.sceneGameObjects, g_profile.sceneEffectObjects,
             g_profile.sceneGroupedObjects, g_profile.sceneHiddenGameObjects,
@@ -767,7 +803,7 @@ namespace {
 
     void logBuckets(char const* label, Buckets const& b) {
         log::info(
-            "DashCore 0.9.5-alpha {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
+            "DashCore 0.9.6-alpha {} buckets: <=2ms={}, 2-4ms={}, 4-8ms={}, 8-16ms={}, 16-25ms={}, >25ms={}.",
             label, b[0], b[1], b[2], b[3], b[4], b[5]
         );
     }
@@ -783,7 +819,7 @@ namespace {
                        std::vector<std::int64_t> const& samples,
                        std::uint32_t over50ms, std::uint32_t over100ms) {
         log::info(
-            "DashCore 0.9.5-alpha {} callback intervals: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}, >50ms={}, >100ms={}, p50={}us, p95={}us, p99={}us.",
+            "DashCore 0.9.6-alpha {} callback intervals: <=16.67ms={}, 16.67-25ms={}, 25-50ms={}, 50-100ms={}, >100ms={}, >50ms={}, >100ms={}, p50={}us, p95={}us, p99={}us.",
             label, b[0], b[1], b[2], b[3], b[4], over50ms, over100ms,
             gapPercentile(samples, 50), gapPercentile(samples, 95), gapPercentile(samples, 99)
         );
@@ -792,7 +828,7 @@ namespace {
     void maybeFinishProfile() {
         if (g_profile.updateFrames >= kFramesToMeasure &&
             g_profile.drawFrames >= kFramesToMeasure) {
-            log::info("DashCore 0.9.5-alpha: both 600-frame samples complete; diagnostic-only.");
+            log::info("DashCore 0.9.6-alpha: both 600-frame samples complete; diagnostic-only.");
             g_profile.layer = nullptr;
         }
     }
@@ -800,7 +836,7 @@ namespace {
     void reportUpdateProfile(char const* stage) {
         if (g_profile.updateFrames == 0) return;
         log::info(
-            "DashCore 0.9.5-alpha UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, callbackGap>50ms={}, callbackGap>100ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
+            "DashCore 0.9.6-alpha UPDATE {}: frames={}, avg={}us, max={}us, over8ms={}, callbackGap>50ms={}, callbackGap>100ms={}, maxGap={}us, dtRange={:.4f}-{:.4f}s.",
             stage, g_profile.updateFrames,
             g_profile.totalPostUpdateUs / g_profile.updateFrames,
             g_profile.maxPostUpdateUs, g_profile.slowPostUpdates,
@@ -813,7 +849,7 @@ namespace {
     }
 
     void reportVisitCost(char const* stage) {
-        log::info("DashCore 0.9.5-alpha NODE-VISIT-COST {}: sampledNodeVisits={}, inclusiveTotal={}us, inclusiveMax={}us, sampledGameObjectVisits={}, gameObjectInclusiveTotal={}us, gameObjectInclusiveMax={}us. Inclusive totals overlap nested parent/child visits and must not be added to DrawScene CPU time.",
+        log::info("DashCore 0.9.6-alpha NODE-VISIT-COST {}: sampledNodeVisits={}, inclusiveTotal={}us, inclusiveMax={}us, sampledGameObjectVisits={}, gameObjectInclusiveTotal={}us, gameObjectInclusiveMax={}us. Inclusive totals overlap nested parent/child visits and must not be added to DrawScene CPU time.",
             stage, g_profile.sampledVisitCalls, g_profile.sampledVisitTotalUs,
             g_profile.sampledVisitMaxUs, g_profile.sampledGameObjectVisits,
             g_profile.sampledGameObjectVisitTotalUs, g_profile.sampledGameObjectVisitMaxUs);
@@ -821,7 +857,7 @@ namespace {
 
     void reportCullStats(char const* stage) {
         log::info(
-            "DashCore 0.9.5-alpha CULL {}: requested={}, active={}, frames={}, visited={}, eligible={}, protectedEffect={}, protectedTrigger={}, protectedGroupedNear={}, eligibleGroupedFar={}, culledGroupedFar={}, boundsChecks={}, culled={}.",
+            "DashCore 0.9.6-alpha CULL {}: requested={}, active={}, frames={}, visited={}, eligible={}, protectedEffect={}, protectedTrigger={}, protectedGroupedNear={}, eligibleGroupedFar={}, culledGroupedFar={}, boundsChecks={}, culled={}.",
             stage, g_cullingRequested, g_cullingEnabled, g_profile.drawFrames,
             g_profile.visitedObjects, g_profile.eligibleObjects,
             g_profile.protectedEffectObjects, g_profile.protectedTriggerObjects,
@@ -833,7 +869,7 @@ namespace {
     void reportDrawProfile(char const* stage) {
         if (g_profile.drawFrames == 0) return;
         log::info(
-            "DashCore 0.9.5-alpha DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, callbackGap>50ms={}, callbackGap>100ms={}, maxGap={}us. GPU execution time is not measured.",
+            "DashCore 0.9.6-alpha DRAWSCENE-CPU {}: frames={}, avg={}us, max={}us, over8ms={}, callbackGap>50ms={}, callbackGap>100ms={}, maxGap={}us. GPU execution time is not measured.",
             stage, g_profile.drawFrames,
             g_profile.totalDrawSceneUs / g_profile.drawFrames,
             g_profile.maxDrawSceneUs, g_profile.slowDrawScenes,
@@ -871,13 +907,7 @@ namespace {
 // with Geode's runtime type information before applying the culling test.
 class $modify(OptGodCCNode, cocos2d::CCNode) {
     static void onModify(auto& self) {
-        auto result = self.getHook("CCNode::visit");
-        if (!result) {
-            log::error("DashCore 0.9.5-alpha: could not register CCNode::visit diagnostic hook.");
-            return;
-        }
-        g_nodeVisitHook = result.unwrap();
-        g_nodeVisitHook->setAutoEnable(false);
+        g_nodeVisitHook = registerOptionalHook(self, "::visit", "CCNode::visit");
     }
 
     void visit() {
@@ -938,6 +968,9 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
             return;
         }
 
+        if (g_cullingEnabled && g_cullingTelemetryEnabled) {
+            ++g_cullingVisitedObjects;
+        }
         if (sampleVisit) ++g_profile.visitedObjects;
 
         bool const isEffect = object->m_classType == GameObjectClassType::Effect;
@@ -945,6 +978,9 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
         bool const isGrouped = object->m_groupCount > 0;
         bool const hasRotateAction = object->getHasRotateAction();
         bool const eligible = !isEffect && !isTrigger && !isGrouped && !hasRotateAction;
+        if (g_cullingEnabled && g_cullingTelemetryEnabled && eligible) {
+            ++g_cullingEligibleObjects;
+        }
 
         // Every diagnostic category is counted on exactly the same sampled
         // visits, so the totals are comparable instead of mixing one-frame
@@ -971,6 +1007,7 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
         // Only ordinary, ungrouped, non-animated objects can be skipped.
         // Triggers, effects, grouped objects and rotating objects retain vanilla draws.
         if (eligible && shouldCullObject(object)) {
+            if (g_cullingTelemetryEnabled) ++g_cullingCulledObjects;
             if (sampleVisit) {
                 ++g_profile.culledObjects;
                 if (isGrouped) ++g_profile.culledGroupedFarObjects;
@@ -984,13 +1021,7 @@ class $modify(OptGodCCNode, cocos2d::CCNode) {
 
 class $modify(OptGodPlayLayer, PlayLayer) {
     static void onModify(auto& self) {
-        auto result = self.getHook("PlayLayer::postUpdate");
-        if (!result) {
-            log::error("DashCore 0.9.5-alpha: could not register PlayLayer::postUpdate diagnostic hook.");
-            return;
-        }
-        g_postUpdateHook = result.unwrap();
-        g_postUpdateHook->setAutoEnable(false);
+        g_postUpdateHook = registerOptionalHook(self, "::postUpdate", "PlayLayer::postUpdate");
     }
 
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
@@ -998,6 +1029,10 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         g_profile = {};
         g_gpuObjectProbeStarted = false;
         g_cullingEnabled = false;
+        g_cullingFrames = 0;
+        g_cullingVisitedObjects = 0;
+        g_cullingEligibleObjects = 0;
+        g_cullingCulledObjects = 0;
         g_lastEngineInitFlag = dontCreateObjects;
         if (!g_diagnosticsEnabled) {
             bool const result = PlayLayer::init(level, useReplay, dontCreateObjects);
@@ -1014,12 +1049,12 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         if (result) {
             rememberLastPlayedLevel(level);
             log::info(
-                "DashCore 0.9.5-alpha: PlayLayer::init={}us ({}ms), levelID={}, replay={}, engineInitFlag={}. ",
+                "DashCore 0.9.6-alpha: PlayLayer::init={}us ({}ms), levelID={}, replay={}, engineInitFlag={}. ",
                 elapsedUs, elapsedUs / 1000, level ? level->m_levelID : 0,
                 useReplay, dontCreateObjects
             );
         } else {
-            log::warn("DashCore 0.9.5-alpha: PlayLayer::init failed after {}us.", elapsedUs);
+            log::warn("DashCore 0.9.6-alpha: PlayLayer::init failed after {}us.", elapsedUs);
         }
         return result;
     }
@@ -1031,9 +1066,8 @@ class $modify(OptGodPlayLayer, PlayLayer) {
         }
         if (!g_diagnosticsEnabled) {
             PlayLayer::setupHasCompleted();
-            g_cullingRequested = Mod::get()->getSettingValue<bool>("experimental-render-culling");
             g_cullingEnabled = g_cullingRequested;
-            log::info("DashCore 0.9.5-alpha: setupHasCompleted; diagnostics=OFF, static-culling-requested={}, static-culling-active={}.",
+            log::info("DashCore 0.9.6-alpha: setupHasCompleted; diagnostics=OFF, static-culling-requested={}, static-culling-active={}.",
                 g_cullingRequested, g_cullingEnabled);
             return;
         }
@@ -1045,21 +1079,35 @@ class $modify(OptGodPlayLayer, PlayLayer) {
 
         g_profile = {};
         g_profile.layer = this;
-        g_cullingRequested = Mod::get()->getSettingValue<bool>("experimental-render-culling");
+        // g_cullingRequested is resolved once during mod load, including the AutoTest override.
         // Culling is opt-in and limited to ordinary, ungrouped, non-animated objects.
         // All uncertain object classes continue through the original renderer.
         g_cullingEnabled = g_cullingRequested;
         g_profile.engineInitFlag = g_lastEngineInitFlag;
         log::info(
-            "DashCore 0.9.5-alpha: setupHasCompleted={}us ({}ms); culling-requested={}, culling-active={}, engineInitFlag={} (raw engine argument; not a gameplay-mode detector). Experimental static-object culling is opt-in; protected objects always use vanilla rendering.",
+            "DashCore 0.9.6-alpha: setupHasCompleted={}us ({}ms); culling-requested={}, culling-active={}, engineInitFlag={} (raw engine argument; not a gameplay-mode detector). Experimental static-object culling is opt-in; protected objects always use vanilla rendering.",
             elapsedUs, elapsedUs / 1000, g_cullingRequested, g_cullingEnabled,
             g_profile.engineInitFlag
         );
     }
 
     void postUpdate(float dt) {
-        if (!g_generalEnabled || !g_diagnosticsEnabled) {
+        if (!g_generalEnabled || (!g_diagnosticsEnabled && !g_cullingTelemetryEnabled)) {
             PlayLayer::postUpdate(dt);
+            return;
+        }
+        if (!g_diagnosticsEnabled) {
+            PlayLayer::postUpdate(dt);
+            if (g_cullingEnabled && g_cullingTelemetryEnabled) {
+                ++g_cullingFrames;
+                if (g_cullingFrames % 120 == 0) {
+                    log::info(
+                        "DashCore 0.9.6-alpha CULL-STATS frames={}, visitedGameObjects={}, eligibleObjects={}, culledObjects={}.",
+                        g_cullingFrames, g_cullingVisitedObjects,
+                        g_cullingEligibleObjects, g_cullingCulledObjects
+                    );
+                }
+            }
             return;
         }
         bool const profiling = g_profile.layer == this &&
@@ -1157,13 +1205,7 @@ class $modify(OptGodMenuLayer, MenuLayer) {
 
 class $modify(OptGodDirector, cocos2d::CCDirector) {
     static void onModify(auto& self) {
-        auto result = self.getHook("CCDirector::drawScene");
-        if (!result) {
-            log::error("DashCore 0.9.5-alpha: could not register CCDirector::drawScene diagnostic hook.");
-            return;
-        }
-        g_drawSceneHook = result.unwrap();
-        g_drawSceneHook->setAutoEnable(false);
+        g_drawSceneHook = registerOptionalHook(self, "::drawScene", "CCDirector::drawScene");
     }
 
     void drawScene() {
@@ -1264,7 +1306,7 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
             auto const visibleSize = director->getVisibleSize();
             auto const visibleOrigin = director->getVisibleOrigin();
             log::info(
-                "DashCore 0.9.5-alpha VIEWPORT-SPACE: winSize=({:.2f},{:.2f}), visibleOrigin=({:.2f},{:.2f}), visibleSize=({:.2f},{:.2f}), contentScaleFactor={:.3f}. World-space object bounds are diagnostic only; camera translation/zoom is not yet applied to the culling candidate.",
+                "DashCore 0.9.6-alpha VIEWPORT-SPACE: winSize=({:.2f},{:.2f}), visibleOrigin=({:.2f},{:.2f}), visibleSize=({:.2f},{:.2f}), contentScaleFactor={:.3f}. World-space object bounds are diagnostic only; camera translation/zoom is not yet applied to the culling candidate.",
                 screen.width, screen.height, visibleOrigin.x, visibleOrigin.y,
                 visibleSize.width, visibleSize.height, director->getContentScaleFactor()
             );
@@ -1277,11 +1319,11 @@ class $modify(OptGodDirector, cocos2d::CCDirector) {
             auto const geometryUs = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - geometryStart).count();
 
             log::info(
-                "DashCore 0.9.5-alpha DIAGNOSTIC-COST: sceneScan={}us, gpuInputCollection={}us, boundsValidation={}us, objectGeometry={}us, gpuInputs={}, boundsObjects={}.",
+                "DashCore 0.9.6-alpha DIAGNOSTIC-COST: sceneScan={}us, gpuInputCollection={}us, boundsValidation={}us, objectGeometry={}us, gpuInputs={}, boundsObjects={}.",
                 scanUs, collectUs, boundsUs, geometryUs, inputs.size(), bounds.scannedGameObjects
             );
             log::info(
-                "DashCore 0.9.5-alpha BISMUTH-CULL: same-frame traversal check; boundsSource=node-local-content-world, groupedPolicy=force-visible; rootChildren={}, scannedNodes={}, scannedGameObjects={}, collectedGameObjects={}, boundsScannedNodes={}, boundsScannedObjects={}, geometryScannedNodes={}, geometryObjects={}, traversalDelta={}.",
+                "DashCore 0.9.6-alpha BISMUTH-CULL: same-frame traversal check; boundsSource=node-local-content-world, groupedPolicy=force-visible; rootChildren={}, scannedNodes={}, scannedGameObjects={}, collectedGameObjects={}, boundsScannedNodes={}, boundsScannedObjects={}, geometryScannedNodes={}, geometryObjects={}, traversalDelta={}.",
                 root->getChildrenCount(), scan.nodes, scan.gameObjects,
                 inputs.size(), bounds.scannedNodes, bounds.scannedGameObjects,
                 geometry.scannedNodes, geometry.objects,
@@ -1304,8 +1346,29 @@ $on_mod(Loaded) {
     g_generalEnabled = Mod::get()->getSettingValue<bool>("general-enable");
     g_diagnosticsEnabled = Mod::get()->getSettingValue<bool>("diagnostics-enable");
     g_cullingRequested = Mod::get()->getSettingValue<bool>("experimental-render-culling");
-    log::info("DashCore 0.9.5-alpha GENERAL-ENABLE: {}.", g_generalEnabled ? "ON" : "OFF");
-    log::info("DashCore 0.9.5-alpha PERFORMANCE-DIAGNOSTICS: {}.",
+    auto const cullingModePath = Mod::get()->getConfigDir(true) / "static-culling-mode.txt";
+    std::ifstream cullingModeFile(cullingModePath.string());
+    std::string cullingMode;
+    bool const hasCullingModeOverride = static_cast<bool>(cullingModeFile >> cullingMode);
+    g_cullingTelemetryEnabled = hasCullingModeOverride;
+    if (hasCullingModeOverride) {
+        if (cullingMode == "on" || cullingMode == "1") {
+            g_cullingRequested = true;
+        } else if (cullingMode == "off" || cullingMode == "0") {
+            g_cullingRequested = false;
+        } else {
+            log::warn("DashCore 0.9.6-alpha CULLING-MODE: unrecognized override '{}'; using Geode setting.", cullingMode);
+            g_cullingTelemetryEnabled = false;
+        }
+    }
+    log::info(
+        "DashCore 0.9.6-alpha CULLING-MODE: mode={}, source={}, config={}.",
+        g_cullingRequested ? "ON" : "OFF",
+        hasCullingModeOverride ? "file" : "Geode-setting",
+        cullingModePath.string()
+    );
+    log::info("DashCore 0.9.6-alpha GENERAL-ENABLE: {}.", g_generalEnabled ? "ON" : "OFF");
+    log::info("DashCore 0.9.6-alpha PERFORMANCE-DIAGNOSTICS: {}.",
         g_diagnosticsEnabled ? "ON" : "OFF");
     // AutoTest can compare the same binary in ON/OFF mode after a full restart.
     // Missing or unrecognized files keep the production default enabled.
@@ -1319,27 +1382,46 @@ $on_mod(Loaded) {
         } else if (requestedMode == "on" || requestedMode == "1") {
             g_fastPathEnabled = true;
         } else {
-            log::warn("DashCore 0.9.5-alpha FAST-PATH: unknown mode '{}'; keeping default ON.", requestedMode);
+            log::warn("DashCore 0.9.6-alpha FAST-PATH: unknown mode '{}'; keeping default ON.", requestedMode);
         }
     }
     log::info(
-        "DashCore 0.9.5-alpha FAST-PATH: mode={}, source={}, config={}.",
+        "DashCore 0.9.6-alpha FAST-PATH: mode={}, source={}, config={}.",
         g_fastPathEnabled ? "ON" : "OFF",
         hasModeOverride ? "file" : "default",
         modePath.string()
     );
     if (g_generalEnabled) {
-        if (g_diagnosticsEnabled || g_cullingRequested) {
-            enableDiagnosticHook(g_nodeVisitHook, "CCNode::visit");
-        }
         if (g_diagnosticsEnabled) {
+            bool const nodeReady = enableDiagnosticHook(g_nodeVisitHook, "CCNode::visit");
             enableDiagnosticHook(g_postUpdateHook, "PlayLayer::postUpdate");
             enableDiagnosticHook(g_drawSceneHook, "CCDirector::drawScene");
+            if (g_cullingRequested && !nodeReady) {
+                g_cullingRequested = false;
+                log::error("DashCore 0.9.6-alpha: experimental culling refused because CCNode::visit could not be enabled.");
+            }
+        } else if (g_cullingRequested) {
+            bool const nodeReady = enableDiagnosticHook(g_nodeVisitHook, "CCNode::visit");
+            bool const telemetryReady = !g_cullingTelemetryEnabled ||
+                enableDiagnosticHook(g_postUpdateHook, "PlayLayer::postUpdate");
+            if (!nodeReady || !telemetryReady) {
+                g_cullingRequested = false;
+                g_cullingTelemetryEnabled = false;
+                if (g_nodeVisitHook && g_nodeVisitHook->isEnabled()) {
+                    auto const disabled = g_nodeVisitHook->disable();
+                    (void)disabled;
+                }
+                if (g_postUpdateHook && g_postUpdateHook->isEnabled()) {
+                    auto const disabled = g_postUpdateHook->disable();
+                    (void)disabled;
+                }
+                log::error("DashCore 0.9.6-alpha: experimental culling refused because its required hook(s) could not be enabled.");
+            }
         }
     } else {
-        log::info("DashCore 0.9.5-alpha: all DashCore hooks remain disabled by General Enable.");
+        log::info("DashCore 0.9.6-alpha: all DashCore hooks remain disabled by General Enable.");
     }
     log::info(
-        "DashCore 0.9.5-alpha: diagnostics and experimental static-object culling are opt-in."
+        "DashCore 0.9.6-alpha: diagnostics and experimental static-object culling are opt-in."
     );
 }
