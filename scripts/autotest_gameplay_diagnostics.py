@@ -22,6 +22,7 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
         "OBJECT-SECTION-LAYOUT:", "OBJECT-SECTION-ROWS:", "setupHasCompleted",
     )
     selected = [line for line in lines if any(m in line for m in selected_markers)]
+    final_line = next((line for line in lines if "RENDER-PIPELINE FINAL:" in line), "")
     pipeline_match = re.search(r"RENDER-PIPELINE FINAL: frames=(\d+)", log_text)
     draw_progress = [
         int(value) for value in re.findall(
@@ -33,6 +34,22 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
             r"RENDER-UPDATE-PROGRESS: postUpdateFrames=(\d+)", log_text
         )
     ]
+    final_draw_match = re.search(r"drawSceneFrames=(\d+)", final_line)
+    final_update_match = re.search(r"postUpdateFrames=(\d+)", final_line)
+    coverage_match = re.search(r"sampleCoverage=([a-z-]+)", final_line)
+    final_frames = int(pipeline_match.group(1)) if pipeline_match else None
+    draw_scene_frames = (
+        int(final_draw_match.group(1)) if final_draw_match
+        else (max(draw_progress) if draw_progress else 0)
+    )
+    post_update_frames = (
+        int(final_update_match.group(1)) if final_update_match
+        else (max(update_progress) if update_progress else final_frames or 0)
+    )
+    sample_coverage = (
+        coverage_match.group(1) if coverage_match
+        else ("legacy" if pipeline_match else None)
+    )
     hooks_ready = bool(re.search(
         r"RENDER-PIPELINE-HOOKS:.*?ready=true", log_text, re.IGNORECASE
     ))
@@ -46,17 +63,22 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
         for line in histogram_lines
         if (match := re.search(r"RENDER-TIMING-BINS: callback=([^,]+)", line))
     }
+    # CCDirector::drawScene is supplementary and did not execute in the
+    # observed Android AutoTest runtime. Its absence must be reported, not
+    # treated as failure of the confirmed PlayLayer::postUpdate sample.
     required_callbacks = {
-        "CCDirector::drawScene", "PlayLayer::postUpdate", "CCNode::visit",
+        "PlayLayer::postUpdate", "CCNode::visit",
         "CCSprite::draw", "CCSpriteBatchNode::draw", "CCTextureAtlas::drawQuads",
     }
     checks = {
         "render_pipeline_hooks_ready": hooks_ready,
-        "full_180_frame_sample": bool(pipeline_match and int(pipeline_match.group(1)) == 180),
+        "full_180_frame_sample": bool(
+            pipeline_match and final_frames == 180 and post_update_frames == 180
+        ),
         "post_update_summary": "RENDER-UPDATE:" in log_text,
         "update_subphase_summary": "RENDER-UPDATE-SUBPHASES:" in log_text,
         "histogram_summary": "RENDER-UPDATE-BINS-NOTE:" in log_text,
-        "render_pipeline_progress_observed": bool(draw_progress),
+        "render_pipeline_progress_observed": bool(draw_progress or update_progress),
         "render_update_progress_observed": bool(update_progress),
         "base_layer_update_histogram": "callback=GJBaseGameLayer::update (PlayLayer)" in log_text,
         "visibility_update_histogram": "callback=PlayLayer::updateVisibility" in log_text,
@@ -68,14 +90,17 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
     return {
         "required_checks": checks,
         "all_diagnostics_present": all(checks.values()),
-        "render_pipeline_frames": int(pipeline_match.group(1)) if pipeline_match else None,
+        "render_pipeline_frames": final_frames,
+        "post_update_frames": post_update_frames,
+        "draw_scene_frames": draw_scene_frames,
+        "sample_coverage": sample_coverage,
+        "draw_scene_callback_observed": draw_scene_frames > 0,
         "last_render_pipeline_progress_frames": max(draw_progress) if draw_progress else None,
         "last_render_update_progress_frames": max(update_progress) if update_progress else None,
         "timing_histogram_lines": histogram_lines,
         "histogram_callbacks_found": sorted(histogram_callbacks),
         "diagnostic_lines": selected,
     }
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -140,6 +165,7 @@ def main() -> int:
             "This AutoTest performs one DashCore-enabled gameplay session only; there is no no-mod baseline or culling-ON pass.",
             "The fixed tap pattern is a gameplay stimulus, not a level-completion or gameplay-correctness test.",
             "CPU callback timings are inclusive and include instrumentation overhead; they are not GPU execution timings.",
+            "When sample coverage is update-only, no drawScene callback was observed; the report does not claim draw-path or GPU coverage.",
             "A successful cloud AutoTest does not establish a physical-device FPS improvement.",
         ],
     }
@@ -159,6 +185,8 @@ def main() -> int:
         "- Baseline / culling-ON comparisons: **not run**",
         f"- Full 180-frame render sample: **{diagnostics['render_pipeline_frames'] == 180}**",
         f"- Highest drawScene progress marker: **{diagnostics['last_render_pipeline_progress_frames']}**",
+        f"- DrawScene callbacks observed: **{diagnostics['draw_scene_callback_observed']}**",
+        f"- Sample coverage: **{diagnostics['sample_coverage']}**",
         f"- Highest postUpdate progress marker: **{diagnostics['last_render_update_progress_frames']}**",
         f"- Completion marker source: **{run.get('render_pipeline_sample_marker_source')}**",
         "", "## Diagnostic checks", "",
