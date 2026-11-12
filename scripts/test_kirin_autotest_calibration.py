@@ -56,6 +56,32 @@ def make_profile():
 
 
 class PhysicalCpuReferenceTests(unittest.TestCase):
+    def test_culling_parser_reconciles_protected_player_counter(self):
+        sample = """
+        setupHasCompleted; diagnostics=OFF, static-culling-requested=true, static-culling-active=true.
+        DashCore 0.10.4-alpha CULL-STATS frames=120, warmupFrames=600, visitedGameObjects=1000, eligibleObjects=500, culledObjects=12.
+        DashCore 0.10.4-alpha CULL-REASONS visited=1000, eligible=500, protectedPlayer=10, protectedEffect=90, protectedTrigger=150, protectedGrouped=200, protectedRotating=50, missingDirector=0, contentSizeFallbacks=500, invalidBoundingRect=0, invalidAnchor=0, invalidWorldBounds=0, invalidViewport=0, withinGuardBand=488, offscreenX=4, offscreenY=5, offscreenBoth=3.
+        DashCore 0.10.4-alpha CULL-NEAREST: found=true, guardClearance=2.50, objectID=42, bounds=(1.00,2.00)-(3.00,4.00).
+        """
+        result = AUTOTEST.parse_culling_runtime(sample)
+        self.assertTrue(result["active_confirmed"], result)
+        self.assertTrue(result["reason_report_found"], result)
+        self.assertEqual(result["reason_counts"]["protected_player"], 10)
+        self.assertEqual(result["protected_objects_total"], 500)
+        self.assertEqual(result["eligible_reason_total"], 500)
+        self.assertTrue(result["reason_totals_match"], result)
+        self.assertEqual(result["reason_culled_total"], 12)
+
+    def test_culling_parser_rejects_legacy_reason_line_without_player_field(self):
+        sample = """
+        setupHasCompleted; diagnostics=OFF, static-culling-requested=true, static-culling-active=true.
+        DashCore 0.10.3-alpha CULL-STATS frames=120, warmupFrames=600, visitedGameObjects=1000, eligibleObjects=500, culledObjects=12.
+        DashCore 0.10.3-alpha CULL-REASONS visited=1000, eligible=500, protectedEffect=100, protectedTrigger=150, protectedGrouped=200, protectedRotating=50, missingDirector=0, contentSizeFallbacks=500, invalidBoundingRect=0, invalidAnchor=0, invalidWorldBounds=0, invalidViewport=0, withinGuardBand=488, offscreenX=4, offscreenY=5, offscreenBoth=3.
+        """
+        result = AUTOTEST.parse_culling_runtime(sample)
+        self.assertFalse(result["reason_report_found"], result)
+        self.assertFalse(result["reason_totals_match"], result)
+
     def test_uses_selected_physical_sample_and_medians(self):
         result = build_physical_cpu_reference(make_profile())
         self.assertEqual(result["status"], "PHYSICAL_REFERENCE_CONTEXT_ONLY")

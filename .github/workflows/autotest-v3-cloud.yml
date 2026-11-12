@@ -217,7 +217,7 @@ jobs:
           sample_culling_log = """
           setupHasCompleted; diagnostics=OFF, static-culling-requested=true, static-culling-active=true.
           DashCore 0.9.9-alpha CULL-STATS frames=120, warmupFrames=600, visitedGameObjects=1000, eligibleObjects=500, culledObjects=12.
-          DashCore 0.9.9-alpha CULL-REASONS visited=1000, eligible=500, protectedEffect=100, protectedTrigger=150, protectedGrouped=200, protectedRotating=50, missingDirector=0, contentSizeFallbacks=500, invalidBoundingRect=0, invalidAnchor=0, invalidWorldBounds=0, invalidViewport=0, withinGuardBand=488, offscreenX=4, offscreenY=5, offscreenBoth=3.
+          DashCore 0.10.4-alpha CULL-REASONS visited=1000, eligible=500, protectedPlayer=10, protectedEffect=90, protectedTrigger=150, protectedGrouped=200, protectedRotating=50, missingDirector=0, contentSizeFallbacks=500, invalidBoundingRect=0, invalidAnchor=0, invalidWorldBounds=0, invalidViewport=0, withinGuardBand=488, offscreenX=4, offscreenY=5, offscreenBoth=3.
           DashCore 0.9.9-alpha CULL-NEAREST: found=true, guardClearance=2.50, objectID=42, bounds=(1.00,2.00)-(3.00,4.00).
           """
           culling_state = module.parse_culling_runtime(sample_culling_log)
@@ -226,6 +226,8 @@ jobs:
           assert culling_state["frames"] == 120 and culling_state["culled_objects"] == 12, culling_state
           assert culling_state["reason_report_found"] is True, culling_state
           assert culling_state["reason_totals_match"] is True, culling_state
+          assert culling_state["reason_counts"]["protected_player"] == 10, culling_state
+          assert culling_state["protected_objects_total"] == 500, culling_state
           assert culling_state["reason_counts"]["within_guard_band"] == 488, culling_state
           assert culling_state["reason_counts"]["content_size_fallbacks"] == 500, culling_state
           assert culling_state["nearest_guard_band_candidate"]["object_id"] == 42, culling_state
