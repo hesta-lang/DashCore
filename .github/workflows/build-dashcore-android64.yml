@@ -11,6 +11,7 @@ on:
       - ".github/PULL_REQUEST_TEMPLATE.md"
       - ".github/workflows/build-android64.yml"
       - ".github/workflows/autotest-v3-cloud.yml"
+      - "scripts/autotest_ab.py"
   workflow_dispatch:
 
 # Keep the build workflow isolated from the retired workflow and let an active build finish.
