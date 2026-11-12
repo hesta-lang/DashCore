@@ -4,44 +4,12 @@
     "android": "2.2081"
   },
   "id": "hesta.optgod",
-  "name": "DashCore",
-  "version": "0.10.11-alpha",
+  "name": "DashCore Experimental Renderer",
+  "version": "0.11.0-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.10.11-alpha: adds sparse drawScene/postUpdate progress markers and live AutoTest completion detection for the 180-frame diagnostic sample. No rendering or gameplay changes; diagnostics and experimental culling default OFF.",
+  "description": "Experimental Android renderer foundation for Geometry Dash level objects. This prerelease builds a read-only parallel data pipeline while the original Geometry Dash renderer remains the only visible draw path. No draw replacement or performance gain is claimed in this stage.",
   "tags": [
     "optimizations",
     "performance"
-  ],
-  "settings": {
-    "general-enable": {
-      "type": "bool",
-      "name": "General Enable",
-      "description": "Master switch for DashCore. When disabled, the mod stays loaded in Geode but bypasses its hooks, profiling, diagnostics, and automatic last-level loading.",
-      "default": true
-    },
-    "experimental-render-culling": {
-      "type": "bool",
-      "name": "Experimental static-object culling (alpha)",
-      "description": "Opt-in Bismuth-inspired CPU visibility culling for ordinary static objects outside an expanded viewport. Triggers, effects, grouped objects, rotating objects and invalid bounds remain visible. Restart Geometry Dash after changing this setting. Experimental; keep OFF if you notice missing objects or visual changes.",
-      "default": false
-    },
-    "load-last-level": {
-      "type": "bool",
-      "name": "Load last played level on startup",
-      "description": "Automatically opens the last supported standard level after the main menu loads. If it cannot be found, the main menu remains available.",
-      "default": true
-    },
-    "diagnostics-enable": {
-      "type": "bool",
-      "name": "Performance Diagnostics",
-      "description": "Enables the 600-frame timing sample, scene-graph scans and one-time GLES probes. When OFF, high-frequency diagnostic hooks remain registered but auto-disabled, avoiding their per-frame/per-node detour overhead. Turn ON only when collecting a Geode log.",
-      "default": false
-    },
-    "render-pipeline-diagnostics": {
-      "type": "bool",
-      "name": "Render Pipeline Diagnostics (alpha)",
-      "description": "Collects sampled CPU timing for PlayLayer::postUpdate and Cocos render/update callbacks over 180 gameplay frames, reports mutually exclusive duration histograms, then performs read-only GameObject hierarchy and section-container censuses. Hooks remain disabled when OFF. Adds opt-in instrumentation overhead but does not change rendering, gameplay, or UI and does not measure GPU execution time.",
-      "default": false
-    }
-  }
+  ]
 }

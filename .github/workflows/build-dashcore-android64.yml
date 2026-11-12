@@ -1,39 +1,38 @@
-name: Build DashCore (Android64)
-
-# Rebuild on diagnostics-only AutoTest harness updates so workflow_run tests the exact current scripts.
+name: Build DashCore Experimental Renderer (Android64)
 
 on:
   push:
-    branches: ["**"]
-    # The .geode artifact is unchanged by documentation-only edits.
+    branches: ["experimental-renderer"]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/PULL_REQUEST_TEMPLATE.md"
-      - ".github/workflows/build-android64.yml"
-      - ".github/workflows/autotest-v3-cloud.yml"
   workflow_dispatch:
 
-# Keep the build workflow isolated from the retired workflow and let an active build finish.
 concurrency:
-  group: dashcore-android64-${{ github.ref }}
+  group: dashcore-experimental-renderer-android64
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  build:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run Cppcheck and CPU profile unit tests
+      - name: Run renderer contract and host-model tests
+        run: |
+          python3 -m py_compile scripts/test_renderer_product_contract.py
+          python3 scripts/test_renderer_product_contract.py
+          c++ -std=c++20 -Wall -Wextra -Werror -Isrc tests/renderer_model_tests.cpp src/renderer/core/*.cpp -o /tmp/dashcore-renderer-model-tests
+          /tmp/dashcore-renderer-model-tests
+
+      - name: Run Cppcheck
         run: |
           sudo apt-get update
-          sudo apt-get install -y cppcheck python3-pil
+          sudo apt-get install -y cppcheck
           cppcheck \
             --enable=warning,performance,portability \
             --inline-suppr \
@@ -41,20 +40,14 @@ jobs:
             --language=c++ \
             --std=c++20 \
             --suppress=missingIncludeSystem \
-            --suppress=syntaxError:src/main.cpp \
             src
-          cppcheck \
-            --enable=warning,performance,portability \
-            --error-exitcode=1 \
-            --language=c \
-            --std=c11 \
-            --suppress=missingIncludeSystem \
-            tools/kirin_cpu_bench.c
-          python3 -m py_compile scripts/kirin_cpu_profile.py scripts/test_kirin_cpu_profile.py scripts/autotest_ab.py scripts/autotest_gameplay_diagnostics.py scripts/test_gameplay_diagnostics_autotest.py scripts/kirin_autotest_calibration.py scripts/test_kirin_autotest_calibration.py scripts/test_render_pipeline_contract.py
-          python3 -m unittest scripts/test_kirin_cpu_profile.py -v
-          python3 scripts/test_kirin_autotest_calibration.py
-          python3 scripts/test_render_pipeline_contract.py
-          python3 scripts/test_gameplay_diagnostics_autotest.py
+
+  build:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Build Geode mod for Android64
         id: build
@@ -64,36 +57,26 @@ jobs:
           sdk: given
           android-min-sdk: 29
           build-config: Release
-          # LTO increases link time; disable it for faster CI builds.
-          # Runtime behavior is unchanged; the resulting binary may be slightly larger.
           use-lto: false
 
-      # Keep diagnostics in the build job so they cannot leave the whole
-      # workflow queued after the .geode artifact has already been produced.
       - name: Build diagnostics
         if: always()
         env:
           BUILD_OUTCOME: ${{ steps.build.outcome }}
           BUILD_OUTPUT: ${{ steps.build.outputs.build-output }}
         run: |
-          echo "## Android64 build diagnostics" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Experimental renderer Android64 build" >> "$GITHUB_STEP_SUMMARY"
           echo "- Commit: `$GITHUB_SHA`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Ref: `$GITHUB_REF`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Runner: `$RUNNER_OS / $RUNNER_ARCH`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Build outcome: **$BUILD_OUTCOME**" >> "$GITHUB_STEP_SUMMARY"
-          echo "Build outcome: $BUILD_OUTCOME"
-          echo "Runner: $RUNNER_OS / $RUNNER_ARCH"
           if [ -n "$BUILD_OUTPUT" ] && [ -d "$BUILD_OUTPUT" ]; then
-            echo "Build output directory: $BUILD_OUTPUT"
             find "$BUILD_OUTPUT" -maxdepth 2 -type f -name '*.geode' -print -exec stat -c 'Artifact size: %s bytes' {} \;
           else
             echo "Build output directory was not produced."
-            echo "- Build output directory: not produced" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Upload .geode artifact
+      - name: Upload Android64 package
         uses: actions/upload-artifact@v4
         with:
-          name: OptGod-Android64
+          name: DashCore-Experimental-Renderer-Android64
           path: ${{ steps.build.outputs.build-output }}/*.geode
           if-no-files-found: error

@@ -1,3 +1,9 @@
+## 0.11.0-alpha — read-only renderer foundation
+- Replaces the old diagnostic/culling runtime with a dedicated experimental-renderer shell.
+- Adds value-only renderer model types and conservative descriptor validation for texture identity, normalized UV bounds, local geometry, transforms, visibility, blend support, and sprite ownership.
+- Keeps all visible rendering on the original Geometry Dash renderer. No collection from the live scene or alternate draw call is active in this milestone.
+- No gameplay, physics, effects, shaders, UI, draw-order, or performance changes are claimed.
+
 ## 0.10.11-alpha — render-sample progress and AutoTest completion visibility
 - Adds one progress log per 30 sampled drawScene frames and postUpdate frames. These records exist only while the opt-in render-pipeline diagnostic sample is active.
 - AutoTest now checks both the rolling Geode log and Android logcat for the final 180-frame marker, avoiding a false timeout when the rolling log has not flushed.
