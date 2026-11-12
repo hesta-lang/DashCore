@@ -40,7 +40,7 @@
     "render-pipeline-diagnostics": {
       "type": "bool",
       "name": "Render Pipeline Diagnostics (alpha)",
-      "description": "Collects CPU timing for PlayLayer::postUpdate and Cocos render callbacks over a bounded 180-gameplay-frame sample, then performs read-only GameObject hierarchy and section-container censuses. Hooks remain disabled when OFF. Adds opt-in instrumentation overhead but does not change rendering, gameplay, or UI and does not measure GPU execution time.",
+      "description": "Collects CPU timing for PlayLayer::postUpdate and Cocos render callbacks over 180 gameplay frames, then performs read-only GameObject hierarchy and section-container censuses. Hooks remain disabled when OFF. Adds opt-in instrumentation overhead but does not change rendering, gameplay, or UI and does not measure GPU execution time.",
       "default": false
     }
   }
