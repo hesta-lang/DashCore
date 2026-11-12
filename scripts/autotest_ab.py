@@ -849,6 +849,89 @@ def write_report(args: argparse.Namespace, baseline: dict[str, Any], enabled: di
     print("FPS-RESULT: MAX-DIFFERENCE={} AVG-DIFFERENCE={}".format(fmt(max_delta), fmt(avg_delta)))
     return valid
 
+def write_culling_report(args: argparse.Namespace, disabled: dict[str, Any],
+                         enabled: dict[str, Any]) -> tuple[bool, bool]:
+    """Compare the same DashCore package with static culling OFF and ON."""
+    out = pathlib.Path(args.report_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    off_gfx, on_gfx = disabled["gfxinfo"], enabled["gfxinfo"]
+
+    def metric(item: dict[str, Any], key: str) -> Any:
+        return item.get(key) if item.get("available") else None
+
+    def fmt(value: Any) -> str:
+        return "unavailable" if value is None else f"{value:.2f}"
+
+    off_runtime = disabled["culling_runtime"]
+    on_runtime = enabled["culling_runtime"]
+    measurement_valid = all(
+        item.get("gameplay_verified") is True
+        and item["gfxinfo"].get("available")
+        and item["cpu_observation"].get("available")
+        and not item["crash_detected"]
+        for item in (disabled, enabled)
+    )
+    activation_valid = (
+        enabled.get("culling_mode") == "on"
+        and on_runtime.get("activation_report_found")
+        and on_runtime.get("requested") is True
+        and on_runtime.get("active_confirmed") is True
+        and on_runtime.get("stats_sample_count", 0) > 0
+        and on_runtime.get("frames", 0) >= 120
+    )
+    actually_culled = activation_valid and on_runtime.get("culled_objects", 0) > 0
+    status = (
+        "INCOMPLETE" if not measurement_valid or not activation_valid
+        else "VALID_WITH_SKIPS" if actually_culled
+        else "INCONCLUSIVE_NO_OBJECTS_SKIPPED"
+    )
+    report = {
+        "status": status,
+        "measurement_valid": measurement_valid,
+        "culling_activation_valid": activation_valid,
+        "actual_culling_observed": actually_culled,
+        "culling_off": disabled,
+        "culling_on": enabled,
+        "cloud_only": True,
+        "physical_huawei_y9s_validation": "NOT_RUN",
+    }
+    (out / "culling-comparison.json").write_text(json.dumps(report, indent=2) + "\n")
+    rows = [
+        "# DashCore culling OFF vs ON", "",
+        f"**Status: {status}**", "",
+        "- Same DashCore package, same Android cloud emulator, same level-entry path.",
+        "- Culling OFF/ON is selected before each full launcher restart through the mod config override.",
+        "- This cloud emulator is not a Huawei Y9s / Kirin 710F / Mali-G51.",
+        f"- Culling hook active and telemetry verified: **{activation_valid}**",
+        f"- Actual skipped GameObject visits observed: **{on_runtime.get('culled_objects', 0)}**",
+        "",
+        "| Metric | DashCore culling OFF | DashCore culling ON |",
+        "|---|---:|---:|",
+        f"| Average FPS | {fmt(metric(off_gfx, 'average_fps'))} | {fmt(metric(on_gfx, 'average_fps'))} |",
+        f"| Maximum FPS | {fmt(metric(off_gfx, 'max_fps'))} | {fmt(metric(on_gfx, 'max_fps'))} |",
+        f"| Minimum FPS | {fmt(metric(off_gfx, 'min_fps'))} | {fmt(metric(on_gfx, 'min_fps'))} |",
+        f"| P95 frame time (ms) | {fmt(metric(off_gfx, 'p95_frame_ms'))} | {fmt(metric(on_gfx, 'p95_frame_ms'))} |",
+        f"| Frames slower than 50 ms | {metric(off_gfx, 'over_50ms') if off_gfx.get('available') else 'unavailable'} | {metric(on_gfx, 'over_50ms') if on_gfx.get('available') else 'unavailable'} |",
+        f"| Frames slower than 100 ms | {metric(off_gfx, 'over_100ms') if off_gfx.get('available') else 'unavailable'} | {metric(on_gfx, 'over_100ms') if on_gfx.get('available') else 'unavailable'} |",
+        f"| CPU (% of one core) | {fmt(disabled['cpu_observation'].get('cpu_percent_one_core'))} | {fmt(enabled['cpu_observation'].get('cpu_percent_one_core'))} |",
+        "",
+        "## Runtime proof", "",
+        f"- Culling OFF requested / active: {off_runtime.get('requested')} / {off_runtime.get('active')}",
+        f"- Culling ON requested / active: {on_runtime.get('requested')} / {on_runtime.get('active')}",
+        f"- Telemetry frames: {on_runtime.get('frames')}",
+        f"- Visited GameObjects: {on_runtime.get('visited_game_objects')}",
+        f"- Eligible static GameObjects: {on_runtime.get('eligible_objects')}",
+        f"- Culled GameObjects: {on_runtime.get('culled_objects')}",
+        "",
+        "VALID_WITH_SKIPS requires the culling hook to be requested and active, at least 120 telemetry frames, and at least one skipped GameObject. If the hook is active but the level gives no safe skip candidate, the result is INCONCLUSIVE rather than a claimed optimization.",
+        "",
+        "A cloud result is only a functional signal. Visual safety and performance still require physical Huawei Y9s testing; the Geode culling option remains OFF by default.",
+    ]
+    (out / "culling-comparison.md").write_text("\n".join(rows) + "\n")
+    print((out / "culling-comparison.md").read_text())
+    return measurement_valid and activation_valid, actually_culled
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--serial", required=True)
@@ -889,19 +972,28 @@ def main() -> int:
         args.report_dir = str(report_root / f"repeat-{repetition:02d}")
         pathlib.Path(args.report_dir).mkdir(parents=True, exist_ok=True)
         print(f"BENCHMARK-REPETITION: {repetition}/{args.repetitions}")
-        # Alternate order between pairs to reduce systematic warm-up/thermal bias.
+        # Three-way comparison. Alternate order to reduce warm-up bias while
+        # keeping the same artifact, emulator, and level-entry procedure.
         if repetition % 2:
             baseline = run_variant(args, "WITHOUT_DASHCORE", mod_enabled=False)
-            enabled = run_variant(args, "WITH_DASHCORE", mod_enabled=True)
+            enabled = run_variant(args, "WITH_DASHCORE_CULLING_OFF", mod_enabled=True, culling_mode="off")
+            culling_enabled = run_variant(args, "WITH_DASHCORE_CULLING_ON", mod_enabled=True, culling_mode="on")
         else:
-            enabled = run_variant(args, "WITH_DASHCORE", mod_enabled=True)
+            culling_enabled = run_variant(args, "WITH_DASHCORE_CULLING_ON", mod_enabled=True, culling_mode="on")
+            enabled = run_variant(args, "WITH_DASHCORE_CULLING_OFF", mod_enabled=True, culling_mode="off")
             baseline = run_variant(args, "WITHOUT_DASHCORE", mod_enabled=False)
         pair_valid = write_report(args, baseline, enabled)
+        culling_valid, actually_culled = write_culling_report(args, enabled, culling_enabled)
         paired_results.append({
             "repetition": repetition,
             "status": "VALID" if pair_valid else "INCOMPLETE",
+            "culling_validation": "VALID_WITH_SKIPS" if culling_valid and actually_culled else
+                                  "INCONCLUSIVE_NO_OBJECTS_SKIPPED" if culling_valid else "INCOMPLETE",
+            "culling_activation_valid": culling_valid,
+            "actual_culling_observed": actually_culled,
             "without_dashcore": baseline,
             "with_dashcore": enabled,
+            "with_culling": culling_enabled,
         })
         print((pathlib.Path(args.report_dir) / "fps-comparison.md").read_text())
     args.report_dir = original_report_dir
@@ -916,7 +1008,23 @@ def main() -> int:
 
     baseline_avg = median_metric("without_dashcore", "average_fps")
     enabled_avg = median_metric("with_dashcore", "average_fps")
-    summary_valid = all(pair["status"] == "VALID" for pair in paired_results)
+    culling_avg_values = [
+        float(pair["with_culling"]["gfxinfo"]["average_fps"])
+        for pair in paired_results
+        if pair["culling_activation_valid"] and pair["with_culling"]["gfxinfo"].get("available")
+        and isinstance(pair["with_culling"]["gfxinfo"].get("average_fps"), (int, float))
+    ]
+    culling_avg = statistics.median(culling_avg_values) if len(culling_avg_values) == args.repetitions else None
+    culling_activation_count = sum(pair["culling_activation_valid"] for pair in paired_results)
+    culling_observed_count = sum(pair["actual_culling_observed"] for pair in paired_results)
+    culling_skipped_total = sum(
+        pair["with_culling"]["culling_runtime"].get("culled_objects", 0)
+        for pair in paired_results
+    )
+    summary_valid = all(
+        pair["status"] == "VALID" and pair["culling_activation_valid"]
+        for pair in paired_results
+    )
     summary = {
         "status": "VALID" if summary_valid else "INCOMPLETE",
         "repetitions_requested": args.repetitions,
@@ -924,6 +1032,19 @@ def main() -> int:
         "aggregation": "median across valid paired runs; no emulator-to-phone equivalence claimed",
         "median_without_dashcore_average_fps": baseline_avg,
         "median_with_dashcore_average_fps": enabled_avg,
+        "median_with_culling_average_fps": culling_avg,
+        "median_culling_average_fps_change_vs_culling_off": (
+            (culling_avg / enabled_avg - 1.0) * 100.0
+            if enabled_avg and culling_avg is not None else None
+        ),
+        "culling_activation_valid_repetitions": culling_activation_count,
+        "culling_repetitions_with_actual_skips": culling_observed_count,
+        "culling_total_objects_skipped_in_final_telemetry_samples": culling_skipped_total,
+        "culling_validation_status": (
+            "VALID_WITH_SKIPS" if culling_activation_count == args.repetitions and culling_observed_count == args.repetitions
+            else "INCONCLUSIVE_NO_OBJECTS_SKIPPED" if culling_activation_count == args.repetitions
+            else "INCOMPLETE"
+        ),
         "median_average_fps_change_percent": (
             (enabled_avg / baseline_avg - 1.0) * 100.0
             if baseline_avg and enabled_avg is not None else None
@@ -947,22 +1068,28 @@ def main() -> int:
         "- Hardware equivalence: **NOT EMULATED**.",
         "- Aggregation: median of each metric across all valid paired repetitions.",
         f"- Median average FPS without DashCore: **{baseline_avg if baseline_avg is not None else 'unavailable'}**",
-        f"- Median average FPS with DashCore: **{enabled_avg if enabled_avg is not None else 'unavailable'}**",
-        f"- Median average-FPS change: **{summary['median_average_fps_change_percent'] if summary['median_average_fps_change_percent'] is not None else 'unavailable'}%**",
+        f"- Median average FPS with DashCore (culling OFF): **{enabled_avg if enabled_avg is not None else 'unavailable'}**",
+        f"- Median average FPS with culling ON: **{culling_avg if culling_avg is not None else 'unavailable'}**",
+        f"- Culling ON average-FPS change vs culling OFF: **{summary['median_culling_average_fps_change_vs_culling_off'] if summary['median_culling_average_fps_change_vs_culling_off'] is not None else 'unavailable'}%**",
+        f"- Culling runtime validation: **{summary['culling_validation_status']}**",
+        f"- Repetitions with culling hook active: **{culling_activation_count}/{args.repetitions}**",
+        f"- Repetitions with actual objects skipped: **{culling_observed_count}/{args.repetitions}**",
+        f"- Objects skipped in final telemetry samples (summed): **{culling_skipped_total}**",
         "- Physical Huawei Y9s FPS validation: **NOT RUN (this workflow is cloud-only)**.",
         f"- Physical CPU reference sample: **{summary['cpu_calibration_reference']['selected_sample']['sample_id']}**; medians are included for context only.", "",
-        "| Repetition | Status | Baseline avg FPS | DashCore avg FPS |",
-        "|---:|---|---:|---:|",
+        "| Repetition | Status | No mod avg FPS | Culling OFF avg FPS | Culling ON avg FPS | Culling validation |",
+        "|---:|---|---:|---:|---:|---|",
     ]
     for pair in paired_results:
         b = pair["without_dashcore"]["gfxinfo"].get("average_fps")
         m = pair["with_dashcore"]["gfxinfo"].get("average_fps")
-        lines.append(f"| {pair['repetition']} | {pair['status']} | {b if b is not None else 'unavailable'} | {m if m is not None else 'unavailable'} |")
+        c = pair["with_culling"]["gfxinfo"].get("average_fps")
+        lines.append(f"| {pair['repetition']} | {pair['status']} | {b if b is not None else 'unavailable'} | {m if m is not None else 'unavailable'} | {c if c is not None else 'unavailable'} | {pair['culling_validation']} |")
     lines += ["", "Cloud measurements are comparative signals only. Do not publish a non-alpha optimization release until validated on the physical reference phone."]
     (report_root / "fps-repeated-summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print((report_root / "fps-repeated-summary.md").read_text())
     if not summary_valid:
-        print("::error::Repeated FPS benchmark incomplete; at least one paired run lacked valid frame/CPU data or detected a crash.")
+        print("::error::Repeated benchmark incomplete; baseline A/B or culling activation/telemetry validation failed.")
         return 1
     return 0
 
