@@ -1,10 +1,10 @@
 # DashCore — Android rendering optimization
 
-## 0.9.6-alpha — hook registry correction and conservative culling validation
+## 0.9.7-alpha — delayed culling telemetry validation
 
 - Resolves high-frequency hooks from Geode's registered hook objects instead of assuming exact internal map keys for namespaced Cocos types.
 - Keeps diagnostic hooks auto-disabled until Performance Diagnostics or experimental culling needs them.
-- Adds bounded culling telemetry for visited, eligible, and skipped GameObjects without enabling the 600-frame diagnostics suite; per-object counters stop after the first 120 update frames.
+- Waits for 600 complete gameplay updates before collecting culling telemetry, then counts visited, eligible, and skipped GameObjects during a separate 120-frame window.
 - AutoTest now runs three conditions: no DashCore, DashCore with culling OFF, and DashCore with culling ON. It requires the ON state and telemetry to be confirmed in Geode logs.
 - Adds an opt-in CPU visibility pass for ordinary static objects outside an expanded viewport, using full Cocos world transforms and a 125% guard band.
 - Triggers, effects, grouped/rotating objects, and objects with invalid bounds remain on the original Geometry Dash draw path.
@@ -30,7 +30,7 @@ DashCore is an Android64 mod for Geometry Dash that investigates rendering perfo
 
 The long-term goal is to reduce unnecessary rendering work and stuttering on Android while keeping Geometry Dash's original gameplay, physics, controls, menus, and visual behavior intact.
 
-**Current status:** DashCore 0.9.6-alpha is a conservative optimization review build. Performance Diagnostics are OFF by default, so normal play skips DashCore's 600-frame profiling window, scene-graph/bounds scans and one-shot GLES probes. Turn **Performance Diagnostics** ON only when collecting a diagnostic Geode log. The `General Enable` master switch remains available. Static-object culling is available as an opt-in alpha feature; keep it OFF for baseline play. The AutoTest-only telemetry sample is limited to the first 120 update frames before FPS timing begins.
+**Current status:** DashCore 0.9.7-alpha is a conservative optimization review build. Performance Diagnostics are OFF by default, so normal play skips DashCore's 600-frame profiling window, scene-graph/bounds scans and one-shot GLES probes. Turn **Performance Diagnostics** ON only when collecting a diagnostic Geode log. The `General Enable` master switch remains available. Static-object culling is available as an opt-in alpha feature; keep it OFF for baseline play. The AutoTest-only telemetry sample begins after a 600-frame gameplay warmup and covers the next 120 frames before FPS timing begins.
 
 ## Compatibility
 
