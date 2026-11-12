@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.10.11-alpha",
+  "version": "0.10.12-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.10.11-alpha: adds sparse drawScene/postUpdate progress markers and live AutoTest completion detection for the 180-frame diagnostic sample. No rendering or gameplay changes; diagnostics and experimental culling default OFF.",
+  "description": "DashCore 0.10.12-alpha: completes the 180-update diagnostic sample from PlayLayer::postUpdate and reports drawScene callback coverage separately. Diagnostics and experimental culling remain OFF by default. No rendering, gameplay, physics, draw-order, or UI changes; no performance improvement is claimed.",
   "tags": [
     "optimizations",
     "performance"
