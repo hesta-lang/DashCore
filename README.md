@@ -1,5 +1,12 @@
 # DashCore — Android rendering optimization
 
+## 0.10.11-alpha — render-sample progress and AutoTest completion visibility
+
+- Adds sparse progress markers for the opt-in drawScene and postUpdate diagnostic sample.
+- AutoTest checks both Geode's rolling log and Android logcat for the final sample marker, and reports the last known progress from each callback.
+- Makes missing-process results safe to report instead of risking an uninitialized metric.
+- No rendering, gameplay, physics, draw-order, or UI changes. This is diagnostic-only; no performance improvement is claimed.
+
 ## Development process
 
 All fixes and optimization work follow the [DashCore Development and Validation Protocol](docs/DASHCORE-DEVELOPMENT-AND-VALIDATION.md). The protocol defines root-cause investigation, Android64 API verification, automated quality gates, gameplay-only AutoTest, and physical Huawei Y9s validation.

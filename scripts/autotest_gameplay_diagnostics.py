@@ -15,13 +15,24 @@ import autotest_ab as runtime
 def inspect_runtime_log(log_text: str) -> dict[str, Any]:
     lines = log_text.splitlines()
     selected_markers = (
-        "RENDER-PIPELINE-HOOKS", "RENDER-PIPELINE FINAL:", "RENDER-UPDATE:",
+        "RENDER-PIPELINE-HOOKS", "RENDER-PIPELINE FINAL:",
+        "RENDER-PIPELINE-PROGRESS:", "RENDER-UPDATE-PROGRESS:", "RENDER-UPDATE:",
         "RENDER-UPDATE-SUBPHASES:", "RENDER-TIMING-BINS:",
         "RENDER-UPDATE-BINS-NOTE:", "OBJECT-VISUAL-HIERARCHY:",
         "OBJECT-SECTION-LAYOUT:", "OBJECT-SECTION-ROWS:", "setupHasCompleted",
     )
     selected = [line for line in lines if any(m in line for m in selected_markers)]
     pipeline_match = re.search(r"RENDER-PIPELINE FINAL: frames=(\d+)", log_text)
+    draw_progress = [
+        int(value) for value in re.findall(
+            r"RENDER-PIPELINE-PROGRESS: drawSceneFrames=(\d+)", log_text
+        )
+    ]
+    update_progress = [
+        int(value) for value in re.findall(
+            r"RENDER-UPDATE-PROGRESS: postUpdateFrames=(\d+)", log_text
+        )
+    ]
     hooks_ready = bool(re.search(
         r"RENDER-PIPELINE-HOOKS:.*?ready=true", log_text, re.IGNORECASE
     ))
@@ -45,6 +56,8 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
         "post_update_summary": "RENDER-UPDATE:" in log_text,
         "update_subphase_summary": "RENDER-UPDATE-SUBPHASES:" in log_text,
         "histogram_summary": "RENDER-UPDATE-BINS-NOTE:" in log_text,
+        "render_pipeline_progress_observed": bool(draw_progress),
+        "render_update_progress_observed": bool(update_progress),
         "base_layer_update_histogram": "callback=GJBaseGameLayer::update (PlayLayer)" in log_text,
         "visibility_update_histogram": "callback=PlayLayer::updateVisibility" in log_text,
         "required_timing_histograms": required_callbacks.issubset(histogram_callbacks),
@@ -56,6 +69,8 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
         "required_checks": checks,
         "all_diagnostics_present": all(checks.values()),
         "render_pipeline_frames": int(pipeline_match.group(1)) if pipeline_match else None,
+        "last_render_pipeline_progress_frames": max(draw_progress) if draw_progress else None,
+        "last_render_update_progress_frames": max(update_progress) if update_progress else None,
         "timing_histogram_lines": histogram_lines,
         "histogram_callbacks_found": sorted(histogram_callbacks),
         "diagnostic_lines": selected,
@@ -104,6 +119,7 @@ def main() -> int:
         "test_mode": "single_gameplay_diagnostics_only",
         "gameplay_verified": gameplay_ok,
         "launcher_crash_detected": run.get("crash_detected"),
+        "render_pipeline_sample_marker_source": run.get("render_pipeline_sample_marker_source"),
         "dashcore_package": str(args.mod_file),
         "dashcore_mod_enabled_for_session": True,
         "performance_diagnostics": "OFF",
@@ -142,6 +158,9 @@ def main() -> int:
         "- Passes: **one gameplay run only**",
         "- Baseline / culling-ON comparisons: **not run**",
         f"- Full 180-frame render sample: **{diagnostics['render_pipeline_frames'] == 180}**",
+        f"- Highest drawScene progress marker: **{diagnostics['last_render_pipeline_progress_frames']}**",
+        f"- Highest postUpdate progress marker: **{diagnostics['last_render_update_progress_frames']}**",
+        f"- Completion marker source: **{run.get('render_pipeline_sample_marker_source')}**",
         "", "## Diagnostic checks", "",
     ]
     report_lines.extend(

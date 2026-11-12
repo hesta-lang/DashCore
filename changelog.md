@@ -1,3 +1,10 @@
+## 0.10.11-alpha — render-sample progress and AutoTest completion visibility
+- Adds one progress log per 30 sampled drawScene frames and postUpdate frames. These records exist only while the opt-in render-pipeline diagnostic sample is active.
+- AutoTest now checks both the rolling Geode log and Android logcat for the final 180-frame marker, avoiding a false timeout when the rolling log has not flushed.
+- The report records the highest observed drawScene and postUpdate progress markers and the source that confirmed completion.
+- Initializes sample-result metrics even when the launcher process cannot be found, so the test can emit an incomplete report instead of failing while constructing its results.
+- No renderer, gameplay, physics, draw-order, UI, or culling behavior changes. Diagnostics remain opt-in and culling remains OFF by default. No optimization or FPS improvement is claimed.
+
 ## 0.10.10-alpha — sampled update timing histograms and gameplay-only AutoTest
 - Adds mutually exclusive duration histograms to the 180-frame CPU sample for CCDirector::drawScene and PlayLayer::postUpdate, plus sampled renderer and update subphase callbacks.
 - Uses bounded ranges: 0–250 μs, 251–500 μs, 501 μs–1 ms, 1–2 ms, 2–4 ms, 4–8 ms, and over 8 ms.

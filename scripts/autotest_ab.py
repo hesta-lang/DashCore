@@ -174,6 +174,28 @@ def read_remote_logs(serial: str, log_dir: str, dest: pathlib.Path) -> str:
             except OSError: pass
     return "\n".join(parts)
 
+
+def find_render_pipeline_final_marker(serial: str, log_dir: str) -> str | None:
+    """Return the first live log source exposing the completed render sample."""
+    file_marker = shell(
+        serial,
+        f"grep -R -I -l 'RENDER-PIPELINE FINAL:' {shlex.quote(log_dir)} 2>/dev/null",
+        check=False, timeout=10
+    ).strip()
+    if file_marker:
+        return "geode-log-file"
+
+    # Geode may not flush its rolling file while the game is still running.
+    # Android logcat is independent and exposes the live completion record.
+    logcat_marker = shell(
+        serial,
+        "logcat -d -s Geode:I | grep -F -m1 'RENDER-PIPELINE FINAL:' || true",
+        check=False, timeout=15
+    ).strip()
+    if logcat_marker:
+        return "logcat"
+    return None
+
 def process_ticks(stat_line: str) -> int | None:
     try:
         tail = stat_line.split(")", 1)[1].split()
@@ -906,31 +928,30 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
     observation = {"available": False, "reason": "Launcher process not found"}
     surface_layers: list[str] = []
     surface_metrics: dict[str, Any] = {"available": False, "reason": "Launcher process not found"}
+    render_pipeline_sample_completed = None
+    render_pipeline_sample_marker_source = None
     if pid:
         shell(serial, "dumpsys gfxinfo com.geode.launcher reset", check=False)
         surface_layers = prepare_surfaceflinger(serial, variant_dir)
         observation = run_device_observation(serial, pid, variant_dir)
-        render_pipeline_sample_completed = None
         if mod_enabled and render_pipeline_mode == "on" and render_pipeline_wait_s > 0:
-            # The read-only 180-draw sample starts only after gameplay setup has
-            # completed. Keep the level active and wait for its FINAL record
-            # instead of stopping after the generic 20-second CPU observation.
+            # Wait for the 180-draw sample and check both Geode's rolling file
+            # and logcat: the file may not flush while Geometry Dash is open.
             render_pipeline_sample_completed = False
             render_pipeline_deadline = time.monotonic() + render_pipeline_wait_s
+            next_marker_probe = 0.0
             while time.monotonic() < render_pipeline_deadline:
-                marker = shell(
-                    serial,
-                    f"grep -R -I -l 'RENDER-PIPELINE FINAL:' {shlex.quote(log_dir)} 2>/dev/null",
-                    check=False, timeout=10
-                ).strip()
-                if marker:
-                    render_pipeline_sample_completed = True
-                    time.sleep(1.0)
-                    break
+                now = time.monotonic()
+                if now >= next_marker_probe:
+                    marker_source = find_render_pipeline_final_marker(serial, log_dir)
+                    next_marker_probe = now + 2.0
+                    if marker_source:
+                        render_pipeline_sample_completed = True
+                        render_pipeline_sample_marker_source = marker_source
+                        time.sleep(1.0)
+                        break
                 shell(serial, "input tap 700 800", check=False, timeout=5)
                 time.sleep(0.5)
-        else:
-            render_pipeline_sample_completed = None
         surface_metrics = collect_surfaceflinger(serial, surface_layers, variant_dir)
         gfx_text = shell(serial, "dumpsys gfxinfo com.geode.launcher framestats", check=False, timeout=90)
         (variant_dir / "gfxinfo-framestats.txt").write_text(gfx_text)
@@ -968,6 +989,7 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
             "surfaceflinger": surface_metrics, "surfaceflinger_candidate_count": len(surface_layers),
             "cpu_observation": observation, "crash_detected": crash,
             "render_pipeline_sample_completed": render_pipeline_sample_completed,
+            "render_pipeline_sample_marker_source": render_pipeline_sample_marker_source,
             "gameplay_verified": gameplay_verified, "gameplay_ocr": gameplay_ocr[:1000],
             "launcher_pid_after_test": pid or None}
     (variant_dir / "metrics.json").write_text(json.dumps(data, indent=2) + "\n")

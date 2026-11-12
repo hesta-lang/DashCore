@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.10.10-alpha",
+  "version": "0.10.11-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.10.10-alpha: adds mutually exclusive CPU-duration histograms for the 180-frame drawScene/postUpdate sample and sampled renderer/update subphases. No rendering or gameplay changes; diagnostics and experimental culling default OFF.",
+  "description": "DashCore 0.10.11-alpha: adds sparse drawScene/postUpdate progress markers and live AutoTest completion detection for the 180-frame diagnostic sample. No rendering or gameplay changes; diagnostics and experimental culling default OFF.",
   "tags": [
     "optimizations",
     "performance"
