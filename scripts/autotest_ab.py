@@ -1138,6 +1138,23 @@ def main() -> int:
         pair["with_culling"]["culling_runtime"].get("culled_objects", 0)
         for pair in paired_results
     )
+    reason_fields = (
+        "protected_effect", "protected_trigger", "protected_grouped", "protected_rotating",
+        "missing_director", "invalid_content_size", "invalid_anchor", "invalid_world_bounds",
+        "invalid_viewport", "within_guard_band", "offscreen_x", "offscreen_y", "offscreen_both",
+    )
+    culling_reason_totals = {
+        key: sum(
+            pair["with_culling"]["culling_runtime"].get("reason_counts", {}).get(key, 0)
+            for pair in paired_results
+        )
+        for key in reason_fields
+    }
+    reason_diagnostics_complete = all(
+        pair["with_culling"]["culling_runtime"].get("reason_report_found") is True
+        and pair["with_culling"]["culling_runtime"].get("reason_totals_match") is True
+        for pair in paired_results
+    )
     summary_valid = all(
         pair["status"] == "VALID" and pair["culling_activation_valid"]
         for pair in paired_results
@@ -1157,6 +1174,8 @@ def main() -> int:
         "culling_activation_valid_repetitions": culling_activation_count,
         "culling_repetitions_with_actual_skips": culling_observed_count,
         "culling_total_objects_skipped_in_final_telemetry_samples": culling_skipped_total,
+        "culling_reason_diagnostics_complete": reason_diagnostics_complete,
+        "culling_reason_totals_across_repetitions": culling_reason_totals,
         "culling_validation_status": (
             "VALID_WITH_SKIPS" if culling_activation_count == args.repetitions and culling_observed_count == args.repetitions
             else "INCONCLUSIVE_NO_OBJECTS_SKIPPED" if culling_activation_count == args.repetitions
@@ -1192,6 +1211,8 @@ def main() -> int:
         f"- Repetitions with culling hook active: **{culling_activation_count}/{args.repetitions}**",
         f"- Repetitions with actual objects skipped: **{culling_observed_count}/{args.repetitions}**",
         f"- Objects skipped in final telemetry samples (summed): **{culling_skipped_total}**",
+        f"- Per-reason diagnostics complete and reconciled: **{reason_diagnostics_complete}**",
+        f"- Per-reason totals across repetitions: **{json.dumps(culling_reason_totals, sort_keys=True)}**",
         "- Physical Huawei Y9s FPS validation: **NOT RUN (this workflow is cloud-only)**.",
         f"- Physical CPU reference sample: **{summary['cpu_calibration_reference']['selected_sample']['sample_id']}**; medians are included for context only.", "",
         "| Repetition | Status | No mod avg FPS | Culling OFF avg FPS | Culling ON avg FPS | Culling validation |",
