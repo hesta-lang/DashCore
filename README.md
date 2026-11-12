@@ -4,10 +4,10 @@
 
 This branch develops a separate rendering path for Geometry Dash level objects on Android64.
 
-- Adds a renderer-only Geode runtime and a pure C++20 value model for object/sprite identity, copied visual attributes, texture identity, UV bounds, transforms, opacity, blending, and traversal order.
+- Adds a renderer-only Geode runtime, pure C++20 value model, validated sprite descriptor extractor, bounded value-only snapshot collector, stable z/traversal ordering, and contiguous batch planner keyed by layer, texture, and blend state.
 - Rejects descriptors with unknown textures, unsupported blending, hidden sprites, invalid bounds, or non-finite transforms.
-- Snapshot data owns values only; it does not retain pointers to live Geometry Dash or Cocos nodes.
-- This first milestone does **not** collect live level sprites, submit GPU draw calls, replace any original draw call, or change visibility.
+- Snapshot data owns values only; the collector rejects mixed level generations, duplicate sprite IDs, incomplete source reads, invalid attributes, and oversized snapshots. It never retains pointers to live Geometry Dash or Cocos nodes.
+- The `LevelObjectSource` adapter is still an interface tested with fake sources; no live `GameObject`/`CCNode` extraction is connected yet. This milestone does **not** submit GPU draw calls, replace any original draw call, or change visibility.
 - Geometry Dash's vanilla rendering remains the only visible draw path. Menus, HUD, editor, player, effects, shaders, gameplay, physics, triggers, and input remain vanilla.
 
 The goal is to build and validate a parallel object-rendering pipeline in small stages before any category is considered for replacement. No FPS improvement or performance claim is made by this read-only foundation.
