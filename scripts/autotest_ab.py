@@ -371,6 +371,15 @@ def wait_for_state(serial: str, mode: str, label: str, destination: pathlib.Path
     while time.monotonic() < deadline:
         attempt += 1
         last_text = take_state_screenshot(serial, mode, f"{label}-{attempt}", destination)
+        # NOTICE can reappear between app launches (including after the main
+        # menu was already confirmed). Handle it inside every state wait, not
+        # only during startup, so later culling-ON repetitions cannot stall
+        # on the Terms of Use modal while waiting for level-select/gameplay.
+        if "notice" in last_text or "terms of use" in last_text:
+            update_notice_state(destination.parent, dialog_detected=True)
+            wait_for_notice_dismissal(serial, mode, destination.parent)
+            time.sleep(1.0)
+            continue
         if predicate(last_text):
             # The first OCR match is already a valid state observation. A second
             # OCR pass can miss transient HUD text even when the game state has
