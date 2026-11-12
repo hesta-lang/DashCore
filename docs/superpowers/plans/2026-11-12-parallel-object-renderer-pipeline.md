@@ -263,7 +263,7 @@ Use the pinned Cocos bindings and observed child-list order to determine the non
 
 Implement `buildStableDrawOrder` and `planBatches`. Preserve input order for equal-layer items and split batches whenever layer, texture, or blend state changes.
 
-- [ ] **Step 5: Run tests and commit**
+- [x] **Step 5: Run tests and commit**
 
 Expected: tests prove that batching never crosses a layer/order/blend boundary and that source reordering produces a corresponding new plan.
 
