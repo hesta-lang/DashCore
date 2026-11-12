@@ -8,7 +8,7 @@ This branch develops a separate rendering path for Geometry Dash level objects o
 - Rejects descriptors with unknown textures, unsupported blending, hidden sprites, invalid bounds, or non-finite transforms.
 - Snapshot data owns values only; it does not retain pointers to live Geometry Dash or Cocos nodes.
 - This first milestone does **not** collect live level sprites, submit GPU draw calls, replace any original draw call, or change visibility.
-- Geometry Dash's original renderer remains the only visible draw path. Menus, HUD, editor, player, effects, shaders, gameplay, physics, triggers, and input remain vanilla.
+- Geometry Dash's vanilla rendering remains the only visible draw path. Menus, HUD, editor, player, effects, shaders, gameplay, physics, triggers, and input remain vanilla.
 
 The goal is to build and validate a parallel object-rendering pipeline in small stages before any category is considered for replacement. No FPS improvement or performance claim is made by this read-only foundation.
 
