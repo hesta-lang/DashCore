@@ -706,12 +706,14 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
     }
 
 
-def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_mode: str = "off") -> dict[str, Any]:
+def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_mode: str = "off",
+                diagnostics_mode: str = "off", geometry_diagnostics: bool = False) -> dict[str, Any]:
     serial, base = args.serial, args.base_dir.rstrip("/")
     mod_dir = f"{base}/game/geode/mods"
     mod_remote = f"{mod_dir}/DashCore.geode"
     config_dir = f"{base}/game/geode/config/{args.mod_id}"
     culling_mode_remote = f"{config_dir}/static-culling-mode.txt"
+    diagnostics_mode_remote = f"{config_dir}/diagnostics-mode.txt"
     log_dir = f"{base}/game/geode/logs"
     variant_dir = pathlib.Path(args.report_dir) / mode.lower().replace("_", "-")
     variant_dir.mkdir(parents=True, exist_ok=True)
@@ -724,10 +726,13 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
             raise ValueError(f"Unsupported culling mode: {culling_mode!r}")
         run_adb(serial, "push", args.mod_file, mod_remote, timeout=120)
         shell(serial, f"test -s {shlex.quote(mod_remote)}")
+        if diagnostics_mode not in ("on", "off"):
+            raise ValueError(f"Unsupported diagnostics mode: {diagnostics_mode!r}")
         shell(serial, f"mkdir -p {shlex.quote(config_dir)}")
         shell(serial, f"printf '%s\\n' {shlex.quote(culling_mode)} > {shlex.quote(culling_mode_remote)}")
+        shell(serial, f"printf '%s\\n' {shlex.quote(diagnostics_mode)} > {shlex.quote(diagnostics_mode_remote)}")
     else:
-        shell(serial, f"rm -f {shlex.quote(culling_mode_remote)}")
+        shell(serial, f"rm -f {shlex.quote(culling_mode_remote)} {shlex.quote(diagnostics_mode_remote)}")
     shell(serial, f"mkdir -p {shlex.quote(log_dir)} && rm -f {shlex.quote(log_dir)}/*")
     shell(serial, "logcat -c", check=False)
     shell(serial, "am start -a android.intent.action.VIEW -d geode-launcher://main/launch -p com.geode.launcher", check=False)
@@ -769,6 +774,100 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
     gameplay_verified = is_gameplay_text(gameplay_ocr)
     if not gameplay_verified:
         raise RuntimeError(f"{mode}: gameplay HUD percentage was not verified; benchmark aborted.")
+
+    if geometry_diagnostics:
+        # Separate launcher session: enable the expensive scan with culling OFF.
+        diagnostic_deadline = time.monotonic() + 120
+        candidate_marker_seen = False
+        while time.monotonic() < diagnostic_deadline:
+            found = shell(
+                serial,
+                f"grep -R -I -l 'CULL-GEOMETRY-CANDIDATE' {shlex.quote(log_dir)} 2>/dev/null",
+                check=False, timeout=15
+            ).strip()
+            if found:
+                candidate_marker_seen = True
+                break
+            time.sleep(2)
+        if not candidate_marker_seen:
+            timeout_logcat = shell(serial, "logcat -d -v threadtime", check=False)
+            (variant_dir / "logcat-diagnostic-timeout.txt").write_text(timeout_logcat)
+            timeout_logs = read_remote_logs(serial, log_dir, variant_dir / "geode-logs-timeout")
+            (variant_dir / "combined-geode-log.txt").write_text(timeout_logcat + "\n" + timeout_logs)
+            raise RuntimeError(
+                f"{mode}: timed out waiting for CULL-GEOMETRY-CANDIDATE after enabling isolated diagnostics; inspect timeout logs."
+            )
+
+        time.sleep(2)
+        diagnostic_logcat = shell(serial, "logcat -d -v threadtime", check=False)
+        diagnostic_logs = read_remote_logs(serial, log_dir, variant_dir / "geode-logs-final")
+        combined_diagnostic = diagnostic_logcat + "\n" + diagnostic_logs
+        (variant_dir / "logcat-final.txt").write_text(diagnostic_logcat)
+        (variant_dir / "combined-geode-log.txt").write_text(combined_diagnostic)
+        diagnostic_markers = (
+            "DIAGNOSTICS-MODE", "DIAGNOSTICS-HOOKS", "DIAGNOSTIC-COST",
+            "VIEWPORT-SPACE", "OBJECT-GEOMETRY", "OBJECT-SAMPLE",
+            "OBJECT-ID", "OBJECT-TYPE", "CULL-GEOMETRY-CANDIDATE",
+            "CULL-GEOMETRY-VIEWPORT", "CULL-GEOMETRY-RECT-CORNERS",
+            "CULL-GEOMETRY-PARENT",
+        )
+        diagnostic_lines = [
+            line for line in diagnostic_logs.splitlines()
+            if any(marker in line for marker in diagnostic_markers)
+        ]
+        marker_counts = {
+            marker: sum(marker in line for line in diagnostic_lines)
+            for marker in diagnostic_markers
+        }
+        required_markers = (
+            "DIAGNOSTICS-HOOKS", "DIAGNOSTIC-COST", "VIEWPORT-SPACE",
+            "OBJECT-GEOMETRY", "OBJECT-SAMPLE", "OBJECT-ID", "OBJECT-TYPE",
+            "CULL-GEOMETRY-CANDIDATE", "CULL-GEOMETRY-VIEWPORT",
+            "CULL-GEOMETRY-RECT-CORNERS", "CULL-GEOMETRY-PARENT",
+        )
+        valid = all(marker_counts.get(marker, 0) > 0 for marker in required_markers)
+        geometry_data = {
+            "status": "VALID" if valid else "INCOMPLETE",
+            "diagnostics_mode": "ON",
+            "culling_mode": "OFF",
+            "geometry_scan_completed": marker_counts.get("DIAGNOSTIC-COST", 0) > 0,
+            "required_markers": list(required_markers),
+            "marker_counts": marker_counts,
+            "candidate_lines": [line for line in diagnostic_lines if "CULL-GEOMETRY-CANDIDATE" in line],
+            "parent_chain_lines": [line for line in diagnostic_lines if "CULL-GEOMETRY-PARENT" in line],
+            "object_geometry_lines": [line for line in diagnostic_lines if "OBJECT-GEOMETRY" in line],
+            "object_id_lines": [line for line in diagnostic_lines if "OBJECT-ID" in line],
+            "object_type_lines": [line for line in diagnostic_lines if "OBJECT-TYPE" in line],
+            "execution_environment": "cloud_android_emulator",
+            "hardware_equivalence": "NOT_EMULATED",
+            "performance_measurement": False,
+            "culling_visibility_changes": False,
+        }
+        (variant_dir / "geometry-diagnostic.json").write_text(
+            json.dumps(geometry_data, indent=2) + "\n", encoding="utf-8"
+        )
+        report_lines = [
+            "# DashCore isolated object-geometry diagnostic",
+            "",
+            f"- Status: **{geometry_data['status']}**",
+            "- Separate launcher session after the FPS benchmark.",
+            "- Performance Diagnostics: ON; static culling: OFF.",
+            "- The 600-frame diagnostic/profile hooks are not part of the FPS measurement.",
+            "- Environment: cloud Android emulator; hardware equivalence: NOT EMULATED.",
+            "",
+            "## Marker counts",
+            "",
+        ]
+        report_lines.extend(f"- {key}: {value}" for key, value in marker_counts.items())
+        report_lines += ["", "## Candidate, coordinate and hierarchy records", ""]
+        report_lines.extend(f"- {line}" for line in diagnostic_lines)
+        report_lines += ["", "No rendering objects are skipped in this diagnostic-only pass."]
+        (variant_dir / "geometry-diagnostic.md").write_text(
+            "\n".join(report_lines) + "\n", encoding="utf-8"
+        )
+        screenshot(serial, "dashcore-geometry-diagnostic-final.png", variant_dir / "final-screen.png")
+        shell(serial, "am force-stop com.geode.launcher", check=False)
+        return geometry_data
 
     # Wait for 600 complete gameplay updates, then a separate bounded 120-frame
     # culling telemetry sample before resetting frame counters for FPS timing.
@@ -1114,6 +1213,27 @@ def main() -> int:
         })
         print((pathlib.Path(args.report_dir) / "fps-comparison.md").read_text())
     args.report_dir = original_report_dir
+    geometry_diagnostic: dict[str, Any]
+    args.report_dir = str(report_root / "geometry-diagnostic")
+    try:
+        geometry_diagnostic = run_variant(
+            args, "GEOMETRY_DIAGNOSTIC", mod_enabled=True,
+            culling_mode="off", diagnostics_mode="on", geometry_diagnostics=True
+        )
+    except Exception as exc:
+        geometry_diagnostic = {
+            "status": "INCOMPLETE",
+            "error": f"{type(exc).__name__}: {exc}",
+            "execution_environment": "cloud_android_emulator",
+            "hardware_equivalence": "NOT_EMULATED",
+            "performance_measurement": False,
+        }
+        (pathlib.Path(args.report_dir) / "geometry-diagnostic-error.txt").write_text(
+            geometry_diagnostic["error"] + "\n", encoding="utf-8"
+        )
+        print(f"::error::Isolated geometry diagnostic failed: {geometry_diagnostic['error']}")
+    args.report_dir = original_report_dir
+    geometry_diagnostic_valid = geometry_diagnostic.get("status") == "VALID"
 
     def median_metric(mode: str, key: str) -> float | None:
         values = []
@@ -1176,6 +1296,8 @@ def main() -> int:
         "culling_total_objects_skipped_in_final_telemetry_samples": culling_skipped_total,
         "culling_reason_diagnostics_complete": reason_diagnostics_complete,
         "culling_reason_totals_across_repetitions": culling_reason_totals,
+        "geometry_diagnostic": geometry_diagnostic,
+        "geometry_diagnostic_valid": geometry_diagnostic_valid,
         "culling_validation_status": (
             "VALID_WITH_SKIPS" if culling_activation_count == args.repetitions and culling_observed_count == args.repetitions
             else "INCONCLUSIVE_NO_OBJECTS_SKIPPED" if culling_activation_count == args.repetitions
@@ -1213,6 +1335,8 @@ def main() -> int:
         f"- Objects skipped in final telemetry samples (summed): **{culling_skipped_total}**",
         f"- Per-reason diagnostics complete and reconciled: **{reason_diagnostics_complete}**",
         f"- Per-reason totals across repetitions: **{json.dumps(culling_reason_totals, sort_keys=True)}**",
+        f"- Isolated geometry diagnostic: **{geometry_diagnostic.get('status', 'INCOMPLETE')}**",
+        f"- Candidate detail records: **{len(geometry_diagnostic.get('candidate_lines', []))}**",
         "- Physical Huawei Y9s FPS validation: **NOT RUN (this workflow is cloud-only)**.",
         f"- Physical CPU reference sample: **{summary['cpu_calibration_reference']['selected_sample']['sample_id']}**; medians are included for context only.", "",
         "| Repetition | Status | No mod avg FPS | Culling OFF avg FPS | Culling ON avg FPS | Culling validation |",
@@ -1228,6 +1352,9 @@ def main() -> int:
     print((report_root / "fps-repeated-summary.md").read_text())
     if not summary_valid:
         print("::error::Repeated benchmark incomplete; baseline A/B or culling activation/telemetry validation failed.")
+        return 1
+    if not geometry_diagnostic_valid:
+        print("::error::The isolated geometry diagnostic is incomplete; do not infer object bounds or change culling from this run.")
         return 1
     return 0
 

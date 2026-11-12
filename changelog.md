@@ -1,3 +1,11 @@
+## 0.10.0-alpha — isolated geometry diagnosis
+- Adds a separate AutoTest launch with Performance Diagnostics ON and static culling explicitly OFF; the FPS A/B runs keep diagnostics OFF.
+- Adds the diagnostics-mode.txt AutoTest override; without the file, the normal Geode Performance Diagnostics setting remains authoritative.
+- Requires CCNode::visit, PlayLayer::postUpdate and CCDirector::drawScene hooks to all enable before a full diagnostic pass is accepted.
+- Identifies the nearest eligible GameObject to the existing guard-band edge and records its object ID, class type, raw bounding rectangle, content size, anchor, position, transformed world bounds, viewport margins and up to eight ancestor transforms.
+- Adds an isolated diagnostic report and strict marker validation to AutoTest. The run is rejected if candidate, hierarchy or scene-geometry records are missing.
+- Does not change culling eligibility, the 125% guard band, rendering behavior or the default OFF setting. Cloud results remain diagnostic only; physical Huawei Y9s validation is still required.
+
 ## 0.9.9-alpha — GameObject bounds fallback
 - AutoTest 214 showed that all 122 eligible Stereo Madness GameObjects had invalid/empty CCNode content sizes, so the previous culling bounds path could not classify any candidate.
 - When content size is unusable, tries GameObject::getBoundingRect() and transforms its four parent-relative corners through the parent node into world space.

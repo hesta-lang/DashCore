@@ -1,11 +1,10 @@
 # DashCore — Android rendering optimization
 
-## 0.9.9-alpha — GameObject bounds fallback
+## 0.10.0-alpha — isolated GameObject geometry diagnostics
 
-- AutoTest 214 showed all 122 eligible Stereo Madness GameObjects had empty/invalid CCNode content sizes, preventing the previous bounds calculation from classifying candidates.
-- Uses GameObject::getBoundingRect() as a fallback when content size is invalid, transforming all four parent-relative corners through the parent node.
-- Reports fallback and invalid-rectangle counts. Any invalid or uncertain bounds remain on vanilla rendering.
-- Keeps the 125% guard band and experimental culling OFF by default.
-- This diagnostic version is not a validated optimization; cloud emulator results do not replace testing on the physical Huawei Y9s / Mali-G51.
-
-
+- Adds a separate AutoTest launch with Performance Diagnostics ON and static culling explicitly OFF.
+- Reports the nearest eligible GameObject to the existing guard-band boundary, including object ID/type, raw rectangle, content size, anchor, position, transformed world bounds, viewport and parent transform chain.
+- Adds an AutoTest diagnostics-mode override; ordinary FPS benchmark passes explicitly keep the expensive 600-frame diagnostics OFF so timing is not contaminated.
+- Requires all three diagnostic hooks (CCNode::visit, PlayLayer::postUpdate and CCDirector::drawScene) before accepting a complete geometry scan.
+- Keeps experimental culling OFF by default and preserves the 125% guard band. The diagnostic-only pass does not change rendering behavior.
+- This is a diagnostic alpha, not a validated optimization. Cloud tests do not replace physical Huawei Y9s / Mali-G51 validation.

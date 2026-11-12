@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.9.9-alpha",
+  "version": "0.10.0-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.9.9-alpha: uses a validated parent-transformed GameObject bounding-rectangle fallback when CCNode content size is empty, with fail-open handling and telemetry.",
+  "description": "DashCore 0.10.0-alpha: adds isolated read-only GameObject geometry diagnostics for bounds, coordinate transforms and parent hierarchies; experimental culling remains opt-in.",
   "tags": [
     "optimizations",
     "performance"
