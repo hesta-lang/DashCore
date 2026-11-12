@@ -626,11 +626,13 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
         log_text, re.IGNORECASE
     )
     samples = re.findall(
-        r"CULL-STATS frames=(\d+),\s*visitedGameObjects=(\d+),\s*eligibleObjects=(\d+),\s*culledObjects=(\d+)",
+        r"CULL-STATS frames=(\d+),\s*warmupFrames=(\d+),\s*visitedGameObjects=(\d+),\s*eligibleObjects=(\d+),\s*culledObjects=(\d+)",
         log_text, re.IGNORECASE
     )
     requested, active = activations[-1] if activations else ("false", "false")
-    frames, visited, eligible, culled = map(int, samples[-1]) if samples else (0, 0, 0, 0)
+    frames, warmup_frames, visited, eligible, culled = (
+        map(int, samples[-1]) if samples else (0, 0, 0, 0, 0)
+    )
     return {
         "activation_report_found": bool(activations),
         "requested": requested.lower() == "true",
@@ -638,6 +640,7 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
         "active_confirmed": bool(activations) and active.lower() == "true",
         "stats_sample_count": len(samples),
         "frames": frames,
+        "warmup_frames": warmup_frames,
         "visited_game_objects": visited,
         "eligible_objects": eligible,
         "culled_objects": culled,
@@ -709,10 +712,10 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
     if not gameplay_verified:
         raise RuntimeError(f"{mode}: gameplay HUD percentage was not verified; benchmark aborted.")
 
-    # Wait for the bounded 120-frame culling telemetry sample before resetting
-    # frame counters and timing the actual culling ON/OFF comparison.
+    # Wait for 600 complete gameplay updates, then a separate bounded 120-frame
+    # culling telemetry sample before resetting frame counters for FPS timing.
     if mod_enabled and culling_mode == "on":
-        telemetry_deadline = time.monotonic() + 35
+        telemetry_deadline = time.monotonic() + 75
         telemetry_seen = False
         while time.monotonic() < telemetry_deadline:
             found = shell(
@@ -726,7 +729,7 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
             time.sleep(1)
         if not telemetry_seen:
             raise RuntimeError(
-                f"{mode}: culling did not emit its 120-frame CULL-STATS sample; refusing to report an unverified ON run."
+                f"{mode}: culling did not emit CULL-STATS after its 600-frame warmup and 120-frame sample; refusing to report an unverified ON run."
             )
         time.sleep(1)
 
@@ -914,6 +917,7 @@ def write_culling_report(args: argparse.Namespace, disabled: dict[str, Any],
         and on_runtime.get("requested") is True
         and on_runtime.get("active_confirmed") is True
         and on_runtime.get("stats_sample_count", 0) > 0
+        and on_runtime.get("warmup_frames", 0) >= 600
         and on_runtime.get("frames", 0) >= 120
         and on_runtime.get("visited_game_objects", 0) > 0
         and on_runtime.get("eligible_objects", 0) > 0
@@ -959,12 +963,13 @@ def write_culling_report(args: argparse.Namespace, disabled: dict[str, Any],
         f"- Culling OFF requested / active: {off_runtime.get('requested')} / {off_runtime.get('active')}",
         f"- Culling OFF state confirmed: {off_mode_confirmed}",
         f"- Culling ON requested / active: {on_runtime.get('requested')} / {on_runtime.get('active')}",
-        f"- Telemetry frames: {on_runtime.get('frames')}",
+        f"- Warmup frames completed: {on_runtime.get('warmup_frames')}",
+        f"- Telemetry sample frames: {on_runtime.get('frames')}",
         f"- Visited GameObjects: {on_runtime.get('visited_game_objects')}",
         f"- Eligible static GameObjects: {on_runtime.get('eligible_objects')}",
         f"- Culled GameObjects: {on_runtime.get('culled_objects')}",
         "",
-        "VALID_WITH_SKIPS requires the culling hook to be requested and active, at least 120 telemetry frames, and at least one skipped GameObject. If the hook is active but the level gives no safe skip candidate, the result is INCONCLUSIVE rather than a claimed optimization.",
+        "VALID_WITH_SKIPS requires the culling hook to be requested and active, at least 600 completed warmup frames, a separate 120-frame telemetry window, and at least one skipped GameObject. If the hook is active but the level gives no safe skip candidate, the result is INCONCLUSIVE rather than a claimed optimization.",
         "",
         "A cloud result is only a functional signal. Visual safety and performance still require physical Huawei Y9s testing; the Geode culling option remains OFF by default.",
     ]
