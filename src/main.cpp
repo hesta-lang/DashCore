@@ -356,7 +356,7 @@ namespace {
                 return result;
             }
 
-            ++g_cullingReasons.contentSizeFallbacks;
+            if (g_cullingTelemetryEnabled && g_cullingSamplingActive) ++g_cullingReasons.contentSizeFallbacks;
             auto const x1 = rect.origin.x;
             auto const y1 = rect.origin.y;
             auto const x2 = x1 + rect.size.width;
