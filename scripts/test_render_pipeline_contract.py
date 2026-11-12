@@ -66,6 +66,10 @@ class RenderPipelineContractTests(unittest.TestCase):
     def test_update_timing_is_bounded_to_the_renderer_sample(self):
         self.assertIn("updateFrames < kRenderPipelineSampleFrames", self.source)
         self.assertIn("kRenderPipelineSampleFrames = 180", self.source)
+        self.assertIn("void finishRendererPipelineSampleIfReady()", self.source)
+        self.assertIn("g_rendererProfile.updateFrames < kRenderPipelineSampleFrames", self.source)
+        self.assertIn('sampleCoverage={}', self.source)
+        self.assertIn("RENDER-PIPELINE-NOTE", self.source)
         self.assertIn("void postUpdate(float dt)", self.source)
         self.assertIn("avgPostUpdateUs", self.source)
         self.assertIn("postUpdateReady", self.source)
@@ -138,12 +142,14 @@ class RenderPipelineContractTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.source)
 
-        # The additional hooks are optional and do not participate in the
-        # required core render-pipeline readiness expression.
+        # drawScene is supplementary: the Android binding map has no
+        # Android implementation address, so it must not gate sample readiness.
         self.assertIn(
-            "g_renderPipelineHooksReady = nodeReady && drawSceneReady && postUpdateReady &&",
+            "g_renderPipelineHooksReady = nodeReady && postUpdateReady &&",
             self.source,
         )
+        readiness = self.source.split("g_renderPipelineHooksReady =", 1)[1].split(";", 1)[0]
+        self.assertNotIn("drawSceneReady", readiness)
         self.assertIn("atlasQuadsReady && atlasCountReady;", self.source)
 
     def test_culling_remains_default_off(self):
@@ -192,7 +198,7 @@ class RenderPipelineContractTests(unittest.TestCase):
 
 
     def test_diagnostic_release_version_and_defaults(self):
-        self.assertEqual(self.metadata["version"], "0.10.11-alpha")
+        self.assertEqual(self.metadata["version"], "0.10.12-alpha")
         self.assertIs(self.metadata["settings"]["render-pipeline-diagnostics"]["default"], False)
         self.assertIs(self.metadata["settings"]["experimental-render-culling"]["default"], False)
         self.assertIn("does not change rendering", self.metadata["settings"]["render-pipeline-diagnostics"]["description"])
