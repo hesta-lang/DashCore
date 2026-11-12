@@ -1,3 +1,9 @@
+## 0.10.12-alpha — update-clocked diagnostic completion
+- Completes the 180-update sample from the confirmed `PlayLayer::postUpdate` callback; sample completion no longer depends on `CCDirector::drawScene` invoking its hook.
+- Adds separate `drawSceneFrames`, `postUpdateFrames`, and `sampleCoverage` fields. Zero draw callbacks are reported as `update-only`, not treated as draw-path or GPU evidence.
+- Keeps the object-hierarchy and section-layout inventories read-only and bounded.
+- No rendering, gameplay, physics, draw-order, UI, or culling behavior changes. Diagnostics remain opt-in; no optimization or FPS improvement is claimed.
+
 ## 0.10.11-alpha — render-sample progress and AutoTest completion visibility
 - Adds one progress log per 30 sampled drawScene frames and postUpdate frames. These records exist only while the opt-in render-pipeline diagnostic sample is active.
 - AutoTest now checks both the rolling Geode log and Android logcat for the final 180-frame marker, avoiding a false timeout when the rolling log has not flushed.
