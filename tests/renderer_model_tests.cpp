@@ -1,4 +1,6 @@
 #include "renderer/core/BatchPlanner.hpp"
+#include "renderer/core/GeometryBuilder.hpp"
+#include "renderer/core/GlesCapabilities.hpp"
 #include "renderer/core/LevelObjectCollector.hpp"
 #include "renderer/core/SpriteDescriptorExtractor.hpp"
 
@@ -155,7 +157,6 @@ int main() {
     collector.reset(0);
     assert(collector.levelGeneration() == 1);
 
-    // Ordering: z-layer first, then explicit traversal order; stable for ties.
     std::vector<SpriteDescriptor> orderInput = {
         makeDescriptor(2, 10, 0, 1, 3),
         makeDescriptor(2, 11, 0, 0, 8),
@@ -165,7 +166,6 @@ int main() {
     auto order = buildStableDrawOrder(orderInput);
     assert((order == std::vector<std::uint32_t>{2, 1, 3, 0}));
 
-    // Contiguous-only batching: A,A,B,A must remain three batches.
     std::vector<SpriteDescriptor> batchInput = {
         makeDescriptor(2, 20, 0, 0, 0, 42, {1, 771, true}),
         makeDescriptor(2, 21, 0, 0, 1, 42, {1, 771, true}),
@@ -192,4 +192,75 @@ int main() {
     auto unsupportedInOrder = batchInput;
     unsupportedInOrder[1].attributes.textureKnown = false;
     assert(buildStableDrawOrder(unsupportedInOrder).empty());
+
+    // CPU geometry preparation is pure and produces no draw calls.
+    RenderSnapshot geometrySnapshot;
+    geometrySnapshot.levelGeneration = 2;
+    geometrySnapshot.frameIndex = 1;
+    geometrySnapshot.sprites = {
+        makeDescriptor(2, 40, 0, 0, 0)
+    };
+    auto geometryOrder = buildStableDrawOrder(geometrySnapshot.sprites);
+    auto geometryBatches = planBatches(geometrySnapshot.sprites, geometryOrder);
+    GeometryData geometry;
+    assert(buildGeometry(geometrySnapshot, geometryBatches, geometry));
+    assert(geometry.vertices.size() == 4);
+    assert(geometry.indices.size() == 6);
+    assert(geometry.vertices[0].x == -8.f);
+    assert(geometry.vertices[0].y == -8.f);
+    assert(geometry.vertices[0].u == 0.f);
+    assert(geometry.vertices[0].v == 0.25f);
+    assert(geometry.vertices[2].x == 8.f);
+    assert(geometry.vertices[2].y == 8.f);
+    assert(geometry.indices[0] == 0 && geometry.indices[1] == 1 && geometry.indices[2] == 2);
+    assert(geometry.vertices[0].color.a == 255);
+
+    geometrySnapshot.sprites[0].attributes.opacity = 128;
+    assert(buildGeometry(geometrySnapshot, geometryBatches, geometry));
+    assert(geometry.vertices[0].color.a == 128);
+
+    auto nonFiniteGeometry = geometrySnapshot;
+    nonFiniteGeometry.sprites[0].attributes.transform.values[4] =
+        std::numeric_limits<float>::infinity();
+    assert(!buildGeometry(nonFiniteGeometry, geometryBatches, geometry));
+    assert(geometry.vertices.empty());
+
+    RenderSnapshot emptySnapshot;
+    assert(buildGeometry(emptySnapshot, {}, geometry));
+    assert(geometry.vertices.empty());
+    assert(geometry.indices.empty());
+
+    assert(canRepresentSpriteCount(1));
+    assert(!canRepresentSpriteCount(
+        static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max() / 4u) + 1u
+    ));
+
+    // GLES capabilities are parsed from the live version/extension strings;
+    // compute and SSBO support are optional and never required by CPU prep.
+    auto noContext = parseGlesCapabilities(nullptr, nullptr, false);
+    assert(!noContext.contextAvailable);
+
+    auto gles30 = parseGlesCapabilities(
+        "OpenGL ES 3.0 Vendor",
+        "GL_OES_vertex_array_object GL_EXT_color_buffer_float",
+        true
+    );
+    assert(gles30.contextAvailable);
+    assert(gles30.majorVersion == 3 && gles30.minorVersion == 0);
+    assert(gles30.supportsBufferObjects);
+    assert(gles30.supportsVertexArrayObjects);
+    assert(!gles30.supportsComputeShaders);
+    assert(!gles30.supportsShaderStorageBuffers);
+
+    auto extensionCaps = parseGlesCapabilities(
+        "OpenGL ES 3.0 Vendor",
+        "GL_EXT_compute_shader GL_EXT_shader_storage_buffer_object",
+        true
+    );
+    assert(extensionCaps.supportsComputeShaders);
+    assert(extensionCaps.supportsShaderStorageBuffers);
+
+    auto gles31 = parseGlesCapabilities("OpenGL ES 3.1 Vendor", "", true);
+    assert(gles31.supportsComputeShaders);
+    assert(gles31.supportsShaderStorageBuffers);
 }
