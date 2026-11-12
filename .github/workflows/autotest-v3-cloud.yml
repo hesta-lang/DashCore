@@ -228,6 +228,9 @@ jobs:
           assert culling_state["reason_totals_match"] is True, culling_state
           assert culling_state["reason_counts"]["within_guard_band"] == 488, culling_state
           assert culling_state["nearest_guard_band_candidate"]["object_id"] == 42, culling_state
+          inconsistent_log = sample_culling_log.replace("offscreenBoth=3", "offscreenBoth=2")
+          inconsistent_state = module.parse_culling_runtime(inconsistent_log)
+          assert inconsistent_state["reason_totals_match"] is False, inconsistent_state
           disabled_state = module.parse_culling_runtime(
               "setupHasCompleted; diagnostics=OFF, static-culling-requested=false, static-culling-active=false."
           )
