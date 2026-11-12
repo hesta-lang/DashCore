@@ -40,7 +40,7 @@
     "render-pipeline-diagnostics": {
       "type": "bool",
       "name": "Render Pipeline Diagnostics (alpha)",
-      "description": "Collects read-only Cocos render callback counts and a one-shot GameObject child-hierarchy inventory after the 180-frame gameplay sample. Reports child nodes, descendant sprites, batch-node ancestors and the largest object subtrees. The scan has per-object and total safety caps. Hooks and diagnostics remain disabled when OFF; this adds instrumentation overhead and does not measure GPU execution time.",
+      "description": "Collects read-only Cocos render callback counts and a one-shot GameObject child-hierarchy inventory after the 180-frame gameplay sample. Reports child nodes, descendant sprites, batch-node ancestors and the largest object subtrees. The scan has per-object and total safety caps. Hooks and diagnostics remain disabled when OFF; this adds instrumentation overhead, does not change rendering, and does not measure GPU execution time.",
       "default": false
     }
   }
