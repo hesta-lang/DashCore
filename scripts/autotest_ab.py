@@ -906,6 +906,8 @@ def write_culling_report(args: argparse.Namespace, disabled: dict[str, Any],
         and on_runtime.get("active_confirmed") is True
         and on_runtime.get("stats_sample_count", 0) > 0
         and on_runtime.get("frames", 0) >= 120
+        and on_runtime.get("visited_game_objects", 0) > 0
+        and on_runtime.get("eligible_objects", 0) > 0
     )
     actually_culled = activation_valid and on_runtime.get("culled_objects", 0) > 0
     status = (
