@@ -59,7 +59,7 @@
 - Preserve mod ID `hesta.optgod` so the experimental package updates/replaces the existing DashCore package.
 - Set package version to `0.11.0-alpha`; identify the package as DashCore Experimental Renderer and state that this milestone still uses vanilla drawing.
 
-- [ ] **Step 1: Write the failing product-contract test**
+- [x] **Step 1: Write the failing product-contract test**
 
 Create `scripts/test_renderer_product_contract.py`. Assert that:
   - `mod.json` keeps ID `hesta.optgod`, uses version `0.11.0-alpha`, and has no runtime settings in this initial read-only milestone.
@@ -67,27 +67,27 @@ Create `scripts/test_renderer_product_contract.py`. Assert that:
   - Runtime source does not hook `CCNode::visit`, `CCSprite::draw`, `CCSpriteBatchNode::draw`, `CCTextureAtlas::drawQuads`, or `CCDirector::drawScene`.
   - README describes a staged level-object renderer and makes no performance or active draw-replacement claim.
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 Run: `python3 scripts/test_renderer_product_contract.py`
 
 Expected: FAIL against the current diagnostic DashCore implementation.
 
-- [ ] **Step 3: Replace the runtime with a minimal Geode shell**
+- [x] **Step 3: Replace the runtime with a minimal Geode shell**
 
 Reduce `src/main.cpp` to the existing Geode module-load convention and renderer-module initialization. Remove profiling, render-pipeline telemetry, static culling, last-level auto-loading, AutoTest override-file handling, and all diagnostic/draw hooks. Do not add replacement draw hooks.
 
 Delete the obsolete `src/bismuth` probes. Keep the Android GLES link only for the planned renderer backend; update its CMake comment to describe ordinary GLES backend support without assuming GLES 3.1/compute.
 
-- [ ] **Step 4: Update package metadata and project description**
+- [x] **Step 4: Update package metadata and project description**
 
 Update `mod.json` to `0.11.0-alpha`, retain `hesta.optgod`, remove unrelated runtime settings, and describe the product as an experimental renderer for Geometry Dash level objects. Update README/changelog to state that the first milestone is read-only and vanilla rendering remains active.
 
-- [ ] **Step 5: Register the contract test in Android64 CI**
+- [x] **Step 5: Register the contract test in Android64 CI**
 
 Run the new Python contract test from `.github/workflows/build-dashcore-android64.yml`. Keep Cppcheck and Android64 package validation enabled.
 
-- [ ] **Step 6: Run the test and commit**
+- [x] **Step 6: Run the test and commit**
 
 Run: `python3 scripts/test_renderer_product_contract.py`
 
@@ -120,21 +120,21 @@ Commit: `refactor: isolate DashCore experimental renderer runtime`
 - `bool validateSpriteDescriptor(SpriteDescriptor const&) noexcept`.
 - Snapshot/descriptors contain value types only; never store `GameObject*`, `CCNode*`, `CCSprite*`, or any pointer into the live scene.
 
-- [ ] **Step 1: Write failing model tests**
+- [x] **Step 1: Write failing model tests**
 
 In `tests/renderer_model_tests.cpp`, test finite/supported descriptors, NaN/infinite transforms, invalid/empty rectangles, unsupported texture/blend states, and object/sprite ID ownership and generation.
 
-- [ ] **Step 2: Run tests and verify they fail**
+- [x] **Step 2: Run tests and verify they fail**
 
 Run: `c++ -std=c++20 -Wall -Wextra -Werror -Isrc tests/renderer_model_tests.cpp src/renderer/core/*.cpp -o /tmp/dashcore-renderer-model-tests && /tmp/dashcore-renderer-model-tests`
 
 Expected: compile/test failure because the model does not yet exist.
 
-- [ ] **Step 3: Implement the value types and validation**
+- [x] **Step 3: Implement the value types and validation**
 
 Implement the declared structures and `validateSpriteDescriptor`. Reject non-finite geometry/transforms, invalid rectangles, and unsupported resource/blend states without dereferencing engine objects.
 
-- [ ] **Step 4: Run tests and commit**
+- [x] **Step 4: Run tests and commit**
 
 Run the same host C++ test command.
 
@@ -157,21 +157,21 @@ Commit: `feat: add renderer snapshot data model`
 - An attribute is unsupported when texture identity, UV/local bounds, transform, color, opacity, visibility, or blend state cannot be read reliably by the source adapter.
 - The extractor never receives or stores a live engine pointer.
 
-- [ ] **Step 1: Add failing extraction fixtures**
+- [x] **Step 1: Add failing extraction fixtures**
 
 Test valid base/detail/glow/black-style sprite descriptors, multiple child indices under one owner, and changed values between captures for position/rotation/scale, RGBA, opacity, and visibility. Add unknown texture, unsupported blend, invalid UV, and non-finite fixtures.
 
-- [ ] **Step 2: Run tests and verify they fail**
+- [x] **Step 2: Run tests and verify they fail**
 
 Run the host C++ model-test command.
 
 Expected: FAIL because the extractor does not exist.
 
-- [ ] **Step 3: Implement the pure extractor**
+- [x] **Step 3: Implement the pure extractor**
 
 Copy validated fields from `RawSpriteAttributes` to `SpriteDescriptor`; call descriptor validation; return false for incomplete or unsupported attributes without fabricating defaults.
 
-- [ ] **Step 4: Run tests and commit**
+- [x] **Step 4: Run tests and commit**
 
 Expected: PASS; a second extraction reflects changed input attributes, and invalid/unsupported values remain ineligible.
 
@@ -197,7 +197,7 @@ Commit: `feat: validate and extract sprite descriptors`
 - `GeodeLevelObjectSource` adapts a live `PlayLayer` to `LevelObjectSource`. Engine pointers are used only during the collection call and never copied into snapshots.
 - Use the verified `PlayLayer::m_objects` inventory and Cocos child traversal; do not use `ObjectToolbox::allKeys()` as an Android enumeration source.
 
-- [ ] **Step 1: Add failing collector tests**
+- [x] **Step 1: Add failing collector tests**
 
 Use fake sources to test empty levels, multiple child sprites under one GameObject, nested child nodes/batch-node ancestry, null/unsupported entries, repeated capture/reset, and level-generation changes. Assert that no pointer-like source identity appears in snapshot data.
 
@@ -207,7 +207,7 @@ Run the host C++ model-test command.
 
 Expected: FAIL because the source/collector interfaces do not exist.
 
-- [ ] **Step 3: Implement the pure collector**
+- [x] **Step 3: Implement the pure collector**
 
 Implement `LevelObjectSource` and `LevelObjectCollector`. Rebuild each snapshot from owned descriptor values; assign object/child indices within the current level generation; reject incomplete entries rather than inventing attributes.
 
@@ -245,7 +245,7 @@ Commit: `feat: collect level object snapshots safely`
 - `std::vector<RenderBatch> planBatches(std::span<SpriteDescriptor const> sprites, std::span<std::uint32_t const> drawOrder)`.
 - Batches combine only adjacent compatible sprites in observed order; no global sort may move a sprite past another sprite.
 
-- [ ] **Step 1: Add failing order/batch tests**
+- [x] **Step 1: Add failing order/batch tests**
 
 Cover different z-layers, equal-z sprites with different traversal order, same texture with different blend states, same blend with different textures, and a compatibility break between otherwise matching sprites.
 
@@ -259,7 +259,7 @@ Expected: FAIL for the absent order and batch planner.
 
 Use the pinned Cocos bindings and observed child-list order to determine the non-mutating source of z-order and arrival/traversal order. Do not call a sorting function that mutates the live scene. If exact order cannot be reconstructed, mark that subtree unsupported.
 
-- [ ] **Step 4: Implement stable ordering and contiguous batching**
+- [x] **Step 4: Implement stable ordering and contiguous batching**
 
 Implement `buildStableDrawOrder` and `planBatches`. Preserve input order for equal-layer items and split batches whenever layer, texture, or blend state changes.
 
