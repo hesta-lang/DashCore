@@ -1,5 +1,11 @@
-## 0.10.2-alpha — Android chrono portability fix
-- Replaces the `std::chrono::microseconds` alias at both geometry timing sites with an explicit microsecond duration type, avoiding the Android64 Clang failure reported by build #35.
+## 0.10.3-alpha — complete Android chrono portability fix
+- Fixes the remaining `std::chrono::microseconds` alias at the GPU-cull input collection timing site (`collectUs`) that was missed by 0.10.2-alpha and caused Android64 Clang to fail at src/main.cpp:1155.
+- Uses the same explicit `std::chrono::duration<std::int64_t, std::ratio<1, 1000000>>` type consistently across the timing code.
+- Updates runtime labels, README and mod metadata to 0.10.3-alpha.
+- Keeps geometry diagnostics read-only and experimental culling OFF by default. This is a compile-fix alpha, not a validated rendering optimization.
+
+## 0.10.2-alpha — initial Android chrono portability fix
+- Replaced several `std::chrono::microseconds` timing aliases with an explicit microsecond duration type. One additional collection-timing alias remained and is corrected in 0.10.3-alpha.
 - Keeps the diagnostic scheduling change from 0.10.1-alpha; scene inspection remains read-only and experimental culling remains OFF by default.
 - Validation build only. No performance improvement is claimed; physical Huawei Y9s validation remains required.
 
