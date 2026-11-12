@@ -34,7 +34,7 @@
 - **Child reordering and z-order changes:** preserve observed vanilla order, including equal-z traversal order. Add stable-order and reordering tests in Task 5.
 - **Unknown texture/atlas or blend state, invalid UVs, and non-finite transforms:** make descriptors ineligible rather than guessing. Add rejection tests in Tasks 2–3.
 - **Level restart, exit, and object destruction:** no GameObject/CCSprite pointer may survive in a snapshot. Test repeated capture/reset and generation changes in Task 4.
-- **Dynamic colors, opacity, rotations, scales, trigger-driven movement, and missing GLES capabilities:** refresh values when captured or mark the item unsupported; test changing attributes in Task 3 and absent capabilities in Task 7.
+- **Dynamic colors, opacity, rotations, scales, trigger-driven movement, and missing GLES capabilities:** refresh values when captured or mark the item unsupported; test changing attributes in Task 3 and absent capabilities in Task 6.
 
 ---
 
