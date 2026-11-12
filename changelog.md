@@ -1,3 +1,10 @@
+## 0.9.7-alpha — delayed culling telemetry window
+- Waits for 600 completed gameplay updates after level setup before starting culling telemetry, avoiding the initial level-construction and camera-settling period.
+- Collects visited, eligible, and actually skipped GameObject counts only during the following 120 gameplay-frame visits; the sample reports its warmup and measurement windows separately.
+- Updates AutoTest parsing and validation so a culling run is accepted only when the full 600-frame warmup and 120-frame sample are confirmed.
+- Keeps the experimental culling setting OFF by default and does not change the culling eligibility rules or Geometry Dash's normal rendering path.
+- Cloud measurements remain diagnostic only; physical Huawei Y9s visual and performance validation is still required.
+
 ## 0.9.6-alpha — hook registration correction and culling A/B validation
 - Resolves optional hooks from Geode's actual registered-hook list using method display-name suffixes, avoiding hard-coded map-key assumptions for namespaced Cocos classes.
 - Explicitly keeps diagnostic hooks auto-disabled until Performance Diagnostics or the experimental culling feature requires them.
