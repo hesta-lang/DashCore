@@ -632,7 +632,7 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
     reason_keys = (
         "visited", "eligible", "protected_effect", "protected_trigger",
         "protected_grouped", "protected_rotating", "missing_director",
-        "invalid_content_size", "invalid_anchor", "invalid_world_bounds",
+        "content_size_fallbacks", "invalid_bounding_rect", "invalid_anchor", "invalid_world_bounds",
         "invalid_viewport", "within_guard_band", "offscreen_x",
         "offscreen_y", "offscreen_both",
     )
