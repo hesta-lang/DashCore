@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.9.5-alpha",
+  "version": "0.9.6-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.9.5-alpha: adds opt-in conservative culling for off-screen static objects while preserving vanilla rendering for triggers, effects, grouped and rotating objects.",
+  "description": "DashCore 0.9.6-alpha: fixes optional Geode hook registration and adds opt-in, observable static-object culling validation.",
   "tags": [
     "optimizations",
     "performance"
@@ -34,7 +34,7 @@
     "diagnostics-enable": {
       "type": "bool",
       "name": "Performance Diagnostics",
-      "description": "Enables the 600-frame timing sample, scene-graph scans and one-time GLES probes. When OFF, high-frequency diagnostic hooks are not installed, removing their per-frame/per-node detour overhead. Turn ON only when collecting a Geode log.",
+      "description": "Enables the 600-frame timing sample, scene-graph scans and one-time GLES probes. When OFF, high-frequency diagnostic hooks remain registered but auto-disabled, avoiding their per-frame/per-node detour overhead. Turn ON only when collecting a Geode log.",
       "default": false
     }
   }
