@@ -94,8 +94,8 @@ namespace {
     std::uint64_t g_cullingEligibleObjects = 0;
     std::uint64_t g_cullingCulledObjects = 0;
 
-    // High-frequency hooks are opt-in: when diagnostics are OFF, these hooks
-    // are not installed, removing their detour overhead from normal gameplay.
+    // High-frequency hooks are registered with auto-enable OFF. They are enabled
+    // only when diagnostics or experimental culling explicitly requires them.
     Hook* g_nodeVisitHook = nullptr;
     Hook* g_postUpdateHook = nullptr;
     Hook* g_drawSceneHook = nullptr;
