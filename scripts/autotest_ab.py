@@ -700,6 +700,27 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
     if not gameplay_verified:
         raise RuntimeError(f"{mode}: gameplay HUD percentage was not verified; benchmark aborted.")
 
+    # Wait for the bounded 120-frame culling telemetry sample before resetting
+    # frame counters and timing the actual culling ON/OFF comparison.
+    if mod_enabled and culling_mode == "on":
+        telemetry_deadline = time.monotonic() + 35
+        telemetry_seen = False
+        while time.monotonic() < telemetry_deadline:
+            found = shell(
+                serial,
+                f"grep -R -I -l 'CULL-STATS frames=' {shlex.quote(log_dir)} 2>/dev/null",
+                check=False, timeout=15
+            ).strip()
+            if found:
+                telemetry_seen = True
+                break
+            time.sleep(1)
+        if not telemetry_seen:
+            raise RuntimeError(
+                f"{mode}: culling did not emit its 120-frame CULL-STATS sample; refusing to report an unverified ON run."
+            )
+        time.sleep(1)
+
     pids = shell(serial, "pidof com.geode.launcher", check=False).strip().split()
     pid = pids[0] if pids else ""
     gfx = {"available": False, "reason": "Launcher process not found"}
@@ -871,8 +892,15 @@ def write_culling_report(args: argparse.Namespace, disabled: dict[str, Any],
         and not item["crash_detected"]
         for item in (disabled, enabled)
     )
+    off_mode_confirmed = (
+        off_runtime.get("activation_report_found")
+        and off_runtime.get("requested") is False
+        and off_runtime.get("active") is False
+    )
     activation_valid = (
-        enabled.get("culling_mode") == "on"
+        disabled.get("culling_mode") == "off"
+        and off_mode_confirmed
+        and enabled.get("culling_mode") == "on"
         and on_runtime.get("activation_report_found")
         and on_runtime.get("requested") is True
         and on_runtime.get("active_confirmed") is True
@@ -888,6 +916,7 @@ def write_culling_report(args: argparse.Namespace, disabled: dict[str, Any],
     report = {
         "status": status,
         "measurement_valid": measurement_valid,
+        "culling_off_confirmed": off_mode_confirmed,
         "culling_activation_valid": activation_valid,
         "actual_culling_observed": actually_culled,
         "culling_off": disabled,
@@ -917,6 +946,7 @@ def write_culling_report(args: argparse.Namespace, disabled: dict[str, Any],
         "",
         "## Runtime proof", "",
         f"- Culling OFF requested / active: {off_runtime.get('requested')} / {off_runtime.get('active')}",
+        f"- Culling OFF state confirmed: {off_mode_confirmed}",
         f"- Culling ON requested / active: {on_runtime.get('requested')} / {on_runtime.get('active')}",
         f"- Telemetry frames: {on_runtime.get('frames')}",
         f"- Visited GameObjects: {on_runtime.get('visited_game_objects')}",
