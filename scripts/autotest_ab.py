@@ -782,7 +782,7 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
         while time.monotonic() < diagnostic_deadline:
             found = shell(
                 serial,
-                f"grep -R -I -l 'CULL-GEOMETRY-CANDIDATE' {shlex.quote(log_dir)} 2>/dev/null",
+                f"grep -R -I -l 'DIAGNOSTIC-COST' {shlex.quote(log_dir)} 2>/dev/null",
                 check=False, timeout=15
             ).strip()
             if found:
@@ -795,7 +795,7 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
             timeout_logs = read_remote_logs(serial, log_dir, variant_dir / "geode-logs-timeout")
             (variant_dir / "combined-geode-log.txt").write_text(timeout_logcat + "\n" + timeout_logs)
             raise RuntimeError(
-                f"{mode}: timed out waiting for CULL-GEOMETRY-CANDIDATE after enabling isolated diagnostics; inspect timeout logs."
+                f"{mode}: timed out waiting for DIAGNOSTIC-COST after 600 confirmed gameplay updates; inspect timeout logs."
             )
 
         time.sleep(2)

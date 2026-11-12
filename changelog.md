@@ -1,3 +1,11 @@
+## 0.10.1-alpha — Android diagnostic scheduling
+- Moves the final read-only scene-geometry scan from the `CCDirector::drawScene` callback to `PlayLayer::postUpdate` after 600 confirmed gameplay updates.
+- The Android AutoTest confirmed that `PlayLayer::postUpdate` ran 600 updates while the hooked `CCDirector::drawScene` callback did not reach its 600-frame completion path. This caused the previous diagnostic timeout.
+- Keeps drawScene profiling optional; only CCNode::visit and PlayLayer::postUpdate are required for the geometry pass.
+- AutoTest waits for DIAGNOSTIC-COST instead of waiting for a candidate line, and still requires the candidate / parent / bounds markers in the completed report.
+- The isolated pass keeps culling OFF; the normal FPS A/B measurements remain free of the expensive geometry scan.
+- No optimization claim is made. Cloud testing is diagnostic only; physical Huawei Y9s validation remains required.
+
 ## 0.10.0-alpha — isolated geometry diagnosis
 - Adds a separate AutoTest launch with Performance Diagnostics ON and static culling explicitly OFF; the FPS A/B runs keep diagnostics OFF.
 - Adds the diagnostics-mode.txt AutoTest override; without the file, the normal Geode Performance Diagnostics setting remains authoritative.
