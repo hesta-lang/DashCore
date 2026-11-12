@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.9.6-alpha",
+  "version": "0.9.7-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.9.6-alpha: fixes optional Geode hook registration and adds opt-in, observable static-object culling validation.",
+  "description": "DashCore 0.9.7-alpha: samples culling behavior after a 600-frame gameplay warmup, then measures a bounded 120-frame window.",
   "tags": [
     "optimizations",
     "performance"
