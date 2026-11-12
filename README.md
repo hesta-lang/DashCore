@@ -1,21 +1,15 @@
 # DashCore — Android rendering optimization
 
-## 0.9.6-alpha — hook registry fix and culling validation
+## 0.9.6-alpha — hook registry correction and conservative culling validation
 
-- Resolves high-frequency hooks through Geode's registered hook objects instead of assuming exact internal key strings for namespaced Cocos types.
-- Keeps those hooks auto-disabled until diagnostics or experimental culling explicitly requires them.
-- AutoTest now runs three separate conditions: no DashCore, DashCore with culling OFF, and DashCore with culling ON.
-- Culling ON must report the actual active state and bounded object-visit counters; the report distinguishes an active hook with no safe objects skipped from a real culling execution.
-- Culling remains opt-in and OFF by default. No stable optimization claim is made from cloud-emulator results.
-
-## 0.9.6-alpha — Bismuth-inspired conservative static-object culling (base feature retained)
-
-- Adds an opt-in CPU visibility pass for ordinary static objects outside an expanded camera viewport.
-- Uses each object's local content bounds transformed through the full Cocos node hierarchy, with a 125% viewport guard band.
-- Keeps triggers, effects, grouped objects, rotating objects, and objects with invalid bounds on the original Geometry Dash draw path.
-- The feature is OFF by default and can be enabled through **Experimental static-object culling (alpha)**.
-- This does not replace Cocos with Bismuth's custom renderer: Bismuth's current renderer requires desktop OpenGL 4.3 features that are not available as a direct Android GLES port.
-- This is an experimental diagnostic/validation build; physical Huawei Y9s testing is required before any stable optimization claim.
+- Resolves high-frequency hooks from Geode's registered hook objects instead of assuming exact internal map keys for namespaced Cocos types.
+- Keeps diagnostic hooks auto-disabled until Performance Diagnostics or experimental culling needs them.
+- Adds bounded culling telemetry for visited, eligible, and skipped GameObjects without enabling the 600-frame diagnostics suite.
+- AutoTest now runs three conditions: no DashCore, DashCore with culling OFF, and DashCore with culling ON. It requires the ON state and telemetry to be confirmed in Geode logs.
+- Adds an opt-in CPU visibility pass for ordinary static objects outside an expanded viewport, using full Cocos world transforms and a 125% guard band.
+- Triggers, effects, grouped/rotating objects, and objects with invalid bounds remain on the original Geometry Dash draw path.
+- Culling remains OFF by default. This is not a replacement for Bismuth's custom desktop OpenGL 4.3 renderer; the Android path uses the existing Cocos/GLES renderer.
+- Cloud results are functional/performance signals only. Physical Huawei Y9s visual and performance validation is still required before any optimization claim.
 
 ## 0.9.4-alpha — remove inactive diagnostic hook overhead
 
@@ -60,7 +54,7 @@ The long-term goal is to reduce unnecessary rendering work and stuttering on And
 
 A `BISMUTH-CULL ... CPU/GPU parity PASS` means only that the compute shader produced the same result as the CPU formula for the supplied coordinates. It does **not** prove that those coordinates match the game's actual rendered geometry, that every renderable object was collected, or that hiding objects would be safe.
 
-Scene bounds are not yet fully validated against the game's camera translation and zoom. Therefore, off-screen classification is not considered reliable enough to control rendering.
+Scene bounds and camera behavior remain experimental and have not been visually certified on the Huawei Y9s. The culling option therefore stays OFF by default, and any cloud test result is insufficient to enable it for normal play.
 
 ## Safety
 
