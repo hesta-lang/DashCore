@@ -68,6 +68,33 @@ class GameplayDiagnosticsAutoTest(unittest.TestCase):
         self.assertEqual(source, "geode-log-file")
         self.assertEqual(shell_mock.call_count, 1)
 
+    def test_update_only_sample_is_complete_without_claiming_draw_coverage(self):
+        sample = """
+        setupHasCompleted; performance-diagnostics=OFF, render-pipeline-diagnostics-requested=true, render-pipeline-hooks-ready=true, static-culling-requested=false, static-culling-active=false.
+        DashCore 0.10.11-alpha RENDER-PIPELINE-HOOKS: requested=true, ready=true.
+        DashCore 0.10.11-alpha RENDER-UPDATE-PROGRESS: postUpdateFrames=180, drawSceneFrames=0, sampleActive=true.
+        DashCore 0.10.11-alpha RENDER-PIPELINE FINAL: frames=180, drawSceneFrames=0, postUpdateFrames=180, sampleCoverage=update-only, timedDrawFrames=0, timingStride=8, drawSceneAvgUs=0.00.
+        DashCore 0.10.11-alpha RENDER-UPDATE: frames=180, avgPostUpdateUs=1200.
+        DashCore 0.10.11-alpha RENDER-UPDATE-SUBPHASES: baseGameLayerUpdateHookReady=true, playLayerUpdateVisibilityHookReady=true.
+        DashCore 0.10.11-alpha RENDER-UPDATE-BINS-NOTE: histogram ranges are mutually exclusive CPU-duration buckets.
+        DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=PlayLayer::postUpdate, samples=180.
+        DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=CCNode::visit, samples=20.
+        DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=CCSprite::draw, samples=20.
+        DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=CCSpriteBatchNode::draw, samples=20.
+        DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=CCTextureAtlas::drawQuads, samples=20.
+        DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=GJBaseGameLayer::update (PlayLayer), samples=20.
+        DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=PlayLayer::updateVisibility, samples=20.
+        DashCore 0.10.11-alpha OBJECT-VISUAL-HIERARCHY: arrayEntries=100.
+        DashCore 0.10.11-alpha OBJECT-SECTION-LAYOUT: sectionOuterSlots=10.
+        static-culling-requested=false, static-culling-active=false.
+        """
+        result = MODULE.inspect_runtime_log(sample)
+        self.assertTrue(result["all_diagnostics_present"], result)
+        self.assertEqual(result["render_pipeline_frames"], 180)
+        self.assertEqual(result["sample_coverage"], "update-only")
+        self.assertFalse(result["draw_scene_callback_observed"])
+        self.assertEqual(result["last_render_update_progress_frames"], 180)
+
     def test_missing_sample_is_incomplete(self):
         result = MODULE.inspect_runtime_log(
             "setupHasCompleted; static-culling-requested=false, static-culling-active=false."
