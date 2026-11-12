@@ -610,10 +610,38 @@ def wait_for_main_menu(serial: str, mode: str, variant_dir: pathlib.Path,
         time.sleep(2.0)
     raise RuntimeError(f"{mode}: timed out waiting for main menu after handling NOTICE; last OCR text: {last_text[:500]!r}")
 
-def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[str, Any]:
+def parse_culling_runtime(log_text: str) -> dict[str, Any]:
+    """Read requested/active state and telemetry from Geode logs."""
+    activations = re.findall(
+        r"static-culling-requested=(true|false),\s*static-culling-active=(true|false)",
+        log_text, re.IGNORECASE
+    )
+    samples = re.findall(
+        r"CULL-STATS frames=(\d+),\s*visitedGameObjects=(\d+),\s*eligibleObjects=(\d+),\s*culledObjects=(\d+)",
+        log_text, re.IGNORECASE
+    )
+    requested, active = activations[-1] if activations else ("false", "false")
+    frames, visited, eligible, culled = map(int, samples[-1]) if samples else (0, 0, 0, 0)
+    return {
+        "activation_report_found": bool(activations),
+        "requested": requested.lower() == "true",
+        "active": active.lower() == "true",
+        "active_confirmed": bool(activations) and active.lower() == "true",
+        "stats_sample_count": len(samples),
+        "frames": frames,
+        "visited_game_objects": visited,
+        "eligible_objects": eligible,
+        "culled_objects": culled,
+        "actual_culling_observed": culled > 0,
+    }
+
+
+def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_mode: str = "off") -> dict[str, Any]:
     serial, base = args.serial, args.base_dir.rstrip("/")
     mod_dir = f"{base}/game/geode/mods"
     mod_remote = f"{mod_dir}/DashCore.geode"
+    config_dir = f"{base}/game/geode/config/{args.mod_id}"
+    culling_mode_remote = f"{config_dir}/static-culling-mode.txt"
     log_dir = f"{base}/game/geode/logs"
     variant_dir = pathlib.Path(args.report_dir) / mode.lower().replace("_", "-")
     variant_dir.mkdir(parents=True, exist_ok=True)
@@ -622,8 +650,14 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[
     shell(serial, f"mkdir -p {shlex.quote(mod_dir)}")
     shell(serial, f"rm -f {shlex.quote(mod_remote)}")
     if mod_enabled:
+        if culling_mode not in ("on", "off"):
+            raise ValueError(f"Unsupported culling mode: {culling_mode!r}")
         run_adb(serial, "push", args.mod_file, mod_remote, timeout=120)
         shell(serial, f"test -s {shlex.quote(mod_remote)}")
+        shell(serial, f"mkdir -p {shlex.quote(config_dir)}")
+        shell(serial, f"printf '%s\\n' {shlex.quote(culling_mode)} > {shlex.quote(culling_mode_remote)}")
+    else:
+        shell(serial, f"rm -f {shlex.quote(culling_mode_remote)}")
     shell(serial, f"mkdir -p {shlex.quote(log_dir)} && rm -f {shlex.quote(log_dir)}/*")
     shell(serial, "logcat -c", check=False)
     shell(serial, "am start -a android.intent.action.VIEW -d geode-launcher://main/launch -p com.geode.launcher", check=False)
@@ -691,10 +725,19 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool) -> dict[
     (variant_dir / "crash-buffer.txt").write_text(crash_text)
     geode_text = read_remote_logs(serial, log_dir, variant_dir / "geode-logs-final")
     combined = last_logcat + "\n" + geode_text
+    culling_runtime = parse_culling_runtime(combined) if mod_enabled else {
+        "activation_report_found": False, "requested": False, "active": False,
+        "active_confirmed": False, "stats_sample_count": 0, "frames": 0,
+        "visited_game_objects": 0, "eligible_objects": 0, "culled_objects": 0,
+        "actual_culling_observed": False,
+    }
     (variant_dir / "combined-geode-log.txt").write_text(combined)
     screenshot(serial, f"dashcore-{mode.lower()}-final.png", variant_dir / "final-screen.png")
     crash = bool(re.search(r"FATAL EXCEPTION|Fatal signal|SIGABRT|SIGSEGV|has died", crash_text, re.IGNORECASE))
-    data = {"mode": mode, "mod_enabled": mod_enabled, "device_profile_id": args.device_profile_data["profile_id"],
+    data = {"mode": mode, "mod_enabled": mod_enabled,
+            "culling_mode": culling_mode if mod_enabled else "not-applicable",
+            "culling_runtime": culling_runtime,
+            "device_profile_id": args.device_profile_data["profile_id"],
             "execution_environment": "cloud_android_emulator", "hardware_equivalence": "NOT_EMULATED",
             "device_profile_assessment": args.device_profile_assessment,
             "gfxinfo": gfx,
