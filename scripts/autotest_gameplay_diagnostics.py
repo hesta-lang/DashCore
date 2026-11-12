@@ -45,6 +45,8 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
         "post_update_summary": "RENDER-UPDATE:" in log_text,
         "update_subphase_summary": "RENDER-UPDATE-SUBPHASES:" in log_text,
         "histogram_summary": "RENDER-UPDATE-BINS-NOTE:" in log_text,
+        "base_layer_update_histogram": "callback=GJBaseGameLayer::update (PlayLayer)" in log_text,
+        "visibility_update_histogram": "callback=PlayLayer::updateVisibility" in log_text,
         "required_timing_histograms": required_callbacks.issubset(histogram_callbacks),
         "visual_hierarchy_census": "OBJECT-VISUAL-HIERARCHY:" in log_text,
         "section_layout_census": "OBJECT-SECTION-LAYOUT:" in log_text,
@@ -87,6 +89,7 @@ def main() -> int:
         variant_args, "GAMEPLAY_DIAGNOSTICS", mod_enabled=True,
         culling_mode="off", diagnostics_mode="off", geometry_diagnostics=False,
         render_pipeline_mode="on",
+        render_pipeline_wait_s=60,
     )
 
     session_dir = args.report_dir / "gameplay-diagnostics"

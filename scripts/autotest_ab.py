@@ -708,7 +708,8 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
 
 def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_mode: str = "off",
                 diagnostics_mode: str = "off", geometry_diagnostics: bool = False,
-                render_pipeline_mode: str = "off") -> dict[str, Any]:
+                render_pipeline_mode: str = "off",
+                render_pipeline_wait_s: int = 0) -> dict[str, Any]:
     serial, base = args.serial, args.base_dir.rstrip("/")
     mod_dir = f"{base}/game/geode/mods"
     mod_remote = f"{mod_dir}/DashCore.geode"
@@ -909,6 +910,27 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
         shell(serial, "dumpsys gfxinfo com.geode.launcher reset", check=False)
         surface_layers = prepare_surfaceflinger(serial, variant_dir)
         observation = run_device_observation(serial, pid, variant_dir)
+        render_pipeline_sample_completed = None
+        if mod_enabled and render_pipeline_mode == "on" and render_pipeline_wait_s > 0:
+            # The read-only 180-draw sample starts only after gameplay setup has
+            # completed. Keep the level active and wait for its FINAL record
+            # instead of stopping after the generic 20-second CPU observation.
+            render_pipeline_sample_completed = False
+            render_pipeline_deadline = time.monotonic() + render_pipeline_wait_s
+            while time.monotonic() < render_pipeline_deadline:
+                marker = shell(
+                    serial,
+                    f"grep -R -I -l 'RENDER-PIPELINE FINAL:' {shlex.quote(log_dir)} 2>/dev/null",
+                    check=False, timeout=10
+                ).strip()
+                if marker:
+                    render_pipeline_sample_completed = True
+                    time.sleep(1.0)
+                    break
+                shell(serial, "input tap 700 800", check=False, timeout=5)
+                time.sleep(0.5)
+        else:
+            render_pipeline_sample_completed = None
         surface_metrics = collect_surfaceflinger(serial, surface_layers, variant_dir)
         gfx_text = shell(serial, "dumpsys gfxinfo com.geode.launcher framestats", check=False, timeout=90)
         (variant_dir / "gfxinfo-framestats.txt").write_text(gfx_text)
@@ -945,6 +967,7 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
             "gfxinfo": gfx,
             "surfaceflinger": surface_metrics, "surfaceflinger_candidate_count": len(surface_layers),
             "cpu_observation": observation, "crash_detected": crash,
+            "render_pipeline_sample_completed": render_pipeline_sample_completed,
             "gameplay_verified": gameplay_verified, "gameplay_ocr": gameplay_ocr[:1000],
             "launcher_pid_after_test": pid or None}
     (variant_dir / "metrics.json").write_text(json.dumps(data, indent=2) + "\n")

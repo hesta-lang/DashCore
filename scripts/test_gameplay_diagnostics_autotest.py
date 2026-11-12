@@ -30,6 +30,8 @@ class GameplayDiagnosticsAutoTest(unittest.TestCase):
         DashCore 0.10.10-alpha RENDER-TIMING-BINS: callback=CCSprite::draw, samples=20.
         DashCore 0.10.10-alpha RENDER-TIMING-BINS: callback=CCSpriteBatchNode::draw, samples=20.
         DashCore 0.10.10-alpha RENDER-TIMING-BINS: callback=CCTextureAtlas::drawQuads, samples=20.
+        DashCore 0.10.10-alpha RENDER-TIMING-BINS: callback=GJBaseGameLayer::update (PlayLayer), samples=20.
+        DashCore 0.10.10-alpha RENDER-TIMING-BINS: callback=PlayLayer::updateVisibility, samples=20.
         DashCore 0.10.10-alpha OBJECT-VISUAL-HIERARCHY: arrayEntries=100.
         DashCore 0.10.10-alpha OBJECT-SECTION-LAYOUT: sectionOuterSlots=10.
         """
