@@ -216,10 +216,11 @@ jobs:
           assert profile["profile_id"] == "huawei-y9s", profile.get("profile_id")
           sample_culling_log = """
           setupHasCompleted; diagnostics=OFF, static-culling-requested=true, static-culling-active=true.
-          DashCore 0.9.6-alpha CULL-STATS frames=120, visitedGameObjects=1000, eligibleObjects=500, culledObjects=12.
+          DashCore 0.9.7-alpha CULL-STATS frames=120, warmupFrames=600, visitedGameObjects=1000, eligibleObjects=500, culledObjects=12.
           """
           culling_state = module.parse_culling_runtime(sample_culling_log)
           assert culling_state["active_confirmed"] is True, culling_state
+          assert culling_state["warmup_frames"] == 600, culling_state
           assert culling_state["frames"] == 120 and culling_state["culled_objects"] == 12, culling_state
           disabled_state = module.parse_culling_runtime(
               "setupHasCompleted; diagnostics=OFF, static-culling-requested=false, static-culling-active=false."
