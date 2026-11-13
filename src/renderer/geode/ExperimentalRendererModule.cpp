@@ -17,7 +17,7 @@ RendererCoordinator& coordinator() noexcept {
 namespace dashcore::renderer {
 
 void initialize() {
-    geode::log::info(
+    ::geode::log::info(
         "DashCore Experimental Renderer 0.11.0-alpha: live read-only object snapshots enabled; vanilla rendering remains the only draw path."
     );
 }
