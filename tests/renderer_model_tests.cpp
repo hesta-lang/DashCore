@@ -3,6 +3,7 @@
 #include "renderer/core/GlesCapabilities.hpp"
 #include "renderer/core/LevelObjectCollector.hpp"
 #include "renderer/core/SpriteDescriptorExtractor.hpp"
+#include "renderer/core/SpriteQuadExtractor.hpp"
 
 #include <cassert>
 #include <limits>
@@ -263,4 +264,77 @@ int main() {
     auto gles31 = parseGlesCapabilities("OpenGL ES 3.1 Vendor", "", true);
     assert(gles31.supportsComputeShaders);
     assert(gles31.supportsShaderStorageBuffers);
+    // Live sprite quads are accepted only when this renderer can reproduce
+    // their geometry, UV mapping, blend and uniform per-vertex color exactly.
+    auto makeQuad = [] {
+        SpriteQuadData quad{};
+        ColorRGBA8 const color{18, 36, 72, 144};
+        quad.bottomLeft = {-8.f, -4.f, 0.1f, 0.6f, color};
+        quad.bottomRight = {8.f, -4.f, 0.5f, 0.6f, color};
+        quad.topRight = {8.f, 4.f, 0.5f, 0.2f, color};
+        quad.topLeft = {-8.f, 4.f, 0.1f, 0.2f, color};
+        return quad;
+    };
+
+    RawSpriteAttributes quadAttributes{};
+    auto const standardBlend = BlendState{1, 771, true};
+    assert(extractAxisAlignedSpriteAttributes(
+        makeQuad(), TextureKey{99}, standardBlend, true, quadAttributes
+    ));
+    assert(quadAttributes.textureKnown);
+    assert(quadAttributes.texture.value == 99);
+    assert(quadAttributes.localRect.x == -8.f);
+    assert(quadAttributes.localRect.y == -4.f);
+    assert(quadAttributes.localRect.width == 16.f);
+    assert(quadAttributes.localRect.height == 8.f);
+    assert(quadAttributes.uvRect.x == 0.1f);
+    assert(quadAttributes.uvRect.y == 0.2f);
+    assert(quadAttributes.uvRect.width == 0.4f);
+    assert(quadAttributes.uvRect.height == 0.4f);
+    assert(quadAttributes.color.r == 18 && quadAttributes.color.g == 36);
+    assert(quadAttributes.color.b == 72 && quadAttributes.color.a == 144);
+    assert(quadAttributes.opacity == 255);
+    assert(quadAttributes.blend.sourceFactor == standardBlend.sourceFactor);
+    assert(quadAttributes.blend.destinationFactor == standardBlend.destinationFactor);
+    assert(quadAttributes.blend.supported);
+    assert(quadAttributes.visible);
+
+    auto rotatedUv = makeQuad();
+    rotatedUv.bottomRight.u = 0.1f;
+    rotatedUv.bottomRight.v = 0.2f;
+    rotatedUv.topRight.u = 0.5f;
+    rotatedUv.topRight.v = 0.6f;
+    RawSpriteAttributes rejectedQuad{};
+    assert(!extractAxisAlignedSpriteAttributes(
+        rotatedUv, TextureKey{99}, standardBlend, true, rejectedQuad
+    ));
+
+    auto vertexTinted = makeQuad();
+    vertexTinted.topLeft.color.r = 19;
+    assert(!extractAxisAlignedSpriteAttributes(
+        vertexTinted, TextureKey{99}, standardBlend, true, rejectedQuad
+    ));
+
+    auto sheared = makeQuad();
+    sheared.topRight.x += 1.f;
+    assert(!extractAxisAlignedSpriteAttributes(
+        sheared, TextureKey{99}, standardBlend, true, rejectedQuad
+    ));
+
+    auto nanPosition = makeQuad();
+    nanPosition.bottomLeft.x = std::numeric_limits<float>::quiet_NaN();
+    assert(!extractAxisAlignedSpriteAttributes(
+        nanPosition, TextureKey{99}, standardBlend, true, rejectedQuad
+    ));
+
+    assert(!extractAxisAlignedSpriteAttributes(
+        makeQuad(), TextureKey{0}, standardBlend, true, rejectedQuad
+    ));
+    assert(!extractAxisAlignedSpriteAttributes(
+        makeQuad(), TextureKey{99}, BlendState{1, 771, false}, true, rejectedQuad
+    ));
+    assert(!extractAxisAlignedSpriteAttributes(
+        makeQuad(), TextureKey{99}, standardBlend, false, rejectedQuad
+    ));
+
 }
