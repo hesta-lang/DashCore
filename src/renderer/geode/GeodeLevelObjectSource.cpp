@@ -1,6 +1,7 @@
 #include "renderer/geode/GeodeLevelObjectSource.hpp"
 
 #include "renderer/core/SpriteDescriptorExtractor.hpp"
+#include "renderer/core/LevelObjectCollector.hpp"
 #include "renderer/core/SpriteQuadExtractor.hpp"
 
 #include <Geode/Geode.hpp>
@@ -170,7 +171,7 @@ bool captureNode(
 
     if (typeinfo_cast<cocos2d::CCSpriteBatchNode*>(node)) return true;
 
-    geode::cocos::CCArrayExt<cocos2d::CCNode*, false> childArray(node->getChildren());
+    ::geode::cocos::CCArrayExt<cocos2d::CCNode*, false> childArray(node->getChildren());
     if (childArray.size() > kMaximumChildrenPerNode) return false;
 
     std::vector<cocos2d::CCNode*> children;
@@ -237,7 +238,7 @@ bool GeodeLevelObjectSource::collect(
     output.clear();
     if (!m_layer || !m_layer->m_objects || !m_layer->m_objectLayer) return false;
 
-    geode::cocos::CCArrayExt<GameObject, false> objects(m_layer->m_objects);
+    ::geode::cocos::CCArrayExt<GameObject, false> objects(m_layer->m_objects);
     if (objects.size() > core::LevelObjectCollector::kMaximumSprites) return false;
 
     std::vector<RootObject> roots;
