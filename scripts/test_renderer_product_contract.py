@@ -48,6 +48,7 @@ class RendererProductContract(unittest.TestCase):
                 self.assertNotIn(marker, self.source)
 
     def test_live_capture_uses_only_update_lifecycle_and_never_draw_hooks(self):
+        self.assertIn("#include <Geode/modify/PlayLayer.hpp>", self.hooks)
         self.assertIn("PlayLayer::postUpdate(dt)", self.hooks)
         self.assertIn("PlayLayer::onEnterTransitionDidFinish()", self.hooks)
         self.assertIn("PlayLayer::onExit()", self.hooks)
