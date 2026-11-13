@@ -1,6 +1,7 @@
 #include "renderer/geode/RendererCoordinator.hpp"
 
 #include <Geode/Geode.hpp>
+#include <Geode/modify/PlayLayer.hpp>
 #include <Geode/binding/PlayLayer.hpp>
 
 using namespace geode::prelude;
