@@ -1,0 +1,35 @@
+#pragma once
+
+#include "renderer/core/LevelObjectCollector.hpp"
+
+#include <cstdint>
+
+class PlayLayer;
+
+namespace dashcore::renderer::geode {
+
+class RendererCoordinator {
+public:
+    void onLevelInit() noexcept;
+    void onFrame(PlayLayer* layer) noexcept;
+    void onLevelExit() noexcept;
+
+    core::RenderSnapshot const& snapshot() const noexcept {
+        return m_snapshot;
+    }
+
+    bool active() const noexcept {
+        return m_active;
+    }
+
+private:
+    core::LevelObjectCollector m_collector;
+    core::RenderSnapshot m_snapshot{};
+    std::uint32_t m_generation = 0;
+    std::uint64_t m_frameIndex = 0;
+    bool m_active = false;
+};
+
+RendererCoordinator& coordinator() noexcept;
+
+} // namespace dashcore::renderer::geode
