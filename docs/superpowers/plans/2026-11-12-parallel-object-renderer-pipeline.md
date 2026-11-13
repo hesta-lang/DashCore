@@ -211,19 +211,19 @@ Expected: FAIL because the source/collector interfaces do not exist.
 
 Implement `LevelObjectSource` and `LevelObjectCollector`. Rebuild each snapshot from owned descriptor values; assign object/child indices within the current level generation; reject incomplete entries rather than inventing attributes.
 
-- [ ] **Step 4: Implement the Geode source adapter**
+- [x] **Step 4: Implement the Geode source adapter**
 
 Enumerate `PlayLayer::m_objects` and traverse each object’s Cocos child hierarchy synchronously. Guard null children and traversal limits, avoid double-counting nested roots, copy required sprite attributes into `RawSpriteAttributes`, then call the Task 3 extractor.
 
 Before using each Geode method, verify its declaration and Android64 availability in the pinned bindings. If a method is unavailable, exclude that data path and document the unsupported case. Do not modify the Cocos tree or call draw/visibility setters.
 
-- [ ] **Step 5: Run tests and build Android64**
+- [x] **Step 5: Run tests and build Android64**
 
 Run the host C++ tests and Android64 build workflow.
 
 Expected: fake-source tests PASS and the Geode source adapter compiles for `arm64-v8a`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Commit: `feat: collect level object snapshots safely`
 
@@ -316,7 +316,7 @@ Query the current context version/extensions through GLES APIs. Do not infer cap
 
 Create/release required buffers and upload prepared data only when the context supports the selected path. Keep a CPU-only path for model/parity work. No shaders, compute dispatches, indirect draws, or framebuffer presentation are enabled in this task.
 
-- [ ] **Step 7: Run model tests and Android64 build for the current head; commit**
+- [x] **Step 7: Run model tests and Android64 build for the current head; commit**
 
 Expected: host tests PASS and Android64 build succeeds without making compute/SSBO a startup requirement.
 
@@ -345,27 +345,27 @@ Commit: `feat: prepare renderer geometry and GLES capabilities`
 - The Geode hook adapter forwards each original callback exactly once.
 - `onLevelReady` may capture and prepare a snapshot only; it must not replace rendering or mutate game objects.
 
-- [ ] **Step 1: Add failing integration-contract tests**
+- [x] **Step 1: Add failing integration-contract tests**
 
 Assert that the coordinator resets on a new level generation, captures only the active PlayLayer, refreshes transform/color/opacity values on successive frames, and never registers hooks for Cocos drawing callbacks.
 
-- [ ] **Step 2: Verify lifecycle hook availability**
+- [x] **Step 2: Verify lifecycle hook availability**
 
 Confirm exact Android64 support/signatures for the selected `PlayLayer` lifecycle callbacks against pinned Geode bindings. Use only confirmed methods. If a cleanup callback is unavailable, keep no live engine pointers in coordinator state and release owned snapshot data at the next verified lifecycle boundary.
 
-- [ ] **Step 3: Implement coordinator lifecycle**
+- [x] **Step 3: Implement coordinator lifecycle**
 
 Reset collector/snapshot state at level initialization; capture after level setup completes; refresh dynamic values after each original `PlayLayer::postUpdate(float)` call; release owned snapshot/backend resources at the verified level-exit boundary. Preserve original callback order and call each original exactly once.
 
-- [ ] **Step 4: Keep the mode read-only**
+- [x] **Step 4: Keep the mode read-only**
 
 Default to parallel/observe-only mode. The only per-frame integration hook in this milestone is the verified `PlayLayer::postUpdate(float)` lifecycle/update callback. Do not install `CCNode::visit`, `CCSprite::draw`, batch, atlas, or director draw hooks. Do not call any draw/present API from the new backend.
 
-- [ ] **Step 5: Run contract tests and Android64 build**
+- [x] **Step 5: Run contract tests and Android64 build**
 
 Expected: tests PASS; the mod loads and the only visible renderer remains vanilla.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Commit: `feat: integrate read-only renderer pipeline lifecycle`
 
