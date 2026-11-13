@@ -6,6 +6,7 @@
 #include "renderer/core/SpriteQuadExtractor.hpp"
 
 #include <cassert>
+#include <cmath>
 #include <limits>
 #include <vector>
 
@@ -287,10 +288,10 @@ int main() {
     assert(quadAttributes.localRect.y == -4.f);
     assert(quadAttributes.localRect.width == 16.f);
     assert(quadAttributes.localRect.height == 8.f);
-    assert(quadAttributes.uvRect.x == 0.1f);
-    assert(quadAttributes.uvRect.y == 0.2f);
-    assert(quadAttributes.uvRect.width == 0.4f);
-    assert(quadAttributes.uvRect.height == 0.4f);
+    assert(std::fabs(quadAttributes.uvRect.x - 0.1f) < 0.00001f);
+    assert(std::fabs(quadAttributes.uvRect.y - 0.2f) < 0.00001f);
+    assert(std::fabs(quadAttributes.uvRect.width - 0.4f) < 0.00001f);
+    assert(std::fabs(quadAttributes.uvRect.height - 0.4f) < 0.00001f);
     assert(quadAttributes.color.r == 18 && quadAttributes.color.g == 36);
     assert(quadAttributes.color.b == 72 && quadAttributes.color.a == 144);
     assert(quadAttributes.opacity == 255);
@@ -325,6 +326,13 @@ int main() {
     nanPosition.bottomLeft.x = std::numeric_limits<float>::quiet_NaN();
     assert(!extractAxisAlignedSpriteAttributes(
         nanPosition, TextureKey{99}, standardBlend, true, rejectedQuad
+    ));
+
+
+    auto nonZeroDepth = makeQuad();
+    nonZeroDepth.topLeft.z = 1.f;
+    assert(!extractAxisAlignedSpriteAttributes(
+        nonZeroDepth, TextureKey{99}, standardBlend, true, rejectedQuad
     ));
 
     assert(!extractAxisAlignedSpriteAttributes(

@@ -21,7 +21,7 @@ bool sameColor(ColorRGBA8 const& left, ColorRGBA8 const& right) noexcept {
 }
 
 bool finiteVertex(SpriteQuadVertexData const& vertex) noexcept {
-    return finite(vertex.x) && finite(vertex.y) &&
+    return finite(vertex.x) && finite(vertex.y) && finite(vertex.z) &&
         finite(vertex.u) && finite(vertex.v);
 }
 
@@ -48,6 +48,12 @@ bool extractAxisAlignedSpriteAttributes(
     if (!visible || texture.value == 0 || !blend.supported) return false;
     if (!finiteVertex(bl) || !finiteVertex(br) ||
         !finiteVertex(tr) || !finiteVertex(tl)) {
+        return false;
+    }
+
+    // GeometryBuilder does not model vertex depth yet.
+    if (!near(bl.z, 0.f) || !near(br.z, 0.f) ||
+        !near(tr.z, 0.f) || !near(tl.z, 0.f)) {
         return false;
     }
 

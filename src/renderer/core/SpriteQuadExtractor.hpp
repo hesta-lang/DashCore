@@ -10,6 +10,7 @@ struct SpriteQuadVertexData {
     float u = 0.f;
     float v = 0.f;
     ColorRGBA8 color{};
+    float z = 0.f;
 };
 
 struct SpriteQuadData {
