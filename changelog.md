@@ -1,8 +1,7 @@
-## 0.11.0-alpha — read-only renderer foundation
-- Replaces the old diagnostic/culling runtime with a dedicated experimental-renderer shell.
-- Adds value-only renderer descriptors, sprite-attribute extraction, and a bounded snapshot collector with level-generation and duplicate-ID validation.
-- Adds stable z/traversal ordering and contiguous batch planning by layer, texture, and blend state.
-- Adds CPU quad-geometry preparation, runtime GLES version/capability parsing, and an Android VBO/EBO upload-only backend that restores Cocos buffer bindings.
-- The source adapter remains test-only. These facilities are not connected to live gameplay and do not submit draw calls or replace any original rendering path.
-- Vanilla rendering, gameplay, physics, effects, shaders, UI, and input remain unchanged. No performance gain is claimed.
+## 0.11.0-alpha — live read-only object snapshots
+- Adds a conservative Geode source adapter over GJBaseGameLayer::m_objects and the main object layer.
+- Traverses copied child arrays in z-order/order-of-arrival order without calling Cocos sorting functions or mutating the live node tree.
+- Captures value-only descriptors for unbatched sprites with supported blending, uniform quad colors, zero vertex depth, axis-aligned geometry, rectangular normalized UVs, no atlas rotation/flip, and no vertex modifications.
+- Refreshes snapshots after the original PlayLayer::postUpdate(float) callback and clears them on level exit. Engine pointers never enter persistent coordinator or snapshot state.
+- Keeps all visible drawing vanilla. CPU geometry preparation and the GLES upload backend remain disconnected from gameplay; no performance gain is claimed.
 

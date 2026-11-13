@@ -13,6 +13,8 @@ class RendererProductContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = (ROOT / "src/main.cpp").read_text(encoding="utf-8")
+        cls.hooks = (ROOT / "src/renderer/geode/PlayLayerRendererHooks.cpp").read_text(encoding="utf-8")
+        cls.adapter = (ROOT / "src/renderer/geode/GeodeLevelObjectSource.cpp").read_text(encoding="utf-8")
         cls.metadata = json.loads((ROOT / "mod.json").read_text(encoding="utf-8"))
         cls.readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
@@ -44,6 +46,41 @@ class RendererProductContract(unittest.TestCase):
         for marker in forbidden:
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, self.source)
+
+    def test_live_capture_uses_only_update_lifecycle_and_never_draw_hooks(self):
+        self.assertIn("PlayLayer::postUpdate(dt)", self.hooks)
+        self.assertIn("PlayLayer::onEnterTransitionDidFinish()", self.hooks)
+        self.assertIn("PlayLayer::onExit()", self.hooks)
+        self.assertLess(
+            self.hooks.index("PlayLayer::postUpdate(dt)"),
+            self.hooks.index("coordinator().onFrame(this)"),
+        )
+        for forbidden in (
+            "CCDirector::drawScene",
+            "CCNode::visit",
+            "CCSprite::draw",
+            "CCSpriteBatchNode::draw",
+            "CCTextureAtlas::drawQuads",
+            "present(",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, self.hooks)
+
+    def test_geode_source_is_bounded_and_conservative(self):
+        self.assertIn("m_layer->m_objects", self.adapter)
+        self.assertIn("m_layer->m_objectLayer", self.adapter)
+        self.assertIn("node->getChildren()", self.adapter)
+        self.assertIn("getZOrder()", self.adapter)
+        self.assertIn("getOrderOfArrival()", self.adapter)
+        self.assertIn("std::stable_sort", self.adapter)
+        self.assertNotIn("sortAllChildren", self.adapter)
+        self.assertIn("getBatchNode()", self.adapter)
+        self.assertIn("m_bRectRotated", self.adapter)
+        self.assertIn("m_bUseVertexMod", self.adapter)
+        self.assertIn("m_bShouldBeHidden", self.adapter)
+        self.assertIn("getName()", self.adapter)
+        self.assertIn("kMaximumDepth", self.adapter)
+        self.assertIn("kMaximumNodes", self.adapter)
 
     def test_readme_describes_staged_renderer_without_optimization_claim(self):
         self.assertIn("experimental renderer", self.readme.lower())
