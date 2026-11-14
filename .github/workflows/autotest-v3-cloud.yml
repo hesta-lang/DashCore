@@ -235,7 +235,7 @@ jobs:
           mkdir -p test-input reports/autotest-level
           adb -s "$SERIAL" root
           adb -s "$SERIAL" wait-for-device
-          DEVICE_ID="$(adb -s "$SERIAL" shell id | tr -d '\\r')"
+          DEVICE_ID="$(adb -s "$SERIAL" shell id | tr -d '\r')"
           echo "$DEVICE_ID" | tee reports/autotest-level/adb-root.txt
           if ! echo "$DEVICE_ID" | grep -q 'uid=0'; then
             echo "::error::The cloud emulator did not grant adb root; the test level cannot be installed into Geometry Dash's private save."
@@ -247,7 +247,7 @@ jobs:
           sleep 25
           adb -s "$SERIAL" shell am force-stop com.geode.launcher || true
 
-          SAVE_PATH="$(adb -s "$SERIAL" shell "find /data/user/0 /data/data /sdcard/Android/media -type f -name CCLocalLevels.dat 2>/dev/null | head -n 1" | tr -d '\\r')"
+          SAVE_PATH="$(adb -s "$SERIAL" shell "find /data/user/0 /data/data /sdcard/Android/media -type f -name CCLocalLevels.dat 2>/dev/null | head -n 1" | tr -d '\r')"
           if [ -n "$SAVE_PATH" ]; then
             SAVE_DIR="$(dirname "$SAVE_PATH")"
             adb -s "$SERIAL" pull "$SAVE_PATH" test-input/CCLocalLevels.original.dat
@@ -256,7 +256,7 @@ jobs:
               --output test-input/CCLocalLevels.autotest.dat \
               --summary reports/autotest-level/autotest-level.json
           else
-            MANAGER_PATH="$(adb -s "$SERIAL" shell "find /data/user/0 /data/data /sdcard/Android/media -type f -name CCGameManager.dat 2>/dev/null | head -n 1" | tr -d '\\r')"
+            MANAGER_PATH="$(adb -s "$SERIAL" shell "find /data/user/0 /data/data /sdcard/Android/media -type f -name CCGameManager.dat 2>/dev/null | head -n 1" | tr -d '\r')"
             if [ -n "$MANAGER_PATH" ]; then
               SAVE_DIR="$(dirname "$MANAGER_PATH")"
             else
@@ -272,7 +272,7 @@ jobs:
             SAVE_PATH="$SAVE_DIR/CCLocalLevels.dat"
           fi
 
-          OWNER="$(adb -s "$SERIAL" shell "stat -c '%u:%g' '$SAVE_DIR'" | tr -d '\\r')"
+          OWNER="$(adb -s "$SERIAL" shell "stat -c '%u:%g' '$SAVE_DIR'" | tr -d '\r')"
           if [ -z "$OWNER" ]; then
             echo "::error::Could not determine the Geometry Dash save-directory owner."
             exit 1
@@ -280,7 +280,7 @@ jobs:
           adb -s "$SERIAL" push test-input/CCLocalLevels.autotest.dat "$SAVE_PATH"
           adb -s "$SERIAL" shell "chown '$OWNER' '$SAVE_PATH' && chmod 600 '$SAVE_PATH'"
           EXPECTED_SHA="$(python3 -c 'import json; print(json.load(open("reports/autotest-level/autotest-level.json"))["output_sha256"])')"
-          ACTUAL_SHA="$(adb -s "$SERIAL" shell "sha256sum '$SAVE_PATH'" | awk '{print $1}' | tr -d '\\r')"
+          ACTUAL_SHA="$(adb -s "$SERIAL" shell "sha256sum '$SAVE_PATH'" | awk '{print $1}' | tr -d '\r')"
           if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
             echo "::error::Installed CCLocalLevels.dat checksum does not match generated fixture."
             exit 1
