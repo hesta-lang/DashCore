@@ -4,10 +4,10 @@
     "android": "2.2081"
   },
   "id": "hesta.optgod",
-  "name": "DashCore Experimental Renderer",
-  "version": "0.11.5-alpha",
+  "name": "DashCore Bismuth Bridge",
+  "version": "0.11.6-alpha",
   "developer": "hesta-lang",
-  "description": "Experimental Android renderer foundation for Geometry Dash level objects. This diagnostic prerelease supports a low-overhead A/B baseline and optional per-level indexed object capture. The original Geometry Dash renderer remains the only visible draw path. No draw replacement or performance gain is claimed.",
+  "description": "Read-only Android64 compatibility bridge that exposes Geometry Dash/Cocos object, sprite and batch-layer data plus the active GLES capability profile for a future Bismuth port. The original Cocos renderer remains the only draw path; no rendering replacement or performance gain is claimed.",
   "tags": [
     "optimizations",
     "performance"

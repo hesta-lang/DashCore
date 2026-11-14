@@ -18,7 +18,7 @@ namespace dashcore::renderer {
 
 void initialize() {
     ::geode::log::info(
-        "DashCore Experimental Renderer 0.11.5-alpha: capture is off by default for A/B baseline; enabling it builds a per-level object index and keeps vanilla rendering as the only draw path."
+        "DashCore Bismuth Bridge 0.11.6-alpha: read-only Cocos object, sprite and batch adapters are available; the original Geometry Dash renderer remains the only draw path."
     );
 }
 

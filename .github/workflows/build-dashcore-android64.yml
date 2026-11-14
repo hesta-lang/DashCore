@@ -1,4 +1,4 @@
-name: Build DashCore Experimental Renderer (Android64)
+name: Build DashCore Bismuth Bridge (Android64)
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: dashcore-experimental-renderer-android64
+  group: dashcore-bismuth-bridge-android64
   cancel-in-progress: false
 
 permissions:
@@ -49,6 +49,8 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/test_renderer_product_contract.py
           python3 scripts/test_renderer_product_contract.py
+          python3 -m py_compile scripts/test_bismuth_bridge_contract.py
+          python3 scripts/test_bismuth_bridge_contract.py
           c++ -std=c++20 -Wall -Wextra -Werror -Isrc tests/renderer_model_tests.cpp src/renderer/core/*.cpp -o /tmp/dashcore-renderer-model-tests
           /tmp/dashcore-renderer-model-tests
           c++ -std=c++20 -Wall -Wextra -Werror -Isrc tests/gles_capabilities_tests.cpp src/renderer/core/GlesCapabilities.cpp -o /tmp/dashcore-gles-capabilities-tests
@@ -67,7 +69,7 @@ jobs:
             --language=c++ \
             --std=c++20 \
             --suppress=missingIncludeSystem \
-            src/renderer
+            src/renderer src/bismuth_bridge
 
   build:
     needs: tests
@@ -92,7 +94,7 @@ jobs:
           BUILD_OUTCOME: ${{ steps.build.outcome }}
           BUILD_OUTPUT: ${{ steps.build.outputs.build-output }}
         run: |
-          echo "## Experimental renderer Android64 build" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Bismuth bridge Android64 build" >> "$GITHUB_STEP_SUMMARY"
           echo "- Commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo "- Build outcome: **$BUILD_OUTCOME**" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$BUILD_OUTPUT" ] && [ -d "$BUILD_OUTPUT" ]; then
@@ -104,6 +106,6 @@ jobs:
       - name: Upload Android64 package
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-Experimental-Renderer-Android64
+          name: DashCore-Bismuth-Bridge-Android64
           path: ${{ steps.build.outputs.build-output }}/*.geode
           if-no-files-found: error

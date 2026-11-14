@@ -1,23 +1,14 @@
 # Bismuth Android64 port plan
 
-## Status: platform foundation only (0.11.5-alpha)
+## Status: read-only bridge foundation (0.11.6-alpha)
 
 This document records the concrete Android64 port constraints identified from the upstream Bismuth source and the November 14, 2026 Huawei STK-LX3 diagnostic capture. It is a staged engineering plan, not a claim that Bismuth has been ported or that performance has improved.
 
-The new GLES capability parser enumerates indexed extensions on GLES 3.x with `glGetStringi` resolved through EGL. It reports the context version, extension-enumeration status, compute shaders, shader storage buffers, single-command indirect drawing, multi-draw indirect, shader draw parameters, SPIR-V shader loading, and disjoint timer queries independently. A missing optional capability must select a fallback or disable the corresponding experiment; it must never be inferred from the GLES version alone unless it is core to that version.
+The bridge queries the EGL/GLES context that Geometry Dash/Cocos already made current and parses its live version and extensions. The launcher has been restored to Geode's original initialization sequence: request GLES 2, install the original EGLConfigChooser, then call `initView()`. The bridge never creates a context or asks the launcher for GLES 3.1. Feature flags are reported independently; missing capabilities disable the corresponding Bismuth path rather than being emulated silently.
 
 ## Device profile measured
 
-The uploaded launcher diagnostic identifies an OpenGL ES 3.2 context with GLSL ES 3.20 on an ARM Mali-G51. The reported feature profile is:
-
-- Compute shaders and shader storage buffers: supported.
-- Single-command indirect drawing: supported by the GLES 3.1+ core path.
-- Multi-draw indirect: not reported as supported.
-- Shader draw parameters: not reported as supported.
-- `GL_EXT_disjoint_timer_query`: reported as supported.
-- The display reports 60 Hz. Renderer callbacks are not the same metric as physical panel presentation.
-
-The runtime extension enumerator added in 0.11.5-alpha will record the actual extension list exposed by the current context when the GLES backend is initialized. The captured device report is a baseline; runtime capability detection remains authoritative for a running context.
+The earlier experimental-launcher capture reported an OpenGL ES 3.2 / GLSL ES 3.20 context on an ARM Mali-G51. That profile was measured while the launcher was explicitly requesting a higher GLES context; it must not be treated as the profile of Geode's restored original context. The current bridge re-queries the actual Cocos-owned context at runtime. With a GLES 2 context, compute shaders, SSBOs and indirect drawing are unavailable, regardless of the GPU's maximum supported GLES version. The 60 Hz panel rate is also not the same metric as renderer callbacks or physical presentation.
 
 ## Upstream dependencies that cannot be carried over unchanged
 
@@ -27,8 +18,8 @@ The upstream GL loader requests desktop functions such as `glMultiDrawElementsIn
 
 ## Required Android substitutions
 
-1. **Context and function loading:** use the current EGL/GLES context and resolve optional entry points through `eglGetProcAddress`. Every resolved pointer must be checked before use. Re-query after context recreation.
-2. **Shader compilation:** use GLSL ES 3.20 for compute and graphics stages. Remove desktop-only directives and SPIR-V specialization assumptions; validate every shader on the target driver.
+1. **Context and function loading:** use only the current EGL/GLES context created by the original Geode/Cocos initialization. Do not create or replace an EGL context. Query the actual version and extensions on the game render thread; in the restored GLES 2 path, keep every GLES 3.1+ Bismuth feature disabled.
+2. **Shader compilation:** this bridge milestone compiles no Bismuth shaders. A future GPU path may use GLSL ES 3.20 only when the live game context confirms GLES 3.2. The original GLES 2 context requires a CPU/direct-Cocos fallback and cannot run the desktop compute pipeline.
 3. **Compute data path:** retain compute shaders and SSBO only when the live capability profile confirms them. Respect `GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS`, `GL_MAX_SHADER_STORAGE_BLOCK_SIZE`, and `GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS` reported by the actual context.
 4. **Draw command submission:** GLES single-command indirect drawing is not the same as multi-draw indirect. The first fallback should submit one indirect command per draw/layer where supported. Measure CPU overhead; a large number of individual indirect calls may erase the gains. A direct-draw fallback must remain available.
 5. **Shader IDs and work groups:** do not rely on shader draw parameters. Pass object/sprite indices using SSBO data and built-in work-group/global invocation IDs, with explicit bounds checks.

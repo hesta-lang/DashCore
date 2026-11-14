@@ -30,13 +30,13 @@ class RendererProductContract(unittest.TestCase):
 
     def test_package_identity_and_diagnostic_prerelease(self):
         self.assertEqual(self.metadata["id"], "hesta.optgod")
-        self.assertEqual(self.metadata["version"], "0.11.5-alpha")
-        self.assertEqual(self.metadata["name"], "DashCore Experimental Renderer")
+        self.assertEqual(self.metadata["version"], "0.11.6-alpha")
+        self.assertEqual(self.metadata["name"], "DashCore Bismuth Bridge")
         self.assertFalse(self.metadata["settings"]["capture-object-diagnostics"]["default"])
         self.assertIn('getSettingValue<bool>("capture-object-diagnostics")', self.hooks)
         self.assertIn("capture_enabled", self.hooks)
-        self.assertIn("project(optgod VERSION 0.11.5)", self.cmake)
-        self.assertIn("0.11.5-alpha", self.module)
+        self.assertIn("project(optgod VERSION 0.11.6)", self.cmake)
+        self.assertIn("0.11.6-alpha", self.module)
 
     def test_gles_profile_covers_bismuth_android_requirements(self):
         for marker in (
@@ -165,7 +165,7 @@ class RendererProductContract(unittest.TestCase):
         self.assertIn("renderCoordinator.onLevelExit()", exit_hook)
 
     def test_readme_describes_diagnostic_stage_without_optimization_claim(self):
-        self.assertIn("0.11.5-alpha", self.readme)
+        self.assertIn("0.11.6-alpha", self.readme)
         self.assertIn("read-only", self.readme.lower())
         self.assertIn("vanilla rendering", self.readme.lower())
         self.assertIn("latest 512 captures", self.readme)
