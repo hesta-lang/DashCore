@@ -506,6 +506,14 @@ def tap_ocr_phrase(serial: str, mode: str, variant_dir: pathlib.Path,
     )
 
 
+def tap_saved_levels_button(serial: str, mode: str,
+                             variant_dir: pathlib.Path) -> dict[str, Any]:
+    """Open the local-level list using Geometry Dash 2.2081's 'Saved' tile."""
+    return tap_ocr_phrase(
+        serial, mode, variant_dir, "open-saved-levels", "Saved", 25
+    )
+
+
 def main_menu_level_editor_icon_center(width: int, height: int) -> tuple[int, int]:
     """Return the measured center of the Level Editor icon on the GD main menu."""
     if width <= 0 or height <= 0:
@@ -606,14 +614,15 @@ def open_custom_autotest_level(serial: str, mode: str,
         timeout_s=25,
     )
 
-    # Some game builds show My Levels as a tab; others enter that list directly.
+    # Geometry Dash 2.2081 labels the local-level entry "Saved".
+    # Some variants may open the list directly, so try the exact fixture name first.
     try:
         tap_ocr_phrase(serial, mode, variant_dir, "select-autotest-level", level_name, 12)
-        navigation["my_levels_tab_required"] = False
+        navigation["saved_levels_button_required"] = False
     except RuntimeError:
-        tap_ocr_phrase(serial, mode, variant_dir, "open-my-levels", "My Levels", 25)
+        tap_saved_levels_button(serial, mode, variant_dir)
         tap_ocr_phrase(serial, mode, variant_dir, "select-autotest-level", level_name, 30)
-        navigation["my_levels_tab_required"] = True
+        navigation["saved_levels_button_required"] = True
 
     tap_ocr_phrase(serial, mode, variant_dir, "play-autotest-level", "Play", 25)
     gameplay = wait_for_state(
