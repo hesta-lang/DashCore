@@ -23,6 +23,10 @@ public:
         return m_active;
     }
 
+    core::RendererDiagnosticSummary summary() const noexcept {
+        return m_diagnostics.summary();
+    }
+
 private:
     core::LevelObjectCollector m_collector;
     core::RenderSnapshot m_snapshot{};
