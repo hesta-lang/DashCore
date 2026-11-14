@@ -32,6 +32,17 @@ class BismuthBridgeContract(unittest.TestCase):
         self.assertIn("valid only for the duration of the visitor call", self.header)
         self.assertIn("std::unordered_set<cocos2d::CCSprite*> visited", self.source)
 
+    def test_sprite_type_ordinals_match_bismuth(self):
+        for marker in (
+            "Base = 0",
+            "Detail = 1",
+            "Black = 2",
+            "Glow = 3",
+            "BlackChild = 4",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.header)
+
     def test_bismuth_sprite_roles_and_order_are_present(self):
         for marker in (
             "m_glowSprite",
