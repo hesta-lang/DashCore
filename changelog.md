@@ -1,3 +1,14 @@
+## 0.11.7-alpha — Bismuth-style Android trigger-state adapter
+- Adds a CPU group-combination model with stable per-object combination indices, Move/Rotate/Follow transforms, Toggle/Alpha state, Pulse metadata and checkpoint snapshots.
+- Observes vanilla trigger/effect state while always calling the original Geometry Dash trigger methods. The adapter is disabled by default.
+- Adds host-side unit tests for group combination indexing, transforms, opacity, toggle, checkpoint restore and the 64-byte GPU record layout.
+- Adds a GLES-compatible CPU reference milestone and a future SSBO record contract only. No GLES Compute Shader is dispatched, no GPU draw path is enabled, and no rendering/gameplay state is mutated.
+- Keeps the original Cocos renderer as the only visible draw path; no performance or pixel-parity claim is made.
+
+## 0.11.6-alpha — read-only Bismuth object bridge
+- Adds the Bismuth sprite/object view adapter and current EGL/GLES capability query.
+- Preserves the original Cocos renderer and does not submit replacement draw calls.
+
 ## 0.11.1-alpha — bounded capture diagnostics
 - Adds per-level counts for nodes, root objects, candidate/accepted sprites, unsupported sprite categories, traversal limits, and unique texture keys.
 - Measures total capture and source-collection CPU wall-clock time separately, reporting full-level averages, maximums, and p95 for a fixed 512-frame rolling window.

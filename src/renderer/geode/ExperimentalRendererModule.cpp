@@ -18,7 +18,7 @@ namespace dashcore::renderer {
 
 void initialize() {
     ::geode::log::info(
-        "DashCore Bismuth Bridge 0.11.6-alpha: read-only Cocos object, sprite and batch adapters are available; the original Geometry Dash renderer remains the only draw path."
+        "DashCore Bismuth Bridge 0.11.7-alpha: the optional CPU trigger-state mirror is available; the original Geometry Dash renderer remains the only draw path."
     );
 }
 
