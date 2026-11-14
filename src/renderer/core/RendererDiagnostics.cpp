@@ -158,6 +158,7 @@ RendererDiagnosticSummary RendererDiagnostics::summary() const noexcept {
     if (m_capturePerformedFrames != 0) {
         result.averageCaptureNanoseconds = m_totalCaptureNanoseconds / m_capturePerformedFrames;
         result.averageCollectionNanoseconds = m_totalCollectionNanoseconds / m_capturePerformedFrames;
+    }
     result.p95PostUpdateNanoseconds = percentile95(m_postUpdateSamples, m_timingSampleCount);
     result.p95CaptureNanoseconds = percentile95(m_captureSamples, m_timingSampleCount);
     result.p95CollectionNanoseconds = percentile95(m_collectionSamples, m_timingSampleCount);
