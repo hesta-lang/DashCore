@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import zlib
 import hashlib
 import json
 import plistlib
