@@ -522,7 +522,7 @@ def tap_create_local_levels_button(serial: str, mode: str,
     menu_text = take_state_screenshot(
         serial, mode, "open-create-local-levels", screenshot_path
     )
-    if not re.search(r"\\bcreate\\b", menu_text, re.IGNORECASE):
+    if not re.search(r"\bcreate\b", menu_text, re.IGNORECASE):
         raise RuntimeError(
             f"{mode}: expected the Create tile before opening local levels; "
             f"last OCR text: {menu_text[:300]!r}"
@@ -557,7 +557,7 @@ def tap_create_local_levels_button(serial: str, mode: str,
         navigation = {"steps": []}
     navigation.setdefault("steps", []).append(event)
     navigation_path.write_text(
-        json.dumps(navigation, indent=2) + "\\n", encoding="utf-8"
+        json.dumps(navigation, indent=2) + "\n", encoding="utf-8"
     )
     time.sleep(1.5)
     return event
