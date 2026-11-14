@@ -27,6 +27,20 @@ jobs:
           python3 -m py_compile scripts/analyze_launcher_diagnostics.py scripts/test_launcher_diagnostics_analyzer.py
           python3 -m unittest discover -s scripts -p 'test_launcher_diagnostics_analyzer.py' -v
 
+      - name: Validate cloud AutoTest fixture and runtime parsers
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check pillow
+          python3 -m py_compile \
+            scripts/autotest_ab.py \
+            scripts/autotest_gameplay_diagnostics.py \
+            scripts/build_autotest_level.py \
+            scripts/test_autotest_level_builder.py \
+            scripts/test_gameplay_diagnostics_autotest.py \
+            scripts/autotest_geode.py
+          python3 scripts/test_autotest_level_builder.py
+          python3 scripts/test_gameplay_diagnostics_autotest.py
+
       - name: Run renderer contract and host-model tests
         run: |
           python3 -m py_compile scripts/test_renderer_product_contract.py
