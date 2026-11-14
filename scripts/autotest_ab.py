@@ -547,6 +547,11 @@ def open_custom_autotest_level(serial: str, mode: str,
     navigation["gameplay_hud_verified"] = is_gameplay_text(gameplay)
     navigation["accepted_gameplay_ocr"] = gameplay[:500]
     navigation_path = variant_dir / "autotest-level-navigation.json"
+    try:
+        recorded_navigation = json.loads(navigation_path.read_text(encoding="utf-8"))
+        navigation["steps"] = recorded_navigation.get("steps", [])
+    except (OSError, json.JSONDecodeError):
+        navigation["steps"] = []
     navigation_path.write_text(
         json.dumps(navigation, indent=2) + "\n", encoding="utf-8"
     )
