@@ -137,7 +137,7 @@ def build_level_entry() -> tuple[dict[str, Any], dict[str, Any]]:
     entry = {
         "kCEK": 4, "k2": LEVEL_NAME, "k3": description,
         "k4": encoded_level, "k5": "Player", "k14": False,
-        "k16": 1, "k21": 2, "k48": counts["total_objects"], "k50": 35,
+        "k21": 2, "k48": counts["total_objects"], "k50": 35,
     }
     counts["level_string_sha256"] = hashlib.sha256(
         level_string.encode("utf-8")
