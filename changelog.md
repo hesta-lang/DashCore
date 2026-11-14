@@ -1,3 +1,10 @@
+## 0.10.14-alpha — independent callback inventory and partial-hook operation
+- Removes the all-or-nothing renderer-hook gate: missing sprite, batch, atlas, or node-visit hooks no longer cause other successfully enabled callbacks to be disabled.
+- Reports every monitored callback as ABSENT, HOOK_DISABLED, ENABLED_NOT_OBSERVED, or RUNNING, with hook-found, hook-enabled, calls, and timedCalls values.
+- AutoTest records the full callback inventory in JSON and Markdown, including missing and non-executed callbacks, and tests mixed present/absent callback states.
+- PlayLayer::postUpdate remains the bounded sample lifecycle controller only; each callback retains its own independent call counter and timing stride. CCDirector::drawScene is supplementary.
+- Diagnostics remain opt-in; culling remains OFF. Original callback behavior, rendering, gameplay, physics, draw order, and UI are unchanged. No optimization or FPS improvement is claimed.
+
 ## 0.10.13-alpha — independent renderer callback sampling
 - Samples CCNode::visit, CCSprite::draw, CCSpriteBatchNode::draw, and CCTextureAtlas draw callbacks using independent per-callback counters and the bounded timing stride.
 - Removes the dependency on CCDirector::drawScene to activate callback timing. drawScene remains supplementary telemetry.
