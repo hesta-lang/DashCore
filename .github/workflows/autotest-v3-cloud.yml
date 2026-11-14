@@ -286,7 +286,7 @@ jobs:
       - name: Validate generated-level AutoTest and capture parser
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/autotest_ab.py scripts/autotest_gameplay_diagnostics.py scripts/build_autotest_level.py scripts/test_autotest_level_builder.py scripts/test_gameplay_diagnostics_autotest.py scripts/autotest_geode.py scripts/posthog_autotest_export.py
+          python3 -m py_compile scripts/autotest_ab.py scripts/autotest_gameplay_diagnostics.py scripts/build_autotest_level.py scripts/test_autotest_level_builder.py scripts/test_gameplay_diagnostics_autotest.py scripts/autotest_geode.py
           python3 scripts/test_autotest_level_builder.py
           python3 scripts/test_gameplay_diagnostics_autotest.py
           python3 scripts/test_renderer_product_contract.py
@@ -307,15 +307,24 @@ jobs:
             --level-manifest reports/autotest-level/autotest-level.json \
             --observation-seconds 20
 
-      - name: Export privacy-minimized AutoTest metrics to PostHog
+      - name: Checkout trusted PostHog exporter
+        id: posthog-exporter
         if: always()
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: posthog-exporter-source
+
+      - name: Export privacy-minimized AutoTest metrics to PostHog
+        if: always() && steps.posthog-exporter.outcome == 'success'
         continue-on-error: true
         env:
           POSTHOG_PROJECT_TOKEN: ${{ secrets.POSTHOG_PROJECT_TOKEN }}
           POSTHOG_HOST: https://us.i.posthog.com
         run: |
           set -euo pipefail
-          python3 scripts/posthog_autotest_export.py --report "$REPORT_DIR/autotest-gameplay-diagnostics.json"
+          python3 -m py_compile posthog-exporter-source/scripts/posthog_autotest_export.py
+          python3 posthog-exporter-source/scripts/posthog_autotest_export.py --report "$REPORT_DIR/autotest-gameplay-diagnostics.json"
 
       - name: Upload gameplay diagnostics report
         if: always()
