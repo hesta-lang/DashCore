@@ -145,7 +145,7 @@ class RenderPipelineContractTests(unittest.TestCase):
         # postUpdate controls only the bounded sample lifecycle. No renderer
         # callback is allowed to gate or disable any other renderer callback.
         self.assertIn("g_renderPipelineHooksReady = postUpdateReady;", self.source)
-        readiness = self.source.split("g_renderPipelineHooksReady =", 1)[1].split(";", 1)[0]
+        readiness = self.source.rsplit("g_renderPipelineHooksReady =", 1)[1].split(";", 1)[0]
         self.assertEqual(readiness.strip(), "postUpdateReady")
         self.assertNotIn("drawSceneReady", readiness)
         self.assertNotIn("nodeReady", readiness)
