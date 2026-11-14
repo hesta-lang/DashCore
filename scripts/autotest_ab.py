@@ -817,6 +817,58 @@ def wait_for_main_menu(serial: str, mode: str, variant_dir: pathlib.Path,
         time.sleep(2.0)
     raise RuntimeError(f"{mode}: timed out waiting for main menu after handling NOTICE; last OCR text: {last_text[:500]!r}")
 
+
+
+def find_dashcore_capture_marker(serial: str, log_dir: str) -> str | None:
+    """Find the current DashCore per-level summary after PlayLayer exits."""
+    file_marker = shell(
+        serial,
+        f"grep -R -I -l 'DashCore_CAPTURE_DIAGNOSTICS' {shlex.quote(log_dir)} 2>/dev/null",
+        check=False, timeout=10,
+    ).strip()
+    if file_marker:
+        return "geode-log-file"
+    logcat_marker = shell(
+        serial,
+        "logcat -d -s Geode:I | grep -F -m1 'DashCore_CAPTURE_DIAGNOSTICS' || true",
+        check=False, timeout=15,
+    ).strip()
+    return "logcat" if logcat_marker else None
+
+
+def exit_level_for_capture_summary(serial: str, mode: str,
+                                   variant_dir: pathlib.Path,
+                                   log_dir: str) -> str | None:
+    """Leave the active level so DashCore emits its one-per-level summary."""
+    shell(serial, "input keyevent 4", check=False)
+    time.sleep(1.5)
+    pause_text = take_state_screenshot(
+        serial, mode, "capture-exit-pause", variant_dir / "capture-exit-pause.png"
+    )
+    if is_main_menu_text(pause_text):
+        return find_dashcore_capture_marker(serial, log_dir)
+
+    try:
+        tap_ocr_phrase(
+            serial, mode, variant_dir, "capture-exit-level", "Exit", timeout_s=8
+        )
+    except RuntimeError:
+        # Some translated or icon-only pause menus expose no OCR-readable Exit label.
+        # A second Back key is a conservative fallback; success is still gated
+        # on the actual DashCore summary appearing in the log.
+        shell(serial, "input keyevent 4", check=False)
+        time.sleep(2.0)
+
+    deadline = time.monotonic() + 20
+    marker_source = None
+    while time.monotonic() < deadline:
+        marker_source = find_dashcore_capture_marker(serial, log_dir)
+        if marker_source:
+            break
+        time.sleep(1.0)
+    return marker_source
+
+
 def parse_culling_runtime(log_text: str) -> dict[str, Any]:
     """Parse culling activation, sample totals, per-reason counts and nearest candidate."""
     activations = re.findall(
@@ -909,11 +961,14 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
                 render_pipeline_mode: str = "off",
                 render_pipeline_wait_s: int = 0,
                 test_level_name: str | None = None,
-                observation_seconds: int = 20) -> dict[str, Any]:
+                observation_seconds: int = 20,
+                capture_object_diagnostics: bool = False) -> dict[str, Any]:
     serial, base = args.serial, args.base_dir.rstrip("/")
     mod_dir = f"{base}/game/geode/mods"
     mod_remote = f"{mod_dir}/DashCore.geode"
     config_dir = f"{base}/game/geode/config/{args.mod_id}"
+    mod_save_dir = f"{base}/save/geode/mods/{args.mod_id}"
+    settings_remote = f"{mod_save_dir}/settings.json"
     culling_mode_remote = f"{config_dir}/static-culling-mode.txt"
     diagnostics_mode_remote = f"{config_dir}/diagnostics-mode.txt"
     render_pipeline_mode_remote = f"{config_dir}/render-pipeline-mode.txt"
@@ -933,12 +988,19 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
             raise ValueError(f"Unsupported diagnostics mode: {diagnostics_mode!r}")
         if render_pipeline_mode not in ("on", "off"):
             raise ValueError(f"Unsupported render pipeline mode: {render_pipeline_mode!r}")
-        shell(serial, f"mkdir -p {shlex.quote(config_dir)}")
+        shell(serial, f"mkdir -p {shlex.quote(config_dir)} {shlex.quote(mod_save_dir)}")
         shell(serial, f"printf '%s\\n' {shlex.quote(culling_mode)} > {shlex.quote(culling_mode_remote)}")
         shell(serial, f"printf '%s\\n' {shlex.quote(diagnostics_mode)} > {shlex.quote(diagnostics_mode_remote)}")
         shell(serial, f"printf '%s\\n' {shlex.quote(render_pipeline_mode)} > {shlex.quote(render_pipeline_mode_remote)}")
+        settings_json = json.dumps({
+            "capture-object-diagnostics": bool(capture_object_diagnostics)
+        }, separators=(",", ":"))
+        shell(
+            serial,
+            f"printf '%s\\n' {shlex.quote(settings_json)} > {shlex.quote(settings_remote)}"
+        )
     else:
-        shell(serial, f"rm -f {shlex.quote(culling_mode_remote)} {shlex.quote(diagnostics_mode_remote)} {shlex.quote(render_pipeline_mode_remote)}")
+        shell(serial, f"rm -f {shlex.quote(culling_mode_remote)} {shlex.quote(diagnostics_mode_remote)} {shlex.quote(render_pipeline_mode_remote)} {shlex.quote(settings_remote)}")
     shell(serial, f"mkdir -p {shlex.quote(log_dir)} && rm -f {shlex.quote(log_dir)}/*")
     shell(serial, "logcat -c", check=False)
     shell(serial, "am start -a android.intent.action.VIEW -d geode-launcher://main/launch -p com.geode.launcher", check=False)
@@ -1150,6 +1212,12 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
         elif not gfx.get("available"):
             gfx = surface_metrics
 
+    capture_summary_marker_source = None
+    if mod_enabled and capture_object_diagnostics:
+        capture_summary_marker_source = exit_level_for_capture_summary(
+            serial, mode, variant_dir, log_dir
+        )
+
     last_logcat = shell(serial, "logcat -d -v threadtime", check=False)
     (variant_dir / "logcat-final.txt").write_text(last_logcat)
     crash_text = shell(serial, "logcat -b crash -d -v threadtime", check=False)
@@ -1187,7 +1255,9 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
             ),
             "test_level_name": test_level_name,
             "level_navigation": level_navigation,
-            "observation_seconds_requested": observation_seconds}
+            "observation_seconds_requested": observation_seconds,
+            "capture_object_diagnostics_requested": capture_object_diagnostics,
+            "capture_summary_marker_source": capture_summary_marker_source}
     (variant_dir / "metrics.json").write_text(json.dumps(data, indent=2) + "\n")
     shell(serial, "am force-stop com.geode.launcher", check=False)
     return data
