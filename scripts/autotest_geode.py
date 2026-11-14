@@ -140,12 +140,22 @@ def main() -> int:
         else:
             fail(f"Expected GD Android {EXPECTED_GD_ANDROID}, got {android_version!r}", errors)
 
-        culling = metadata.get("settings", {}).get("experimental-render-culling", {})
-        if culling.get("default") is False:
-            checks.append("Experimental render culling defaults to disabled")
+        capture = metadata.get("settings", {}).get("capture-object-diagnostics", {})
+        if capture.get("default") is False:
+            checks.append("Read-only object capture defaults to disabled")
+            print("[OK] Object capture default is disabled")
+        else:
+            fail("Read-only object capture is not explicitly disabled by default", errors)
+
+        culling = metadata.get("settings", {}).get("experimental-render-culling")
+        if culling is None:
+            checks.append("No render-culling setting or culling optimization is exposed by this build")
+            print("[OK] No render-culling setting is exposed")
+        elif culling.get("default") is False:
+            checks.append("Any experimental render-culling setting defaults to disabled")
             print("[OK] Render culling default is disabled")
         else:
-            fail("Experimental render culling is not explicitly disabled by default", errors)
+            fail("Experimental render culling must remain disabled by default", errors)
 
     if not elf_files:
         fail("No ELF native library found inside the .geode package", errors)
@@ -172,7 +182,8 @@ def main() -> int:
             "geode": EXPECTED_GEODE,
             "gd_android": EXPECTED_GD_ANDROID,
             "native_elf_machine": EXPECTED_ABI_MACHINE,
-            "render_culling_default": False,
+            "capture_object_diagnostics_default": False,
+            "render_culling_setting": "not-exposed-by-this-build",
         },
         "checks": checks,
         "elf_files": elf_files,
