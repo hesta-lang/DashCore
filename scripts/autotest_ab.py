@@ -412,7 +412,7 @@ def ocr_phrase_center(path: pathlib.Path, phrase: str) -> tuple[int, int] | None
     if not target:
         return None
     rows: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
-    for row in csv.DictReader(io.StringIO(proc.stdout), delimiter="\\t"):
+    for row in csv.DictReader(io.StringIO(proc.stdout), delimiter="\t"):
         word = (row.get("text") or "").strip()
         normalized = normalize_ocr_phrase(word)
         if not normalized:
