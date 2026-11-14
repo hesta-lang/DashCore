@@ -12,7 +12,7 @@ namespace dashcore::renderer::geode {
 class RendererCoordinator {
 public:
     void onLevelInit() noexcept;
-    void onFrame(PlayLayer* layer) noexcept;
+    void onFrame(PlayLayer* layer, std::uint64_t originalPostUpdateNanoseconds) noexcept;
     void onLevelExit() noexcept;
 
     core::RenderSnapshot const& snapshot() const noexcept {
