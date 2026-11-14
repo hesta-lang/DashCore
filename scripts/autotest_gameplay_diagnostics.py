@@ -52,7 +52,7 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
         else ("legacy" if pipeline_match else None)
     )
     hooks_ready = bool(re.search(
-        r"RENDER-PIPELINE-HOOKS:.*?ready=true", log_text, re.IGNORECASE
+        r"RENDER-PIPELINE-HOOKS:.*?(?:ready|sampleControllerReady)=true", log_text, re.IGNORECASE
     ))
     culling_off = bool(re.search(
         r"static-culling-requested=false,\s*static-culling-active=false",
