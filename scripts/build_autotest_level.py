@@ -7,6 +7,7 @@ import base64
 import hashlib
 import json
 import plistlib
+import gzip
 import zlib
 from pathlib import Path
 from typing import Any
@@ -19,9 +20,9 @@ GAME_BUILD_FALLBACK = 2200
 
 
 def _decompress_limited(data: bytes, limit: int = MAX_SAVE_BYTES) -> bytes:
-    """Decode GD's zlib-wrapped save data, with safe gzip/raw compatibility."""
+    """Decode Geometry Dash's gzip save data, with legacy zlib/raw compatibility."""
     last_error: Exception | None = None
-    for window_bits in (zlib.MAX_WBITS, -zlib.MAX_WBITS, zlib.MAX_WBITS | 16):
+    for window_bits in (zlib.MAX_WBITS | 16, zlib.MAX_WBITS, -zlib.MAX_WBITS):
         try:
             decoder = zlib.decompressobj(window_bits)
             output = decoder.decompress(data, limit + 1)
@@ -53,10 +54,29 @@ def decode_save(raw: bytes) -> bytes:
 
 
 def encode_save(xml_data: bytes) -> bytes:
-    # Geometry Dash's save codec uses the zlib wrapper (not the gzip container).
-    compressed = zlib.compress(xml_data, level=9)
+    # Windows/Android Geometry Dash saves use gzip -> URL-safe Base64 -> XOR 0x0B.
+    # mtime=0 keeps the generated artifact deterministic across CI runs.
+    compressed = gzip.compress(xml_data, compresslevel=9, mtime=0)
     encoded = base64.urlsafe_b64encode(compressed)
     return bytes(value ^ SAVE_XOR_KEY for value in encoded)
+
+
+def local_level_names(raw: bytes) -> list[str]:
+    """Decode a CCLocalLevels save and return level names in list order."""
+    document = plistlib.loads(decode_save(raw))
+    if not isinstance(document, dict):
+        raise ValueError("CCLocalLevels plist root must be a dictionary")
+    levels = document.get("LLM_01")
+    if not isinstance(levels, dict):
+        raise ValueError("CCLocalLevels plist is missing the LLM_01 level array")
+    ordered: list[tuple[int, str]] = []
+    for key, value in levels.items():
+        if not (key.startswith("k_") and key[2:].isdigit() and isinstance(value, dict)):
+            continue
+        name = value.get("k2")
+        if isinstance(name, str) and name:
+            ordered.append((int(key[2:]), name))
+    return [name for _, name in sorted(ordered)]
 
 
 def object_record(object_id: int, grid_x: int, grid_y: int,
@@ -239,6 +259,7 @@ def main() -> int:
             "output_bytes": len(output_bytes),
             "game_build": args.game_build,
             "savefile_round_trip_verified": True,
+            "save_codec": "xor-0b+urlsafe-base64+gzip",
             "rendering_or_gameplay_code_changed": False,
         })
         args.summary.parent.mkdir(parents=True, exist_ok=True)
