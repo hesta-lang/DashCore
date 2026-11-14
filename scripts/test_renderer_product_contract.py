@@ -38,6 +38,12 @@ class RendererProductContract(unittest.TestCase):
         self.assertIn("project(optgod VERSION 0.11.6)", self.cmake)
         self.assertIn("0.11.6-alpha", self.module)
 
+    def test_bismuth_bridge_keeps_vanilla_rendering_active(self):
+        self.assertIn("vanilla rendering", self.readme.lower())
+        self.assertIn("original cocos renderer", self.readme.lower())
+        self.assertIn("read-only", self.readme.lower())
+        self.assertIn("GLES 2", self.readme)
+
     def test_gles_profile_covers_bismuth_android_requirements(self):
         for marker in (
             "supportsDrawIndirect",
