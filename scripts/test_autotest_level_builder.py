@@ -66,7 +66,7 @@ class AutoTestLevelBuilderTests(unittest.TestCase):
         encrypted = builder.encode_save(xml_data)
         base64_bytes = bytes(value ^ builder.SAVE_XOR_KEY for value in encrypted)
         compressed = base64.urlsafe_b64decode(base64_bytes)
-        self.assertTrue(compressed.startswith(b"\\x1f\\x8b"))
+        self.assertEqual(compressed[:2], bytes((0x1f, 0x8b)))
         self.assertEqual(gzip.decompress(compressed), xml_data)
 
     def test_local_level_names_are_read_from_the_encoded_save(self):
