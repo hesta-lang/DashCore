@@ -13,6 +13,7 @@ from autotest_ab import (
     main_menu_level_editor_icon_center,
     map_screenshot_point_to_input,
     tap_create_local_levels_button,
+    verify_local_level_save,
 )
 
 
@@ -57,6 +58,68 @@ class MainMenuNavigationTests(unittest.TestCase):
                 (directory / "autotest-level-navigation.json").read_text()
             )
             self.assertEqual(navigation["steps"][0]["target"], "create-local-levels-button")
+
+    def test_live_save_verification_accepts_the_injected_fixture(self) -> None:
+        import json
+        import plistlib
+        import tempfile
+        from build_autotest_level import encode_save
+
+        raw = encode_save(plistlib.dumps({
+            "LLM_01": {
+                "_isArr": True,
+                "k_0": {"kCEK": 4, "k2": "DashCore AutoTest"},
+            },
+            "LLM_02": 2200,
+        }, fmt=plistlib.FMT_XML, sort_keys=False))
+
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+
+            def fake_pull(_serial, _remote, local):
+                Path(local).write_bytes(raw)
+                return True
+
+            with patch("autotest_ab.pull", side_effect=fake_pull):
+                result = verify_local_level_save(
+                    "emulator-5554",
+                    "/sdcard/Android/media/com.geode.launcher/save/CCLocalLevels.dat",
+                    "DashCore AutoTest",
+                    directory,
+                )
+
+            self.assertTrue(result["verified_after_game_start"])
+            self.assertEqual(result["level_names"], ["DashCore AutoTest"])
+            report = json.loads(
+                (directory / "local-level-save-verification.json").read_text()
+            )
+            self.assertTrue(report["expected_level_present"])
+
+    def test_live_save_verification_rejects_a_missing_fixture(self) -> None:
+        import plistlib
+        import tempfile
+        from build_autotest_level import encode_save
+
+        raw = encode_save(plistlib.dumps({
+            "LLM_01": {"_isArr": True},
+            "LLM_02": 2200,
+        }, fmt=plistlib.FMT_XML, sort_keys=False))
+
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+
+            def fake_pull(_serial, _remote, local):
+                Path(local).write_bytes(raw)
+                return True
+
+            with patch("autotest_ab.pull", side_effect=fake_pull):
+                with self.assertRaisesRegex(RuntimeError, "did not retain"):
+                    verify_local_level_save(
+                        "emulator-5554",
+                        "/sdcard/Android/media/com.geode.launcher/save/CCLocalLevels.dat",
+                        "DashCore AutoTest",
+                        directory,
+                    )
 
     def test_portrait_panel_is_mapped_to_landscape_input_space(self) -> None:
         x, y, width, height = map_screenshot_point_to_input(
