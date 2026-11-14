@@ -1,6 +1,7 @@
 #pragma once
 
 #include "renderer/core/LevelObjectCollector.hpp"
+#include "renderer/core/RendererDiagnostics.hpp"
 
 #include <cstdint>
 
@@ -25,6 +26,7 @@ public:
 private:
     core::LevelObjectCollector m_collector;
     core::RenderSnapshot m_snapshot{};
+    core::RendererDiagnostics m_diagnostics;
     std::uint32_t m_generation = 0;
     std::uint64_t m_frameIndex = 0;
     bool m_active = false;
