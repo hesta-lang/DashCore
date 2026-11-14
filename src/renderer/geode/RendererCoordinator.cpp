@@ -109,7 +109,11 @@ void RendererCoordinator::onLevelExit() noexcept {
     if (m_active) {
         auto const report = m_diagnostics.summary();
         if (report.totalFrames != 0) {
-            logLevelDiagnostics(report);
+            try {
+                logLevelDiagnostics(report);
+            } catch (...) {
+                // Logging is diagnostic-only and must never interrupt level teardown.
+            }
         }
     }
 
