@@ -23,6 +23,9 @@ void logLevelDiagnostics(core::RendererDiagnosticSummary const& report) {
          << " frames=" << report.totalFrames
          << " successful=" << report.successfulFrames
          << " failed=" << report.failedFrames
+         << " post_update_avg_ms=" << nanosecondsToMilliseconds(report.averagePostUpdateNanoseconds)
+         << " post_update_p95_last512_ms=" << nanosecondsToMilliseconds(report.p95PostUpdateNanoseconds)
+         << " post_update_max_ms=" << nanosecondsToMilliseconds(report.maximumPostUpdateNanoseconds)
          << " capture_avg_ms=" << nanosecondsToMilliseconds(report.averageCaptureNanoseconds)
          << " capture_p95_last512_ms=" << nanosecondsToMilliseconds(report.p95CaptureNanoseconds)
          << " capture_max_ms=" << nanosecondsToMilliseconds(report.maximumCaptureNanoseconds)
@@ -70,12 +73,16 @@ void RendererCoordinator::onLevelInit() noexcept {
     m_active = true;
 }
 
-void RendererCoordinator::onFrame(PlayLayer* layer) noexcept {
+void RendererCoordinator::onFrame(
+    PlayLayer* layer,
+    std::uint64_t originalPostUpdateNanoseconds
+) noexcept {
     if (!m_active || !layer) return;
 
     auto const captureStart = std::chrono::steady_clock::now();
     GeodeLevelObjectSource source(layer);
     core::CaptureFrameSample sample{};
+    sample.postUpdateNanoseconds = originalPostUpdateNanoseconds;
     bool captureSucceeded = false;
 
     try {
