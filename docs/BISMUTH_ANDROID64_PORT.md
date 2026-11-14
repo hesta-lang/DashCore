@@ -50,4 +50,4 @@ The final render sequence must preserve the effective vanilla order across ZLaye
 - **Gate D — performance:** compare CPU wall/CPU-thread time and GPU execution time on the same physical device, level, StartPos, graphics settings, refresh rate, and thermal state. Report p50/p95/max and dropped-frame intervals, not callback count as panel FPS.
 - **Gate E — controlled activation:** only after parity and stability tests should a feature flag permit experimental level-object drawing. Menus, HUD, player, editor, effects, gameplay, physics, triggers, and input remain vanilla.
 
-No optimization or visible rendering replacement is activated by this milestone.
+No Bismuth rendering path or new draw submission is enabled by this milestone. No optimization or visible rendering replacement is activated by this milestone.
