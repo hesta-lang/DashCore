@@ -53,11 +53,13 @@ class RendererProductContract(unittest.TestCase):
     def test_live_capture_uses_only_update_lifecycle_and_never_draw_hooks(self):
         self.assertIn("#include <Geode/modify/PlayLayer.hpp>", self.hooks)
         self.assertIn("PlayLayer::postUpdate(dt)", self.hooks)
+        self.assertIn("steady_clock::now()", self.hooks)
+        self.assertIn("onFrame(this, updateNanoseconds)", self.hooks)
         self.assertIn("PlayLayer::onEnterTransitionDidFinish()", self.hooks)
         self.assertIn("PlayLayer::onExit()", self.hooks)
         self.assertLess(
             self.hooks.index("PlayLayer::postUpdate(dt)"),
-            self.hooks.index("coordinator().onFrame(this)"),
+            self.hooks.index("coordinator().onFrame(this, updateNanoseconds)"),
         )
         for forbidden in (
             "CCDirector::drawScene",
@@ -92,8 +94,10 @@ class RendererProductContract(unittest.TestCase):
     def test_diagnostics_are_bounded_and_logged_only_on_level_exit(self):
         self.assertIn("kTimingSampleWindow = 512", self.diagnostics_header)
         self.assertIn("std::array<std::uint64_t, kTimingSampleWindow>", self.diagnostics_header)
+        self.assertIn("postUpdateNanoseconds", self.diagnostics_header)
         self.assertIn("m_diagnostics.record(sample)", self.coordinator)
         self.assertIn("DashCore_CAPTURE_DIAGNOSTICS", self.coordinator)
+        self.assertIn("post_update_avg_ms", self.coordinator)
         self.assertIn("memory_scope=snapshot_vector_capacity_only", self.coordinator)
         on_frame = self.coordinator.split("void RendererCoordinator::onFrame", 1)[1].split(
             "void RendererCoordinator::onLevelExit", 1
@@ -109,6 +113,7 @@ class RendererProductContract(unittest.TestCase):
         self.assertIn("vanilla rendering", self.readme.lower())
         self.assertIn("latest 512 captures", self.readme)
         self.assertIn("not total process memory", self.readme.lower())
+        self.assertIn("post-update time", self.readme.lower())
         self.assertNotIn("improves FPS", self.readme)
         self.assertNotIn("increases FPS", self.readme)
         self.assertNotIn("replaces the original renderer", self.readme.lower())
