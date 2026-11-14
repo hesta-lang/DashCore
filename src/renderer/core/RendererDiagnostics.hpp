@@ -30,6 +30,7 @@ struct CaptureCounters {
 
 struct CaptureFrameSample {
     CaptureCounters counters{};
+    std::uint64_t postUpdateNanoseconds = 0;
     std::uint64_t captureNanoseconds = 0;
     std::uint64_t collectionNanoseconds = 0;
     std::uint64_t snapshotSprites = 0;
@@ -42,6 +43,9 @@ struct RendererDiagnosticSummary {
     std::uint64_t successfulFrames = 0;
     std::uint64_t failedFrames = 0;
     CaptureCounters totals{};
+    std::uint64_t averagePostUpdateNanoseconds = 0;
+    std::uint64_t p95PostUpdateNanoseconds = 0;
+    std::uint64_t maximumPostUpdateNanoseconds = 0;
     std::uint64_t averageCaptureNanoseconds = 0;
     std::uint64_t p95CaptureNanoseconds = 0;
     std::uint64_t maximumCaptureNanoseconds = 0;
@@ -72,10 +76,13 @@ private:
     std::uint64_t m_successfulFrames = 0;
     std::uint64_t m_failedFrames = 0;
     CaptureCounters m_totals{};
+    std::uint64_t m_totalPostUpdateNanoseconds = 0;
     std::uint64_t m_totalCaptureNanoseconds = 0;
     std::uint64_t m_totalCollectionNanoseconds = 0;
+    std::uint64_t m_maximumPostUpdateNanoseconds = 0;
     std::uint64_t m_maximumCaptureNanoseconds = 0;
     std::uint64_t m_maximumCollectionNanoseconds = 0;
+    std::array<std::uint64_t, kTimingSampleWindow> m_postUpdateSamples{};
     std::array<std::uint64_t, kTimingSampleWindow> m_captureSamples{};
     std::array<std::uint64_t, kTimingSampleWindow> m_collectionSamples{};
     std::size_t m_timingSampleCount = 0;
