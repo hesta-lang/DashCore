@@ -185,7 +185,7 @@ def verify_local_level_save(serial: str, remote_path: str, expected_level_name: 
         "verified_after_game_start": expected_level_name in names,
     }
     (variant_dir / "local-level-save-verification.json").write_text(
-        json.dumps(result, indent=2) + "\\n", encoding="utf-8"
+        json.dumps(result, indent=2) + "\n", encoding="utf-8"
     )
     if expected_level_name not in names:
         raise RuntimeError(
