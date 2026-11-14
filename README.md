@@ -2,7 +2,7 @@
 
 ## 0.11.6-alpha — read-only Bismuth bridge and A/B diagnostics
 
-This branch develops a separate rendering path for Geometry Dash level objects on Android64. This milestone adds bounded diagnostics to the read-only live snapshot stage; it does not change rendering.
+This branch preserves the vanilla Geometry Dash renderer and adds a read-only bridge for Bismuth's Android64 object pipeline. The optional diagnostics remain read-only and do not change rendering.
 
 - Adds a renderer-only Geode runtime, pure C++20 value model, validated sprite descriptor extractor, bounded value-only snapshot collector, stable z/traversal ordering, and contiguous batch planner keyed by layer, texture, and blend state.
 - Rejects descriptors with unknown textures, unsupported blending, hidden sprites, invalid bounds, or non-finite transforms.
