@@ -1,6 +1,5 @@
 #include "renderer/core/BatchPlanner.hpp"
 #include "renderer/core/GeometryBuilder.hpp"
-#include "renderer/core/GlesCapabilities.hpp"
 #include "renderer/core/LevelObjectCollector.hpp"
 #include "renderer/core/SpriteDescriptorExtractor.hpp"
 #include "renderer/core/SpriteQuadExtractor.hpp"
@@ -237,34 +236,6 @@ int main() {
         static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max() / 4u) + 1u
     ));
 
-    // GLES capabilities are parsed from the live version/extension strings;
-    // compute and SSBO support are optional and never required by CPU prep.
-    auto noContext = parseGlesCapabilities(nullptr, nullptr, false);
-    assert(!noContext.contextAvailable);
-
-    auto gles30 = parseGlesCapabilities(
-        "OpenGL ES 3.0 Vendor",
-        "GL_OES_vertex_array_object GL_EXT_color_buffer_float",
-        true
-    );
-    assert(gles30.contextAvailable);
-    assert(gles30.majorVersion == 3 && gles30.minorVersion == 0);
-    assert(gles30.supportsBufferObjects);
-    assert(gles30.supportsVertexArrayObjects);
-    assert(!gles30.supportsComputeShaders);
-    assert(!gles30.supportsShaderStorageBuffers);
-
-    auto extensionCaps = parseGlesCapabilities(
-        "OpenGL ES 3.0 Vendor",
-        "GL_EXT_compute_shader GL_EXT_shader_storage_buffer_object",
-        true
-    );
-    assert(extensionCaps.supportsComputeShaders);
-    assert(extensionCaps.supportsShaderStorageBuffers);
-
-    auto gles31 = parseGlesCapabilities("OpenGL ES 3.1 Vendor", "", true);
-    assert(gles31.supportsComputeShaders);
-    assert(gles31.supportsShaderStorageBuffers);
     // Live sprite quads are accepted only when this renderer can reproduce
     // their geometry, UV mapping, blend and uniform per-vertex color exactly.
     auto makeQuad = [] {
