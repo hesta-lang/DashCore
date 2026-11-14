@@ -85,10 +85,21 @@ def main() -> int:
     parser.add_argument("--report-dir", type=pathlib.Path, required=True)
     parser.add_argument("--device-profile", type=pathlib.Path,
                         default=pathlib.Path("profiles/huawei-y9s.json"))
+    parser.add_argument("--level-name", default="DashCore AutoTest")
+    parser.add_argument("--level-manifest", type=pathlib.Path,
+                        default=pathlib.Path("reports/autotest-level/autotest-level.json"))
+    parser.add_argument("--observation-seconds", type=int, default=20)
     args = parser.parse_args()
     if not args.mod_file.is_file():
         raise SystemExit(f"DashCore package not found: {args.mod_file}")
     args.report_dir.mkdir(parents=True, exist_ok=True)
+    if not args.level_manifest.is_file():
+        raise SystemExit(f"Generated AutoTest level manifest not found: {args.level_manifest}")
+    level_manifest = json.loads(args.level_manifest.read_text(encoding="utf-8"))
+    if level_manifest.get("result") != "passed" or level_manifest.get("level_name") != args.level_name:
+        raise SystemExit("Generated AutoTest level manifest is invalid or names a different level")
+    if not 5 <= args.observation_seconds <= 120:
+        raise SystemExit("--observation-seconds must be between 5 and 120")
 
     profile = runtime.load_device_profile(args.device_profile)
     actual_guest = runtime.collect_device_fingerprint(args.serial)
@@ -98,13 +109,17 @@ def main() -> int:
         mod_file=str(args.mod_file), report_dir=str(args.report_dir),
         device_profile_data=profile, device_profile_assessment=assessment,
     )
-    print("AUTOTEST-MODE: one gameplay session; diagnostics only.")
+    print("AUTOTEST-MODE: generated local level; gameplay diagnostics only.")
+    print(f"AUTOTEST-LEVEL: {args.level_name} | objects={level_manifest.get('total_objects')}")
+    print(f"AUTOTEST-OBSERVATION: {args.observation_seconds}s")
     print("AUTOTEST-CONFIG: Performance Diagnostics=OFF; Render Pipeline Diagnostics=ON; static culling=OFF.")
     run = runtime.run_variant(
         variant_args, "GAMEPLAY_DIAGNOSTICS", mod_enabled=True,
         culling_mode="off", diagnostics_mode="off", geometry_diagnostics=False,
         render_pipeline_mode="on",
         render_pipeline_wait_s=60,
+        test_level_name=args.level_name,
+        observation_seconds=args.observation_seconds,
     )
 
     session_dir = args.report_dir / "gameplay-diagnostics"
@@ -112,12 +127,22 @@ def main() -> int:
     combined_log = log_path.read_text(encoding="utf-8", errors="replace") if log_path.is_file() else ""
     diagnostics = inspect_runtime_log(combined_log)
     gameplay_ok = run.get("gameplay_verified") is True
+    level_selection_ok = run.get("level_selection_verified") is True
     crash_free = run.get("crash_detected") is False
-    passed = gameplay_ok and crash_free and diagnostics["all_diagnostics_present"]
+    passed = level_selection_ok and gameplay_ok and crash_free and diagnostics["all_diagnostics_present"]
     report = {
         "result": "passed" if passed else "incomplete",
-        "test_mode": "single_gameplay_diagnostics_only",
+        "test_mode": "single_generated_level_gameplay_diagnostics_only",
         "gameplay_verified": gameplay_ok,
+        "level_selection_verified": level_selection_ok,
+        "test_level": {
+            "name": args.level_name,
+            "object_count": level_manifest.get("total_objects"),
+            "floor_objects": level_manifest.get("floor_objects"),
+            "density_sections": level_manifest.get("sections"),
+            "manifest": str(args.level_manifest),
+            "manifest_sha256": level_manifest.get("output_sha256"),
+        },
         "launcher_crash_detected": run.get("crash_detected"),
         "render_pipeline_sample_marker_source": run.get("render_pipeline_sample_marker_source"),
         "dashcore_package": str(args.mod_file),
@@ -126,10 +151,17 @@ def main() -> int:
         "render_pipeline_diagnostics": "ON",
         "static_culling": "OFF",
         "automated_gameplay": {
-            "level_selection": "last saved supported level when available; otherwise first standard level",
-            "input": "fixed screen tap at (700,800) every 0.5 seconds during the 20-second observation window",
+            "level_selection": f"generated local level {args.level_name}; no official or saved-level fallback",
+            "level_selection_verified": level_selection_ok,
+            "input": f"fixed screen tap at (700,800) every 0.5 seconds during the {args.observation_seconds}-second observation window",
+            "observation_seconds": args.observation_seconds,
             "completion_required": False,
-            "scope": "verifies the in-level ATTEMPT HUD and keeps gameplay active while the 180-frame diagnostic sample is collected",
+            "scope": "uses three reproducible object-density zones and verifies the ATTEMPT HUD while the 180-frame diagnostic sample is collected",
+            "fixture": {
+                "object_count": level_manifest.get("total_objects"),
+                "floor_objects": level_manifest.get("floor_objects"),
+                "sections": level_manifest.get("sections"),
+            },
         },
         "device_profile_assessment": assessment,
         "cloud_guest": actual_guest,
@@ -138,7 +170,8 @@ def main() -> int:
         "limitations": [
             "Cloud Android emulator only; Huawei Y9s / Kirin 710F / Mali-G51 hardware is NOT EMULATED.",
             "This AutoTest performs one DashCore-enabled gameplay session only; there is no no-mod baseline or culling-ON pass.",
-            "The fixed tap pattern is a gameplay stimulus, not a level-completion or gameplay-correctness test.",
+            "The generated runway contains no gameplay hazards; the fixed tap pattern is only a repeatable input stimulus, not a level-completion or correctness test.",
+            "The workflow inserts a local CCLocalLevels entry on the cloud guest; it does not modify a user phone or user save file.",
             "CPU callback timings are inclusive and include instrumentation overhead; they are not GPU execution timings.",
             "A successful cloud AutoTest does not establish a physical-device FPS improvement.",
         ],
@@ -149,7 +182,10 @@ def main() -> int:
     report_lines = [
         "# DashCore AutoTest — gameplay and diagnostics only", "",
         f"**Result: {'PASSED' if passed else 'INCOMPLETE'}**", "",
+        f"- Dedicated level selected: **{args.level_name} ({level_selection_ok})**",
         f"- In-level HUD verified: **{gameplay_ok}**",
+        f"- Fixture object count: **{level_manifest.get('total_objects')}**",
+        f"- Observation window: **{args.observation_seconds}s**",
         f"- Launcher crash detected: **{run.get('crash_detected')}**",
         "- DashCore enabled: **yes**",
         "- Performance Diagnostics: **OFF**",
