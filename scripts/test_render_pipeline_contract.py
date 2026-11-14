@@ -224,7 +224,7 @@ class RenderPipelineContractTests(unittest.TestCase):
         self.assertNotIn("disableIfEnabled(g_spriteDrawHook)", self.source)
         self.assertNotIn("disableIfEnabled(g_batchDrawHook)", self.source)
         self.assertIn("RENDER-CALLBACK-STATUS", self.source)
-        self.assertIn("state=RUNNING", self.source)
+        self.assertIn('"RUNNING"', self.source)
         self.assertIn('"ABSENT"', self.source)
 
 if __name__ == "__main__":
