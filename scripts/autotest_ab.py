@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measure Geometry Dash frame timing first without DashCore, then with DashCore."""
 from __future__ import annotations
-import argparse, csv, json, math, pathlib, re, shlex, statistics, subprocess, sys, time
+import argparse, csv, io, json, math, pathlib, re, shlex, statistics, subprocess, sys, time
 from PIL import Image
 from typing import Any
 
@@ -327,8 +327,12 @@ def parse_update(log_text: str) -> dict[str, int] | None:
     keys = ("frames", "avg_us", "max_us", "over8ms", "gaps_over_50ms", "gaps_over_100ms", "max_gap_us")
     return dict(zip(keys, map(int, match.groups())))
 
-def run_device_observation(serial: str, pid: str, mode_dir: pathlib.Path) -> dict[str, Any]:
+def run_device_observation(serial: str, pid: str, mode_dir: pathlib.Path,
+                           duration_s: int = 20) -> dict[str, Any]:
+    if not 5 <= duration_s <= 120:
+        raise ValueError("Gameplay observation duration must be between 5 and 120 seconds")
     script = r"""PID="$1"
+DURATION="$2"
 CLK_TCK="$(getconf CLK_TCK 2>/dev/null || echo 100)"
 read U0 _ < /proc/uptime
 STAT_BEFORE="$(cat "/proc/$PID/stat" 2>/dev/null || true)"
@@ -336,7 +340,7 @@ START="$U0"
 COUNT=0
 while :; do
   read NOW _ < /proc/uptime
-  awk -v a="$START" -v b="$NOW" 'BEGIN { exit !((b-a) < 20.0) }' || break
+  awk -v a="$START" -v b="$NOW" -v limit="$DURATION" 'BEGIN { exit !((b-a) < limit) }' || break
   input tap 700 800 >/dev/null 2>&1 || true
   COUNT=$((COUNT+1))
   sleep 0.5
@@ -347,11 +351,12 @@ echo "DEVICE_START=$START"
 echo "DEVICE_END=$END"
 echo "TAP_COUNT=$COUNT"
 echo "CLK_TCK=$CLK_TCK"
+echo "DURATION_REQUESTED=$DURATION"
 echo "STAT_BEFORE=$STAT_BEFORE"
 echo "STAT_AFTER=$STAT_AFTER"
 """
-    proc = subprocess.run(["adb", "-s", serial, "shell", "sh", "-s", pid], input=script, text=True,
-                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=45)
+    proc = subprocess.run(["adb", "-s", serial, "shell", "sh", "-s", pid, str(duration_s)], input=script, text=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=duration_s + 25)
     (mode_dir / "device-observation.txt").write_text(proc.stdout)
     if proc.returncode != 0: return {"available": False, "reason": f"device sample exited {proc.returncode}"}
     markers = {}
@@ -384,6 +389,172 @@ def take_state_screenshot(serial: str, mode: str, label: str, destination: pathl
     text = screenshot_text(destination)
     (destination.parent / f"{label}-ocr.txt").write_text(text + "\n")
     return text
+
+
+def normalize_ocr_phrase(value: str) -> str:
+    """Normalize OCR words for case- and punctuation-insensitive UI matching."""
+    return re.sub(r"[^a-z0-9]+", "", value.casefold())
+
+
+def ocr_phrase_center(path: pathlib.Path, phrase: str) -> tuple[int, int] | None:
+    """Find the center of an exact visible phrase using Tesseract word boxes."""
+    try:
+        proc = subprocess.run(
+            ["tesseract", str(path), "stdout", "--psm", "6", "tsv"],
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return None
+
+    target = normalize_ocr_phrase(phrase)
+    if not target:
+        return None
+    rows: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for row in csv.DictReader(io.StringIO(proc.stdout), delimiter="\\t"):
+        word = (row.get("text") or "").strip()
+        normalized = normalize_ocr_phrase(word)
+        if not normalized:
+            continue
+        try:
+            confidence = float(row.get("conf", "-1"))
+            x, y = int(row["left"]), int(row["top"])
+            width, height = int(row["width"]), int(row["height"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if confidence < 10 or width <= 0 or height <= 0:
+            continue
+        key = (row.get("block_num", ""), row.get("par_num", ""), row.get("line_num", ""))
+        rows.setdefault(key, []).append({
+            "text": normalized, "x": x, "y": y,
+            "right": x + width, "bottom": y + height,
+            "word_num": int(row.get("word_num") or 0),
+        })
+
+    for words in rows.values():
+        words.sort(key=lambda item: item["word_num"])
+        for start in range(len(words)):
+            joined = ""
+            selected = []
+            for end in range(start, len(words)):
+                joined += words[end]["text"]
+                selected.append(words[end])
+                if joined == target:
+                    left = min(item["x"] for item in selected)
+                    top = min(item["y"] for item in selected)
+                    right = max(item["right"] for item in selected)
+                    bottom = max(item["bottom"] for item in selected)
+                    return (left + right) // 2, (top + bottom) // 2
+                if len(joined) >= len(target) or not target.startswith(joined):
+                    break
+    return None
+
+
+def tap_ocr_phrase(serial: str, mode: str, variant_dir: pathlib.Path,
+                   label: str, phrase: str, timeout_s: int = 25) -> dict[str, Any]:
+    """Tap an exact OCR-visible button or level name, scaled to the live display."""
+    deadline = time.monotonic() + timeout_s
+    attempt = 0
+    while time.monotonic() < deadline:
+        attempt += 1
+        screenshot_path = variant_dir / f"{label}-{attempt}.png"
+        text = take_state_screenshot(
+            serial, mode, f"{label}-{attempt}", screenshot_path
+        )
+        if "notice" in text or "terms of use" in text:
+            update_notice_state(variant_dir, dialog_detected=True)
+            wait_for_notice_dismissal(serial, mode, variant_dir)
+            time.sleep(1.0)
+            continue
+        center = ocr_phrase_center(screenshot_path, phrase)
+        if center is None:
+            time.sleep(1.0)
+            continue
+        with Image.open(screenshot_path) as frame:
+            shot_width, shot_height = frame.size
+        display_width, display_height = parse_wm_size(
+            shell(serial, "wm size", check=False), shot_width, shot_height
+        )
+        x, y, input_width, input_height = map_screenshot_point_to_input(
+            center[0], center[1], shot_width, shot_height,
+            display_width, display_height,
+        )
+        shell(serial, f"input tap {x} {y}")
+        event = {
+            "phrase": phrase,
+            "screenshot_center_px": list(center),
+            "screenshot_size": [shot_width, shot_height],
+            "input_size": [input_width, input_height],
+            "adb_tap": [x, y],
+            "attempt": attempt,
+        }
+        navigation_path = variant_dir / "autotest-level-navigation.json"
+        try:
+            navigation = json.loads(navigation_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            navigation = {"steps": []}
+        navigation.setdefault("steps", []).append(event)
+        navigation_path.write_text(
+            json.dumps(navigation, indent=2) + "\n", encoding="utf-8"
+        )
+        time.sleep(1.5)
+        return event
+    raise RuntimeError(
+        f"{mode}: could not locate exact UI text {phrase!r} within {timeout_s}s; "
+        f"see {variant_dir} screenshots and OCR files."
+    )
+
+
+def open_custom_autotest_level(serial: str, mode: str,
+                               variant_dir: pathlib.Path,
+                               level_name: str) -> dict[str, Any]:
+    """Navigate only to the generated local fixture; never fall back to an official level."""
+    menu_text = take_state_screenshot(
+        serial, mode, "custom-level-menu-check", variant_dir / "custom-level-menu-check.png"
+    )
+    if not is_main_menu_text(menu_text):
+        # If startup restored an interrupted run, leave it before navigating.
+        shell(serial, "input keyevent 4", check=False)
+        wait_for_main_menu(serial, mode, variant_dir, timeout_s=60)
+    else:
+        wait_for_main_menu(serial, mode, variant_dir, timeout_s=30)
+
+    navigation: dict[str, Any] = {
+        "requested_level": level_name,
+        "level_selection_verified": False,
+        "method": "ocr-text-navigation",
+        "steps": [],
+    }
+    tap_ocr_phrase(serial, mode, variant_dir, "open-level-editor", "Level Editor", 25)
+
+    # Some game builds show My Levels as a tab; others enter that list directly.
+    try:
+        tap_ocr_phrase(serial, mode, variant_dir, "select-autotest-level", level_name, 12)
+        navigation["my_levels_tab_required"] = False
+    except RuntimeError:
+        tap_ocr_phrase(serial, mode, variant_dir, "open-my-levels", "My Levels", 25)
+        tap_ocr_phrase(serial, mode, variant_dir, "select-autotest-level", level_name, 30)
+        navigation["my_levels_tab_required"] = True
+
+    tap_ocr_phrase(serial, mode, variant_dir, "play-autotest-level", "Play", 25)
+    gameplay = wait_for_state(
+        serial, mode, "custom-level-gameplay",
+        variant_dir / "custom-level-gameplay.png",
+        is_gameplay_text, timeout_s=75,
+    )
+    navigation["level_selection_verified"] = True
+    navigation["gameplay_hud_verified"] = is_gameplay_text(gameplay)
+    navigation["accepted_gameplay_ocr"] = gameplay[:500]
+    navigation_path = variant_dir / "autotest-level-navigation.json"
+    navigation_path.write_text(
+        json.dumps(navigation, indent=2) + "\n", encoding="utf-8"
+    )
+    screenshot(
+        serial, f"dashcore-{mode.lower()}-gameplay-start-confirmed.png",
+        variant_dir / "gameplay-start.png",
+    )
+    return navigation
 
 def wait_for_state(serial: str, mode: str, label: str, destination: pathlib.Path,
                    predicate, timeout_s: int = 60, interval_s: float = 2.0) -> str:
@@ -731,7 +902,9 @@ def parse_culling_runtime(log_text: str) -> dict[str, Any]:
 def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_mode: str = "off",
                 diagnostics_mode: str = "off", geometry_diagnostics: bool = False,
                 render_pipeline_mode: str = "off",
-                render_pipeline_wait_s: int = 0) -> dict[str, Any]:
+                render_pipeline_wait_s: int = 0,
+                test_level_name: str | None = None,
+                observation_seconds: int = 20) -> dict[str, Any]:
     serial, base = args.serial, args.base_dir.rstrip("/")
     mod_dir = f"{base}/game/geode/mods"
     mod_remote = f"{mod_dir}/DashCore.geode"
@@ -778,9 +951,18 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
     gameplay_pattern = re.compile(r"\battempt\s*#?\s*\d+\b", re.IGNORECASE)
     current_text = take_state_screenshot(serial, mode, "startup-current", variant_dir / "startup-current.png")
     gameplay_ready = bool(gameplay_pattern.search(current_text))
-    if not gameplay_ready:
+    level_navigation: dict[str, Any] | None = None
+    if test_level_name:
+        # AutoTest always enters its generated custom level. It never silently
+        # substitutes a saved or official level when the requested one is absent.
+        if gameplay_ready:
+            shell(serial, "input keyevent 4", check=False)
+        level_navigation = open_custom_autotest_level(
+            serial, mode, variant_dir, test_level_name
+        )
+    elif not gameplay_ready:
         wait_for_main_menu(serial, mode, variant_dir, timeout_s=90)
-        # The central Play button is used; bottom navigation icons are never tapped.
+        # Legacy benchmark path: official first level, used only when no fixture was requested.
         shell(serial, "input tap 960 540")
         wait_for_state(
             serial, mode, "level-select", variant_dir / "level-select.png",
@@ -933,7 +1115,9 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
     if pid:
         shell(serial, "dumpsys gfxinfo com.geode.launcher reset", check=False)
         surface_layers = prepare_surfaceflinger(serial, variant_dir)
-        observation = run_device_observation(serial, pid, variant_dir)
+        observation = run_device_observation(
+            serial, pid, variant_dir, duration_s=observation_seconds
+        )
         if mod_enabled and render_pipeline_mode == "on" and render_pipeline_wait_s > 0:
             # Wait for the 180-draw sample and check both Geode's rolling file
             # and logcat: the file may not flush while Geometry Dash is open.
@@ -991,7 +1175,14 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
             "render_pipeline_sample_completed": render_pipeline_sample_completed,
             "render_pipeline_sample_marker_source": render_pipeline_sample_marker_source,
             "gameplay_verified": gameplay_verified, "gameplay_ocr": gameplay_ocr[:1000],
-            "launcher_pid_after_test": pid or None}
+            "launcher_pid_after_test": pid or None,
+            "level_selection_verified": (
+                level_navigation.get("level_selection_verified")
+                if level_navigation else None
+            ),
+            "test_level_name": test_level_name,
+            "level_navigation": level_navigation,
+            "observation_seconds_requested": observation_seconds}
     (variant_dir / "metrics.json").write_text(json.dumps(data, indent=2) + "\n")
     shell(serial, "am force-stop com.geode.launcher", check=False)
     return data
