@@ -25,11 +25,11 @@ class RendererProductContract(unittest.TestCase):
 
     def test_package_identity_and_diagnostic_prerelease(self):
         self.assertEqual(self.metadata["id"], "hesta.optgod")
-        self.assertEqual(self.metadata["version"], "0.11.1-alpha")
+        self.assertEqual(self.metadata["version"], "0.11.2-alpha")
         self.assertEqual(self.metadata["name"], "DashCore Experimental Renderer")
         self.assertFalse(self.metadata.get("settings"))
-        self.assertIn("project(optgod VERSION 0.11.1)", self.cmake)
-        self.assertIn("0.11.1-alpha", self.module)
+        self.assertIn("project(optgod VERSION 0.11.2)", self.cmake)
+        self.assertIn("0.11.2-alpha", self.module)
 
     def test_legacy_probes_culling_and_draw_interception_are_absent(self):
         forbidden = (
@@ -112,7 +112,7 @@ class RendererProductContract(unittest.TestCase):
         self.assertIn("percentile95", self.diagnostics_source)
 
     def test_readme_describes_diagnostic_stage_without_optimization_claim(self):
-        self.assertIn("0.11.1-alpha", self.readme)
+        self.assertIn("0.11.2-alpha", self.readme)
         self.assertIn("read-only", self.readme.lower())
         self.assertIn("vanilla rendering", self.readme.lower())
         self.assertIn("latest 512 captures", self.readme)
