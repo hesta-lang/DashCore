@@ -10,6 +10,7 @@ int main() {
 
     CaptureFrameSample first{};
     first.succeeded = true;
+    first.postUpdateNanoseconds = 80;
     first.captureNanoseconds = 100;
     first.collectionNanoseconds = 40;
     first.snapshotSprites = 3;
@@ -22,6 +23,7 @@ int main() {
 
     CaptureFrameSample second{};
     second.succeeded = false;
+    second.postUpdateNanoseconds = 160;
     second.captureNanoseconds = 300;
     second.collectionNanoseconds = 100;
     second.counters.nodesVisited = 20;
@@ -37,6 +39,9 @@ int main() {
     assert(summary.totals.candidateSprites == 4);
     assert(summary.totals.acceptedSprites == 3);
     assert(summary.totals.rejectedQuad == 1);
+    assert(summary.averagePostUpdateNanoseconds == 120);
+    assert(summary.p95PostUpdateNanoseconds == 160);
+    assert(summary.maximumPostUpdateNanoseconds == 160);
     assert(summary.averageCaptureNanoseconds == 200);
     assert(summary.p95CaptureNanoseconds == 300);
     assert(summary.averageCollectionNanoseconds == 70);
@@ -50,9 +55,11 @@ int main() {
 
     RendererDiagnostics boundedWindow;
     CaptureFrameSample oldSample{};
+    oldSample.postUpdateNanoseconds = 1;
     oldSample.captureNanoseconds = 1;
     boundedWindow.record(oldSample);
     CaptureFrameSample recentSample{};
+    recentSample.postUpdateNanoseconds = 10;
     recentSample.captureNanoseconds = 10;
     for (std::size_t index = 0; index < RendererDiagnostics::kTimingSampleWindow; ++index) {
         boundedWindow.record(recentSample);
@@ -60,6 +67,7 @@ int main() {
     auto const boundedSummary = boundedWindow.summary();
     assert(boundedSummary.totalFrames == 513);
     assert(boundedSummary.timingWindowSamples == 512);
+    assert(boundedSummary.p95PostUpdateNanoseconds == 10);
     assert(boundedSummary.p95CaptureNanoseconds == 10);
     assert(boundedSummary.maximumCaptureNanoseconds == 10);
 }
