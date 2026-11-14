@@ -864,10 +864,18 @@ def exit_level_for_capture_summary(serial: str, mode: str,
         )
     except RuntimeError:
         # Some translated or icon-only pause menus expose no OCR-readable Exit label.
-        # A second Back key is a conservative fallback; success is still gated
-        # on the actual DashCore summary appearing in the log.
         shell(serial, "input keyevent 4", check=False)
         time.sleep(2.0)
+    else:
+        # Geometry Dash may ask for confirmation after Exit. Only tap a
+        # visible Yes button; the per-level marker below remains the proof
+        # that the PlayLayer actually ended.
+        try:
+            tap_ocr_phrase(
+                serial, mode, variant_dir, "confirm-capture-exit", "Yes", timeout_s=8
+            )
+        except RuntimeError:
+            pass
 
     deadline = time.monotonic() + 20
     marker_source = None
