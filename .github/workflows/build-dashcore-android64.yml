@@ -28,6 +28,8 @@ jobs:
           python3 scripts/test_renderer_product_contract.py
           c++ -std=c++20 -Wall -Wextra -Werror -Isrc tests/renderer_model_tests.cpp src/renderer/core/*.cpp -o /tmp/dashcore-renderer-model-tests
           /tmp/dashcore-renderer-model-tests
+          c++ -std=c++20 -Wall -Wextra -Werror -Isrc tests/renderer_diagnostics_tests.cpp src/renderer/core/RendererDiagnostics.cpp -o /tmp/dashcore-renderer-diagnostics-tests
+          /tmp/dashcore-renderer-diagnostics-tests
 
       - name: Run Cppcheck
         run: |
