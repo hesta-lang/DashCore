@@ -53,7 +53,7 @@ class RendererProductContract(unittest.TestCase):
         self.assertIn("kGlNumExtensions", self.gles_backend)
         self.assertIn("GL_EXT_multi_draw_indirect", self.gles_source)
         self.assertIn("GL_EXT_disjoint_timer_query", self.gles_source)
-        self.assertIn("no se activa", self.bismuth_port.lower())
+        self.assertIn("no bismuth rendering path", self.bismuth_port.lower())
         self.assertIn("glsl es 3.20", self.bismuth_port.lower())
 
     def test_legacy_probes_culling_and_draw_interception_are_absent(self):
