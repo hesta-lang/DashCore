@@ -152,7 +152,11 @@ def read_session(data: bytes, label: str) -> dict[str, Any]:
             continue
         level_id, level_name = window.get("level_id"), window.get("level_name")
         identity = str(level_id) if level_id not in (None, "", "null") else str(level_name or "")
-        key = identity.strip() or f"segment-{window.get('level_segment_index', 'unknown')}"
+        if not identity.strip():
+            if "Level markers currently have no level ID/name; cross-session level matching needs manual confirmation." not in warnings:
+                warnings.append("Level markers currently have no level ID/name; cross-session level matching needs manual confirmation.")
+            continue
+        key = identity.strip()
         levels.setdefault(key, []).append(window)
         names[key] = str(level_name or level_id or key)
 
@@ -268,7 +272,11 @@ def _delta(before: Any, after: Any) -> dict[str, Any]:
             "delta_percent": diff / before * 100.0 if before else None}
 
 
-def compare_sessions(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+def compare_sessions(
+    baseline: dict[str, Any],
+    candidate: dict[str, Any],
+    same_route_confirmed: bool = False,
+) -> dict[str, Any]:
     checks = {}
     for key in ("manufacturer", "model", "device", "android_release", "android_sdk", "game_version"):
         left, right = baseline["device"].get(key), candidate["device"].get(key)
@@ -278,7 +286,13 @@ def compare_sessions(baseline: dict[str, Any], candidate: dict[str, Any]) -> dic
         checks[f"same_{key}"] = left is not None and right is not None and left == right
     left_levels, right_levels = _level_map(baseline), _level_map(candidate)
     matched = sorted(set(left_levels) & set(right_levels))
-    checks["same_level_observed"] = bool(matched)
+    level_samples_available = (
+        baseline.get("renderer", {}).get("level", {}).get("frame_count", 0) > 0
+        and candidate.get("renderer", {}).get("level", {}).get("frame_count", 0) > 0
+    )
+    use_manual_level_pair = not matched and same_route_confirmed and level_samples_available
+    checks["same_level_observed"] = bool(matched) or use_manual_level_pair
+    checks["same_level_route_user_confirmed"] = same_route_confirmed
     checks["baseline_capture_off"] = baseline.get("capture_enabled") is False
     checks["candidate_capture_on"] = candidate.get("capture_enabled") is True
     checks["single_capture_variant_each"] = (
@@ -286,12 +300,22 @@ def compare_sessions(baseline: dict[str, Any], candidate: dict[str, Any]) -> dic
         and not baseline.get("capture_state_mixed") and not candidate.get("capture_state_mixed")
     )
     level_results = []
-    for key in matched:
-        before, after = left_levels[key]["renderer"], right_levels[key]["renderer"]
+    pairs = [
+        (key, left_levels[key]["name"], left_levels[key]["renderer"], right_levels[key]["renderer"])
+        for key in matched
+    ]
+    if use_manual_level_pair:
+        pairs = [(
+            "__manual_confirmed_route__",
+            "Same route and StartPos (manually confirmed)",
+            baseline["renderer"]["level"],
+            candidate["renderer"]["level"],
+        )]
+    for key, name, before, after in pairs:
         before_frame, after_frame = before.get("frame_interval", {}), after.get("frame_interval", {})
         before_wall, after_wall = before.get("callback_wall", {}), after.get("callback_wall", {})
         level_results.append({
-            "key": key, "name": left_levels[key]["name"],
+            "key": key, "name": name,
             "frame_interval_avg_ms": _delta(before_frame.get("weighted_average_ms"),
                                              after_frame.get("weighted_average_ms")),
             "frame_interval_worst_window_p95_ms": _delta(before_frame.get("worst_window_p95_ms"),
@@ -309,7 +333,8 @@ def compare_sessions(baseline: dict[str, Any], candidate: dict[str, Any]) -> dic
         "checks": checks,
         "matched_levels": level_results,
         "manual_confirmation_required": [
-            "Confirm both runs used the same level route and the same StartPos; these are not recorded by the current launcher schema.",
+            "The level route and StartPos must be confirmed by the tester; they are not recorded by the current launcher schema.",
+            "Use --confirm-same-route only after confirming both runs followed the same route and StartPos.",
             "Keep graphics settings, background apps, refresh rate and device rest conditions similar.",
             "This comparison does not measure GPU execution or prove an optimization.",
         ],
@@ -389,6 +414,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("inputs", nargs="+", help="JSONL file, ZIP of JSONL sessions, or directory")
     parser.add_argument("--compare", nargs=2, metavar=("BASELINE_OFF", "CAPTURE_ON"),
                         help="Compare two single-session JSONL files or ZIP archives, OFF then ON.")
+    parser.add_argument("--confirm-same-route", action="store_true",
+                        help="Assert that both runs used the same level route and StartPos.")
     parser.add_argument("--output-dir", type=pathlib.Path,
                         default=pathlib.Path("reports/launcher-diagnostics"))
     args = parser.parse_args(argv)
@@ -401,7 +428,9 @@ def main(argv: list[str] | None = None) -> int:
         candidate = load_inputs(pathlib.Path(args.compare[1]))
         if len(baseline) != 1 or len(candidate) != 1:
             parser.error("--compare inputs must each contain exactly one JSONL session.")
-        comparison = compare_sessions(baseline[0], candidate[0])
+        comparison = compare_sessions(
+            baseline[0], candidate[0], same_route_confirmed=args.confirm_same_route
+        )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     report = {"schema_version": 1, "sessions": sessions, "comparison": comparison}
     json_path = args.output_dir / "launcher-diagnostics-summary.json"
