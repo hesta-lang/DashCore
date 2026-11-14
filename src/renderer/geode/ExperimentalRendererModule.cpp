@@ -18,7 +18,7 @@ namespace dashcore::renderer {
 
 void initialize() {
     ::geode::log::info(
-        "DashCore Experimental Renderer 0.11.0-alpha: live read-only object snapshots enabled; vanilla rendering remains the only draw path."
+        "DashCore Experimental Renderer 0.11.1-alpha: bounded capture diagnostics enabled; vanilla rendering remains the only draw path."
     );
 }
 
