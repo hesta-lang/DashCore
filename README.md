@@ -1,11 +1,11 @@
 # DashCore — Android rendering optimization
 
-## 0.10.12-alpha — update-clocked diagnostic completion
+## 0.10.13-alpha — independent renderer callback sampling
 
-- Completes the 180-update diagnostic sample from the confirmed `PlayLayer::postUpdate` path instead of waiting for the optional `CCDirector::drawScene` callback.
-- Reports `drawSceneFrames` and `sampleCoverage` separately. An `update-only` result is explicitly not a draw-path or GPU measurement.
-- Keeps scene hierarchy and section-container inventories read-only and bounded.
-- No rendering, gameplay, physics, draw-order, or UI changes. This is diagnostic-only; no performance improvement is claimed.
+- Samples `CCNode::visit`, sprite, batch-node, and texture-atlas callbacks using each callback's own bounded call counter; their timing no longer depends on the optional `CCDirector::drawScene` hook.
+- AutoTest now requires at least one timed sprite, batch, or atlas draw callback before reporting complete renderer coverage. Zero callbacks are reported as INCOMPLETE instead of passing from update-only data.
+- Keeps `CCDirector::drawScene` as supplementary telemetry and reports its coverage separately. CPU timings are not GPU timings.
+- No rendering, gameplay, physics, draw-order, or UI changes. Diagnostics remain opt-in; no performance improvement is claimed.
 
 
 ## 0.10.11-alpha — render-sample progress and AutoTest completion visibility
