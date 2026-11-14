@@ -172,6 +172,7 @@ namespace {
     RenderPipelineProfile g_rendererProfile;
     bool g_renderPipelineDiagnosticsRequested = false;
     // The sample controller is separate from every independently measured callback.
+    // Final status records preserve absent, disabled, idle, and running states.
     bool g_renderPipelineHooksReady = false;
     bool g_baseGameLayerUpdateHookReady = false;
     bool g_playLayerVisibilityHookReady = false;
