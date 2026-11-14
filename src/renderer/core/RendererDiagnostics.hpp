@@ -8,6 +8,7 @@ namespace dashcore::renderer::core {
 
 struct CaptureCounters {
     std::uint64_t nodesVisited = 0;
+    std::uint64_t objectArrayIndexBuilds = 0;
     std::uint64_t objectArrayEntries = 0;
     std::uint64_t objectsInVisiblePlayLayerTree = 0;
     std::uint64_t objectsOutsideVisiblePlayLayerTree = 0;
@@ -36,8 +37,10 @@ struct CaptureFrameSample {
     std::uint64_t postUpdateNanoseconds = 0;
     std::uint64_t captureNanoseconds = 0;
     std::uint64_t collectionNanoseconds = 0;
+    std::uint64_t indexBuildNanoseconds = 0;
     std::uint64_t snapshotSprites = 0;
     std::uint64_t snapshotCapacityBytes = 0;
+    bool capturePerformed = true;
     bool succeeded = false;
 };
 
@@ -45,6 +48,10 @@ struct RendererDiagnosticSummary {
     std::uint64_t totalFrames = 0;
     std::uint64_t successfulFrames = 0;
     std::uint64_t failedFrames = 0;
+    std::uint64_t capturePerformedFrames = 0;
+    std::uint64_t captureSkippedFrames = 0;
+    std::uint64_t totalIndexBuildNanoseconds = 0;
+    bool captureEnabled = true;
     CaptureCounters totals{};
     std::uint64_t averagePostUpdateNanoseconds = 0;
     std::uint64_t p95PostUpdateNanoseconds = 0;
@@ -78,6 +85,9 @@ private:
     std::uint64_t m_totalFrames = 0;
     std::uint64_t m_successfulFrames = 0;
     std::uint64_t m_failedFrames = 0;
+    std::uint64_t m_capturePerformedFrames = 0;
+    std::uint64_t m_captureSkippedFrames = 0;
+    std::uint64_t m_totalIndexBuildNanoseconds = 0;
     CaptureCounters m_totals{};
     std::uint64_t m_totalPostUpdateNanoseconds = 0;
     std::uint64_t m_totalCaptureNanoseconds = 0;

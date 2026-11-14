@@ -23,6 +23,10 @@ void logLevelDiagnostics(core::RendererDiagnosticSummary const& report) {
          << " frames=" << report.totalFrames
          << " successful=" << report.successfulFrames
          << " failed=" << report.failedFrames
+         << " capture_enabled=" << (report.captureEnabled ? "true" : "false")
+         << " capture_performed_frames=" << report.capturePerformedFrames
+         << " capture_skipped_frames=" << report.captureSkippedFrames
+         << " index_build_total_ms=" << nanosecondsToMilliseconds(report.totalIndexBuildNanoseconds)
          << " post_update_avg_ms=" << nanosecondsToMilliseconds(report.averagePostUpdateNanoseconds)
          << " post_update_p95_last512_ms=" << nanosecondsToMilliseconds(report.p95PostUpdateNanoseconds)
          << " post_update_max_ms=" << nanosecondsToMilliseconds(report.maximumPostUpdateNanoseconds)
@@ -34,15 +38,18 @@ void logLevelDiagnostics(core::RendererDiagnosticSummary const& report) {
          << " collection_max_ms=" << nanosecondsToMilliseconds(report.maximumCollectionNanoseconds)
          << " p95_window_frames=" << report.timingWindowSamples
          << " nodes_visited_total=" << report.totals.nodesVisited
-         << " object_array_entries_total=" << report.totals.objectArrayEntries
-         << " objects_in_visible_playlayer_tree_total=" << report.totals.objectsInVisiblePlayLayerTree
-         << " objects_outside_visible_playlayer_tree_total=" << report.totals.objectsOutsideVisiblePlayLayerTree
+         << " object_array_index_builds_total=" << report.totals.objectArrayIndexBuilds
+         << " object_array_entries_indexed_total=" << report.totals.objectArrayEntries
+         << " objects_cached_in_visible_playlayer_tree_total=" << report.totals.objectsInVisiblePlayLayerTree
+         << " objects_excluded_from_playlayer_tree_index_total=" << report.totals.objectsOutsideVisiblePlayLayerTree
          << " root_objects_total=" << report.totals.rootObjects
          << " sprite_candidates_total=" << report.totals.candidateSprites
          << " sprites_accepted_total=" << report.totals.acceptedSprites
          << " invisible_subtrees_total=" << report.totals.invisibleSubtrees
          << " rejected_flags_total=" << report.totals.rejectedFlags
          << " rejected_batched_total=" << report.totals.rejectedBatched
+         << " sprites_skipped_unsupported_flags_total=" << report.totals.rejectedFlags
+         << " sprites_skipped_batch_node_total=" << report.totals.rejectedBatched
          << " rejected_missing_texture_total=" << report.totals.rejectedMissingTexture
          << " rejected_unuploaded_texture_total=" << report.totals.rejectedUnuploadedTexture
          << " rejected_blend_total=" << report.totals.rejectedBlend
@@ -66,13 +73,15 @@ void logLevelDiagnostics(core::RendererDiagnosticSummary const& report) {
 
 } // namespace
 
-void RendererCoordinator::onLevelInit() noexcept {
+void RendererCoordinator::onLevelInit(PlayLayer* layer, bool captureEnabled) noexcept {
     ++m_generation;
     if (m_generation == 0) m_generation = 1;
     m_collector.reset(m_generation);
+    m_source.reset(layer);
     m_snapshot = {};
     m_diagnostics.reset();
     m_frameIndex = 0;
+    m_captureEnabled = captureEnabled;
     m_active = true;
 }
 
@@ -82,35 +91,44 @@ void RendererCoordinator::onFrame(
 ) noexcept {
     if (!m_active || !layer) return;
 
-    auto const captureStart = std::chrono::steady_clock::now();
-    GeodeLevelObjectSource source(layer);
     core::CaptureFrameSample sample{};
     sample.postUpdateNanoseconds = originalPostUpdateNanoseconds;
-    bool captureSucceeded = false;
+    sample.capturePerformed = m_captureEnabled;
 
-    try {
-        core::RenderSnapshot next;
-        captureSucceeded = m_collector.capture(source, m_frameIndex, next);
-        if (captureSucceeded) {
-            sample.snapshotSprites = next.sprites.size();
-            sample.snapshotCapacityBytes =
-                next.sprites.capacity() * sizeof(core::SpriteDescriptor);
-            m_snapshot = std::move(next);
-        } else {
+    if (m_captureEnabled) {
+        auto const captureStart = std::chrono::steady_clock::now();
+        bool captureSucceeded = false;
+
+        try {
+            core::RenderSnapshot next;
+            captureSucceeded = m_collector.capture(m_source, m_frameIndex, next);
+            if (captureSucceeded) {
+                sample.snapshotSprites = next.sprites.size();
+                sample.snapshotCapacityBytes =
+                    next.sprites.capacity() * sizeof(core::SpriteDescriptor);
+                m_snapshot = std::move(next);
+            } else {
+                m_snapshot = {};
+            }
+        } catch (...) {
             m_snapshot = {};
+            captureSucceeded = false;
         }
-    } catch (...) {
+
+        auto const captureElapsed = std::chrono::steady_clock::now() - captureStart;
+        sample.captureNanoseconds = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(captureElapsed).count()
+        );
+        sample.collectionNanoseconds = m_source.lastStats().collectionNanoseconds;
+        sample.indexBuildNanoseconds = m_source.lastStats().indexBuildNanoseconds;
+        sample.counters = m_source.lastStats().counters;
+        sample.succeeded = captureSucceeded;
+    } else {
+        // The A/B baseline still measures postUpdate and level boundaries without
+        // scanning m_objects or building per-frame snapshots.
         m_snapshot = {};
-        captureSucceeded = false;
     }
 
-    auto const captureElapsed = std::chrono::steady_clock::now() - captureStart;
-    sample.captureNanoseconds = static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(captureElapsed).count()
-    );
-    sample.collectionNanoseconds = source.lastStats().collectionNanoseconds;
-    sample.counters = source.lastStats().counters;
-    sample.succeeded = captureSucceeded;
     m_diagnostics.record(sample);
     ++m_frameIndex;
 }
@@ -128,6 +146,8 @@ void RendererCoordinator::onLevelExit() noexcept {
     }
 
     m_snapshot = {};
+    m_source.reset(nullptr);
+    m_captureEnabled = false;
     m_active = false;
     m_frameIndex = 0;
 }

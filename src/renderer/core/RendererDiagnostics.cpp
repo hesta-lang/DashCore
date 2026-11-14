@@ -23,6 +23,7 @@ std::uint64_t percentile95(
 
 void addCounters(CaptureCounters& target, CaptureCounters const& value) noexcept {
     addSaturated(target.nodesVisited, value.nodesVisited);
+    addSaturated(target.objectArrayIndexBuilds, value.objectArrayIndexBuilds);
     addSaturated(target.objectArrayEntries, value.objectArrayEntries);
     addSaturated(target.objectsInVisiblePlayLayerTree, value.objectsInVisiblePlayLayerTree);
     addSaturated(target.objectsOutsideVisiblePlayLayerTree, value.objectsOutsideVisiblePlayLayerTree);
@@ -51,6 +52,9 @@ void RendererDiagnostics::reset() noexcept {
     m_totalFrames = 0;
     m_successfulFrames = 0;
     m_failedFrames = 0;
+    m_capturePerformedFrames = 0;
+    m_captureSkippedFrames = 0;
+    m_totalIndexBuildNanoseconds = 0;
     m_totals = {};
     m_totalPostUpdateNanoseconds = 0;
     m_totalCaptureNanoseconds = 0;
@@ -73,33 +77,39 @@ void RendererDiagnostics::reset() noexcept {
 
 void RendererDiagnostics::record(CaptureFrameSample const& sample) noexcept {
     addSaturated(m_totalFrames, 1);
-    if (sample.succeeded) {
-        addSaturated(m_successfulFrames, 1);
+    addSaturated(m_totalPostUpdateNanoseconds, sample.postUpdateNanoseconds);
+    addSaturated(m_totalIndexBuildNanoseconds, sample.indexBuildNanoseconds);
+
+    if (sample.capturePerformed) {
+        addSaturated(m_capturePerformedFrames, 1);
+        if (sample.succeeded) {
+            addSaturated(m_successfulFrames, 1);
+        } else {
+            addSaturated(m_failedFrames, 1);
+        }
+        addSaturated(m_totalCaptureNanoseconds, sample.captureNanoseconds);
+        addSaturated(m_totalCollectionNanoseconds, sample.collectionNanoseconds);
+        m_maximumCaptureNanoseconds = std::max(
+            m_maximumCaptureNanoseconds,
+            sample.captureNanoseconds
+        );
+        m_maximumCollectionNanoseconds = std::max(
+            m_maximumCollectionNanoseconds,
+            sample.collectionNanoseconds
+        );
     } else {
-        addSaturated(m_failedFrames, 1);
+        addSaturated(m_captureSkippedFrames, 1);
     }
 
     addCounters(m_totals, sample.counters);
-    addSaturated(m_totalPostUpdateNanoseconds, sample.postUpdateNanoseconds);
-    addSaturated(m_totalCaptureNanoseconds, sample.captureNanoseconds);
-    addSaturated(m_totalCollectionNanoseconds, sample.collectionNanoseconds);
-
     m_maximumPostUpdateNanoseconds = std::max(
         m_maximumPostUpdateNanoseconds,
         sample.postUpdateNanoseconds
     );
-    m_maximumCaptureNanoseconds = std::max(
-        m_maximumCaptureNanoseconds,
-        sample.captureNanoseconds
-    );
-    m_maximumCollectionNanoseconds = std::max(
-        m_maximumCollectionNanoseconds,
-        sample.collectionNanoseconds
-    );
 
     m_postUpdateSamples[m_nextTimingSample] = sample.postUpdateNanoseconds;
-    m_captureSamples[m_nextTimingSample] = sample.captureNanoseconds;
-    m_collectionSamples[m_nextTimingSample] = sample.collectionNanoseconds;
+    m_captureSamples[m_nextTimingSample] = sample.capturePerformed ? sample.captureNanoseconds : 0;
+    m_collectionSamples[m_nextTimingSample] = sample.capturePerformed ? sample.collectionNanoseconds : 0;
     m_nextTimingSample = (m_nextTimingSample + 1u) % kTimingSampleWindow;
     if (m_timingSampleCount < kTimingSampleWindow) {
         ++m_timingSampleCount;
@@ -127,6 +137,9 @@ RendererDiagnosticSummary RendererDiagnostics::summary() const noexcept {
     result.totalFrames = m_totalFrames;
     result.successfulFrames = m_successfulFrames;
     result.failedFrames = m_failedFrames;
+    result.capturePerformedFrames = m_capturePerformedFrames;
+    result.captureSkippedFrames = m_captureSkippedFrames;
+    result.totalIndexBuildNanoseconds = m_totalIndexBuildNanoseconds;
     result.totals = m_totals;
     result.maximumPostUpdateNanoseconds = m_maximumPostUpdateNanoseconds;
     result.maximumCaptureNanoseconds = m_maximumCaptureNanoseconds;
@@ -141,9 +154,10 @@ RendererDiagnosticSummary RendererDiagnostics::summary() const noexcept {
 
     if (m_totalFrames != 0) {
         result.averagePostUpdateNanoseconds = m_totalPostUpdateNanoseconds / m_totalFrames;
-        result.averageCaptureNanoseconds = m_totalCaptureNanoseconds / m_totalFrames;
-        result.averageCollectionNanoseconds = m_totalCollectionNanoseconds / m_totalFrames;
     }
+    if (m_capturePerformedFrames != 0) {
+        result.averageCaptureNanoseconds = m_totalCaptureNanoseconds / m_capturePerformedFrames;
+        result.averageCollectionNanoseconds = m_totalCollectionNanoseconds / m_capturePerformedFrames;
     result.p95PostUpdateNanoseconds = percentile95(m_postUpdateSamples, m_timingSampleCount);
     result.p95CaptureNanoseconds = percentile95(m_captureSamples, m_timingSampleCount);
     result.p95CollectionNanoseconds = percentile95(m_collectionSamples, m_timingSampleCount);

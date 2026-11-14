@@ -5,11 +5,19 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore Experimental Renderer",
-  "version": "0.11.3-alpha",
+  "version": "0.11.4-alpha",
   "developer": "hesta-lang",
-  "description": "Experimental Android renderer foundation for Geometry Dash level objects. This diagnostic prerelease reports bounded per-level capture metrics, validates visible PlayLayer ancestor chains, and sends idempotent PlayLayer lifecycle markers, and forwards structured capture summaries to the Android launcher's session recorder. The original Geometry Dash renderer remains the only visible draw path. No draw replacement or performance gain is claimed.",
+  "description": "Experimental Android renderer foundation for Geometry Dash level objects. This diagnostic prerelease supports a low-overhead A/B baseline and optional per-level indexed object capture. The original Geometry Dash renderer remains the only visible draw path. No draw replacement or performance gain is claimed.",
   "tags": [
     "optimizations",
     "performance"
-  ]
+  ],
+  "settings": {
+    "capture-object-diagnostics": {
+      "name": "Capture object diagnostics",
+      "description": "Enables per-frame read-only object and sprite capture for the A/B comparison. When disabled, DashCore only sends level lifecycle markers while Launcher Diagnostics measures the game. Changes apply from the next level.",
+      "type": "bool",
+      "default": false
+    }
+  }
 }

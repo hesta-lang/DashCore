@@ -34,6 +34,10 @@ std::string makeLauncherDiagnosticsJson(
          << "\"frames\":" << report.totalFrames
          << ",\"successful_frames\":" << report.successfulFrames
          << ",\"failed_frames\":" << report.failedFrames
+         << ",\"capture_enabled\":" << (report.captureEnabled ? "true" : "false")
+         << ",\"capture_performed_frames\":" << report.capturePerformedFrames
+         << ",\"capture_skipped_frames\":" << report.captureSkippedFrames
+         << ",\"index_build_total_ms\":" << nanosecondsToMilliseconds(report.totalIndexBuildNanoseconds)
          << ",\"post_update_avg_ms\":" << nanosecondsToMilliseconds(report.averagePostUpdateNanoseconds)
          << ",\"post_update_p95_last512_ms\":" << nanosecondsToMilliseconds(report.p95PostUpdateNanoseconds)
          << ",\"post_update_max_ms\":" << nanosecondsToMilliseconds(report.maximumPostUpdateNanoseconds)
@@ -45,15 +49,18 @@ std::string makeLauncherDiagnosticsJson(
          << ",\"collection_max_ms\":" << nanosecondsToMilliseconds(report.maximumCollectionNanoseconds)
          << ",\"p95_window_frames\":" << report.timingWindowSamples
          << ",\"nodes_visited_total\":" << counters.nodesVisited
-         << ",\"object_array_entries_total\":" << counters.objectArrayEntries
-         << ",\"objects_in_visible_playlayer_tree_total\":" << counters.objectsInVisiblePlayLayerTree
-         << ",\"objects_outside_visible_playlayer_tree_total\":" << counters.objectsOutsideVisiblePlayLayerTree
+         << ",\"object_array_index_builds_total\":" << counters.objectArrayIndexBuilds
+         << ",\"object_array_entries_indexed_total\":" << counters.objectArrayEntries
+         << ",\"objects_cached_in_visible_playlayer_tree_total\":" << counters.objectsInVisiblePlayLayerTree
+         << ",\"objects_excluded_from_playlayer_tree_index_total\":" << counters.objectsOutsideVisiblePlayLayerTree
          << ",\"root_objects_total\":" << counters.rootObjects
          << ",\"sprite_candidates_total\":" << counters.candidateSprites
          << ",\"sprites_accepted_total\":" << counters.acceptedSprites
          << ",\"invisible_subtrees_total\":" << counters.invisibleSubtrees
          << ",\"rejected_flags_total\":" << counters.rejectedFlags
          << ",\"rejected_batched_total\":" << counters.rejectedBatched
+         << ",\"sprites_skipped_unsupported_flags_total\":" << counters.rejectedFlags
+         << ",\"sprites_skipped_batch_node_total\":" << counters.rejectedBatched
          << ",\"rejected_missing_texture_total\":" << counters.rejectedMissingTexture
          << ",\"rejected_unuploaded_texture_total\":" << counters.rejectedUnuploadedTexture
          << ",\"rejected_blend_total\":" << counters.rejectedBlend
@@ -170,7 +177,9 @@ void notifyLauncherLevelEnded() noexcept {}
 class $modify(DashCoreExperimentalPlayLayer, PlayLayer) {
     void onEnterTransitionDidFinish() {
         PlayLayer::onEnterTransitionDidFinish();
-        dashcore::renderer::geode::coordinator().onLevelInit();
+        auto const captureEnabled =
+            Mod::get()->getSettingValue<bool>("capture-object-diagnostics");
+        dashcore::renderer::geode::coordinator().onLevelInit(this, captureEnabled);
         notifyLauncherLevelStarted();
     }
 

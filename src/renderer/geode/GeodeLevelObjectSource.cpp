@@ -53,17 +53,24 @@ enum class SpriteRejectReason {
     Transform,
 };
 
-struct RootObject {
-    GameObject* object = nullptr;
-    std::uint32_t objectIndex = 0;
-};
+bool isDescendantOfPlayLayer(
+    cocos2d::CCNode* node,
+    PlayLayer* layer
+) noexcept {
+    if (!node || !layer) return false;
+    auto* const layerNode = static_cast<cocos2d::CCNode*>(layer);
+    auto* current = node;
+    while (current && current != layerNode) {
+        current = current->getParent();
+    }
+    return current == layerNode;
+}
 
 bool isVisibleDescendantOfPlayLayer(
     cocos2d::CCNode* node,
     PlayLayer* layer
 ) noexcept {
     if (!node || !layer) return false;
-
     auto* const layerNode = static_cast<cocos2d::CCNode*>(layer);
     auto* current = node;
     while (current && current != layerNode) {
@@ -334,8 +341,46 @@ bool captureNode(
 
 } // namespace
 
-GeodeLevelObjectSource::GeodeLevelObjectSource(PlayLayer* layer) noexcept
-  : m_layer(layer) {}
+GeodeLevelObjectSource::GeodeLevelObjectSource(PlayLayer* layer) noexcept {
+    reset(layer);
+}
+
+void GeodeLevelObjectSource::reset(PlayLayer* layer) noexcept {
+    m_layer = layer;
+    m_indexedObjectsArray = nullptr;
+    m_indexedObjectCount = 0;
+    m_indexBuilt = false;
+    m_cachedRoots.clear();
+    m_lastStats = {};
+}
+
+bool GeodeLevelObjectSource::rebuildObjectIndex() const {
+    if (!m_layer || !m_layer->m_objects) return false;
+
+    ::geode::cocos::CCArrayExt<GameObject, false> objects(m_layer->m_objects);
+    if (objects.size() > core::LevelObjectCollector::kMaximumSprites) return false;
+
+    m_cachedRoots.clear();
+    m_cachedRoots.reserve(objects.size());
+    ++m_lastStats.counters.objectArrayIndexBuilds;
+    m_lastStats.counters.objectArrayEntries = objects.size();
+
+    for (std::size_t index = 0; index < objects.size(); ++index) {
+        auto* object = objects[index];
+        if (!object || !isDescendantOfPlayLayer(object, m_layer)) {
+            ++m_lastStats.counters.objectsOutsideVisiblePlayLayerTree;
+            continue;
+        }
+        ++m_lastStats.counters.objectsInVisiblePlayLayerTree;
+        if (index > std::numeric_limits<std::uint32_t>::max()) return false;
+        m_cachedRoots.push_back({object, static_cast<std::uint32_t>(index)});
+    }
+
+    m_indexedObjectsArray = static_cast<void const*>(m_layer->m_objects);
+    m_indexedObjectCount = objects.size();
+    m_indexBuilt = true;
+    return true;
+}
 
 bool GeodeLevelObjectSource::collect(
     std::uint32_t levelGeneration,
@@ -356,22 +401,27 @@ bool GeodeLevelObjectSource::collect(
     ::geode::cocos::CCArrayExt<GameObject, false> objects(m_layer->m_objects);
     if (objects.size() > core::LevelObjectCollector::kMaximumSprites) return fail();
 
-    m_lastStats.counters.objectArrayEntries = objects.size();
-
-    std::vector<RootObject> roots;
-    roots.reserve(objects.size());
-    for (std::size_t index = 0; index < objects.size(); ++index) {
-        auto* object = objects[index];
-        if (!object || !isVisibleDescendantOfPlayLayer(object, m_layer)) {
-            ++m_lastStats.counters.objectsOutsideVisiblePlayLayerTree;
-            continue;
-        }
-        ++m_lastStats.counters.objectsInVisiblePlayLayerTree;
-        if (index > std::numeric_limits<std::uint32_t>::max()) return fail();
-        roots.push_back({object, static_cast<std::uint32_t>(index)});
+    auto const arrayIdentity = static_cast<void const*>(m_layer->m_objects);
+    if (!m_indexBuilt ||
+        m_indexedObjectsArray != arrayIdentity ||
+        m_indexedObjectCount != objects.size()) {
+        auto const indexStart = std::chrono::steady_clock::now();
+        if (!rebuildObjectIndex()) return fail();
+        auto const indexElapsed = std::chrono::steady_clock::now() - indexStart;
+        m_lastStats.indexBuildNanoseconds = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(indexElapsed).count()
+        );
     }
 
-    std::stable_sort(roots.begin(), roots.end(), [](RootObject const& left, RootObject const& right) {
+    std::vector<CachedRootObject> roots;
+    roots.reserve(m_cachedRoots.size());
+    for (auto const& root : m_cachedRoots) {
+        if (root.object && isVisibleDescendantOfPlayLayer(root.object, m_layer)) {
+            roots.push_back(root);
+        }
+    }
+
+    std::stable_sort(roots.begin(), roots.end(), [](CachedRootObject const& left, CachedRootObject const& right) {
         if (left.object->getZOrder() != right.object->getZOrder()) {
             return left.object->getZOrder() < right.object->getZOrder();
         }

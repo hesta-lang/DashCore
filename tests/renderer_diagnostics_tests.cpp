@@ -70,4 +70,18 @@ int main() {
     assert(boundedSummary.p95PostUpdateNanoseconds == 10);
     assert(boundedSummary.p95CaptureNanoseconds == 10);
     assert(boundedSummary.maximumCaptureNanoseconds == 10);
+
+    RendererDiagnostics skippedCapture;
+    CaptureFrameSample baseline{};
+    baseline.capturePerformed = false;
+    baseline.postUpdateNanoseconds = 90;
+    skippedCapture.record(baseline);
+    auto const baselineSummary = skippedCapture.summary();
+    assert(baselineSummary.totalFrames == 1);
+    assert(baselineSummary.capturePerformedFrames == 0);
+    assert(baselineSummary.captureSkippedFrames == 1);
+    assert(baselineSummary.successfulFrames == 0);
+    assert(baselineSummary.failedFrames == 0);
+    assert(baselineSummary.averagePostUpdateNanoseconds == 90);
+    assert(baselineSummary.averageCaptureNanoseconds == 0);
 }
