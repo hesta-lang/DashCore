@@ -506,12 +506,61 @@ def tap_ocr_phrase(serial: str, mode: str, variant_dir: pathlib.Path,
     )
 
 
-def tap_saved_levels_button(serial: str, mode: str,
-                             variant_dir: pathlib.Path) -> dict[str, Any]:
-    """Open the local-level list using Geometry Dash 2.2081's 'Saved' tile."""
-    return tap_ocr_phrase(
-        serial, mode, variant_dir, "open-saved-levels", "Saved", 25
+def create_local_levels_button_center(width: int, height: int) -> tuple[int, int]:
+    """Return the center of the Create tile in the Geometry Dash online menu."""
+    if width <= 0 or height <= 0:
+        raise ValueError("Screenshot dimensions must be positive")
+    # On the 1920x1080 v2.2081 layout the Create tile spans roughly
+    # x=194..412 and y=95..313. Tap its center, not the caption edge.
+    return round(width * 0.158), round(height * 0.189)
+
+
+def tap_create_local_levels_button(serial: str, mode: str,
+                                   variant_dir: pathlib.Path) -> dict[str, Any]:
+    """Open My Levels, the local custom-level list; Saved contains online levels."""
+    screenshot_path = variant_dir / "open-create-local-levels.png"
+    menu_text = take_state_screenshot(
+        serial, mode, "open-create-local-levels", screenshot_path
     )
+    if not re.search(r"\\bcreate\\b", menu_text, re.IGNORECASE):
+        raise RuntimeError(
+            f"{mode}: expected the Create tile before opening local levels; "
+            f"last OCR text: {menu_text[:300]!r}"
+        )
+
+    with Image.open(screenshot_path) as frame:
+        shot_width, shot_height = frame.size
+    display_width, display_height = parse_wm_size(
+        shell(serial, "wm size", check=False), shot_width, shot_height
+    )
+    center_x, center_y = create_local_levels_button_center(
+        shot_width, shot_height
+    )
+    x, y, input_width, input_height = map_screenshot_point_to_input(
+        center_x, center_y, shot_width, shot_height,
+        display_width, display_height,
+    )
+    shell(serial, f"input tap {x} {y}")
+    event = {
+        "target": "create-local-levels-button",
+        "method": "normalized-tile-center",
+        "normalized_position": [0.158, 0.189],
+        "screenshot_center_px": [center_x, center_y],
+        "screenshot_size": [shot_width, shot_height],
+        "input_size": [input_width, input_height],
+        "adb_tap": [x, y],
+    }
+    navigation_path = variant_dir / "autotest-level-navigation.json"
+    try:
+        navigation = json.loads(navigation_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        navigation = {"steps": []}
+    navigation.setdefault("steps", []).append(event)
+    navigation_path.write_text(
+        json.dumps(navigation, indent=2) + "\\n", encoding="utf-8"
+    )
+    time.sleep(1.5)
+    return event
 
 
 def main_menu_level_editor_icon_center(width: int, height: int) -> tuple[int, int]:
@@ -614,15 +663,15 @@ def open_custom_autotest_level(serial: str, mode: str,
         timeout_s=25,
     )
 
-    # Geometry Dash 2.2081 labels the local-level entry "Saved".
-    # Some variants may open the list directly, so try the exact fixture name first.
-    try:
-        tap_ocr_phrase(serial, mode, variant_dir, "select-autotest-level", level_name, 12)
-        navigation["saved_levels_button_required"] = False
-    except RuntimeError:
-        tap_saved_levels_button(serial, mode, variant_dir)
-        tap_ocr_phrase(serial, mode, variant_dir, "select-autotest-level", level_name, 30)
-        navigation["saved_levels_button_required"] = True
+    # The Create tile opens "My Levels", which contains CCLocalLevels.dat.
+    # "Saved" is a separate list of downloaded online levels and must not be used.
+    tap_create_local_levels_button(serial, mode, variant_dir)
+    tap_ocr_phrase(
+        serial, mode, variant_dir, "select-autotest-local-level",
+        level_name, 30
+    )
+    navigation["local_levels_menu"] = "Create"
+    navigation["saved_levels_menu_used"] = False
 
     tap_ocr_phrase(serial, mode, variant_dir, "play-autotest-level", "Play", 25)
     gameplay = wait_for_state(
