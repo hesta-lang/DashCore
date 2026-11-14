@@ -7,6 +7,7 @@ from typing import Any
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from kirin_autotest_calibration import build_physical_cpu_reference
+from build_autotest_level import local_level_names
 
 def load_device_profile(path: pathlib.Path) -> dict[str, Any]:
     """Load and validate a reference-device profile without changing emulator settings."""
@@ -157,6 +158,48 @@ def pull(serial: str, remote: str, local: pathlib.Path) -> bool:
     local.parent.mkdir(parents=True, exist_ok=True)
     result = run_adb(serial, "pull", remote, str(local), check=False, timeout=120)
     return "file pulled" in result or "files pulled" in result or local.exists()
+
+def verify_local_level_save(serial: str, remote_path: str, expected_level_name: str,
+                            variant_dir: pathlib.Path) -> dict[str, Any]:
+    """Pull the live save after app startup and independently verify the fixture is present."""
+    local_path = variant_dir / "CCLocalLevels.after-launch.dat"
+    if not pull(serial, remote_path, local_path):
+        raise RuntimeError(
+            f"AutoTest save verification: could not pull live save file {remote_path!r}"
+        )
+    raw = local_path.read_bytes()
+    try:
+        names = local_level_names(raw)
+    except Exception as exc:
+        raise RuntimeError(
+            f"AutoTest save verification: live CCLocalLevels.dat is not readable: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+    result = {
+        "remote_path": remote_path,
+        "file_bytes": len(raw),
+        "sha256": __import__("hashlib").sha256(raw).hexdigest(),
+        "expected_level_name": expected_level_name,
+        "level_names": names,
+        "expected_level_present": expected_level_name in names,
+        "verified_after_game_start": expected_level_name in names,
+    }
+    (variant_dir / "local-level-save-verification.json").write_text(
+        json.dumps(result, indent=2) + "\\n", encoding="utf-8"
+    )
+    if expected_level_name not in names:
+        raise RuntimeError(
+            "AutoTest save verification: Geometry Dash did not retain the injected "
+            f"level after startup; expected={expected_level_name!r}, "
+            f"found={names!r}, sha256={result['sha256']}"
+        )
+    print(
+        "AUTOTEST-SAVE-VERIFY: PASS "
+        f"path={remote_path} bytes={len(raw)} levels={len(names)} "
+        f"sha256={result['sha256']}"
+    )
+    return result
+
 
 def screenshot(serial: str, remote_name: str, destination: pathlib.Path) -> None:
     remote = f"/sdcard/{remote_name}"
@@ -627,7 +670,8 @@ def tap_main_menu_level_editor_icon(serial: str, mode: str,
 
 def open_custom_autotest_level(serial: str, mode: str,
                                variant_dir: pathlib.Path,
-                               level_name: str) -> dict[str, Any]:
+                               level_name: str,
+                               save_path: str | None = None) -> dict[str, Any]:
     """Navigate only to the generated local fixture; never fall back to an official level."""
     menu_text = take_state_screenshot(
         serial, mode, "custom-level-menu-check", variant_dir / "custom-level-menu-check.png"
@@ -648,6 +692,9 @@ def open_custom_autotest_level(serial: str, mode: str,
         except RuntimeError:
             shell(serial, "input keyevent 4", check=False)
             wait_for_main_menu(serial, mode, variant_dir, timeout_s=45)
+
+    if save_path:
+        verify_local_level_save(serial, save_path, level_name, variant_dir)
 
     navigation: dict[str, Any] = {
         "requested_level": level_name,
@@ -1169,7 +1216,8 @@ def run_variant(args: argparse.Namespace, mode: str, mod_enabled: bool, culling_
         if gameplay_ready:
             shell(serial, "input keyevent 4", check=False)
         level_navigation = open_custom_autotest_level(
-            serial, mode, variant_dir, test_level_name
+            serial, mode, variant_dir, test_level_name,
+            save_path=f"{base}/save/CCLocalLevels.dat",
         )
     elif not gameplay_ready:
         wait_for_main_menu(serial, mode, variant_dir, timeout_s=90)
