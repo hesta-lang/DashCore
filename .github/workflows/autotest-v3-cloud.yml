@@ -17,6 +17,11 @@ on:
         required: false
         default: ""
         type: string
+      build_branch:
+        description: "DashCore source branch to test. Run this workflow on main to keep PostHog export trusted."
+        required: true
+        default: "experimental-renderer"
+        type: string
 
 permissions:
   actions: read
@@ -43,7 +48,7 @@ jobs:
           BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
           BUILD_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
           EVENT_NAME: ${{ github.event_name }}
-          BUILD_BRANCH: ${{ github.ref_name }}
+          BUILD_BRANCH: ${{ inputs.build_branch || github.ref_name }}
           INPUT_BUILD_RUN_ID: ${{ inputs.build_run_id }}
         run: |
           set -euo pipefail
@@ -62,7 +67,7 @@ jobs:
           branch = os.environ["BUILD_BRANCH"]
           requested = os.environ.get("INPUT_BUILD_RUN_ID", "").strip()
           if not branch or branch == "main":
-              raise SystemExit("Run this AutoTest from experimental-renderer, not main.")
+              raise SystemExit("Run the trusted workflow on main and set build_branch=experimental-renderer.")
           base = f"https://api.github.com/repos/{repo}/actions"
           headers = {"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}"}
           if requested:
