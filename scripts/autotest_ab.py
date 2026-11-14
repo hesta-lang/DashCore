@@ -506,6 +506,68 @@ def tap_ocr_phrase(serial: str, mode: str, variant_dir: pathlib.Path,
     )
 
 
+def main_menu_level_editor_icon_center(width: int, height: int) -> tuple[int, int]:
+    """Return the measured center of the Level Editor icon on the GD main menu."""
+    if width <= 0 or height <= 0:
+        raise ValueError("Screenshot dimensions must be positive")
+    # The label and arrow below the crossed-tools icon are decorative; the
+    # actual hit target is the icon itself, around 69% x / 40% y of the frame.
+    return round(width * 0.69), round(height * 0.40)
+
+
+def tap_main_menu_level_editor_icon(serial: str, mode: str,
+                                    variant_dir: pathlib.Path) -> dict[str, Any]:
+    """Open Level Editor by tapping its icon, not its non-interactive caption."""
+    screenshot_path = variant_dir / "open-level-editor-button.png"
+    menu_text = take_state_screenshot(
+        serial, mode, "open-level-editor-button", screenshot_path
+    )
+    if not is_main_menu_text(menu_text):
+        wait_for_main_menu(serial, mode, variant_dir, timeout_s=30)
+        menu_text = take_state_screenshot(
+            serial, mode, "open-level-editor-button-confirmed", screenshot_path
+        )
+    if not is_main_menu_text(menu_text):
+        raise RuntimeError(
+            f"{mode}: main-menu landmarks disappeared before opening Level Editor; "
+            f"last OCR text: {menu_text[:300]!r}"
+        )
+
+    with Image.open(screenshot_path) as frame:
+        shot_width, shot_height = frame.size
+    display_width, display_height = parse_wm_size(
+        shell(serial, "wm size", check=False), shot_width, shot_height
+    )
+    center_x, center_y = main_menu_level_editor_icon_center(
+        shot_width, shot_height
+    )
+    x, y, input_width, input_height = map_screenshot_point_to_input(
+        center_x, center_y, shot_width, shot_height,
+        display_width, display_height,
+    )
+    shell(serial, f"input tap {x} {y}")
+    event = {
+        "target": "main-menu-level-editor-icon",
+        "method": "normalized-icon-center",
+        "normalized_position": [0.69, 0.40],
+        "screenshot_center_px": [center_x, center_y],
+        "screenshot_size": [shot_width, shot_height],
+        "input_size": [input_width, input_height],
+        "adb_tap": [x, y],
+    }
+    navigation_path = variant_dir / "autotest-level-navigation.json"
+    try:
+        navigation = json.loads(navigation_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        navigation = {"steps": []}
+    navigation.setdefault("steps", []).append(event)
+    navigation_path.write_text(
+        json.dumps(navigation, indent=2) + "\n", encoding="utf-8"
+    )
+    time.sleep(2.0)
+    return event
+
+
 def open_custom_autotest_level(serial: str, mode: str,
                                variant_dir: pathlib.Path,
                                level_name: str) -> dict[str, Any]:
@@ -536,7 +598,13 @@ def open_custom_autotest_level(serial: str, mode: str,
         "method": "ocr-text-navigation",
         "steps": [],
     }
-    tap_ocr_phrase(serial, mode, variant_dir, "open-level-editor", "Level Editor", 25)
+    tap_main_menu_level_editor_icon(serial, mode, variant_dir)
+    wait_for_state(
+        serial, mode, "level-editor-screen",
+        variant_dir / "level-editor-screen.png",
+        lambda text: bool(text.strip()) and not is_main_menu_text(text),
+        timeout_s=25,
+    )
 
     # Some game builds show My Levels as a tab; others enter that list directly.
     try:
