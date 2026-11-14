@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.10.12-alpha",
+  "version": "0.10.13-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.10.12-alpha: completes the 180-update diagnostic sample from PlayLayer::postUpdate and reports drawScene callback coverage separately. Diagnostics and experimental culling remain OFF by default. No rendering, gameplay, physics, draw-order, or UI changes; no performance improvement is claimed.",
+  "description": "DashCore 0.10.13-alpha: samples Cocos renderer callbacks independently of CCDirector::drawScene and reports actual callback timing coverage. Diagnostics and experimental culling remain OFF by default. No rendering, gameplay, physics, draw-order, or UI changes; no performance improvement is claimed.",
   "tags": [
     "optimizations",
     "performance"
