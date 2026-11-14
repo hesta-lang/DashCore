@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import base64
-import gzip
+import zlib
 import hashlib
 import json
 import plistlib
@@ -19,17 +19,24 @@ MAX_SAVE_BYTES = 64 * 1024 * 1024
 GAME_BUILD_FALLBACK = 2200
 
 
-def _gzip_decompress_limited(data: bytes, limit: int = MAX_SAVE_BYTES) -> bytes:
-    decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
-    output = decoder.decompress(data, limit + 1)
-    if len(output) > limit or decoder.unconsumed_tail:
-        raise ValueError("Compressed save exceeds the 64 MiB safety limit")
-    output += decoder.flush()
-    if len(output) > limit:
-        raise ValueError("Decompressed save exceeds the 64 MiB safety limit")
-    if not decoder.eof:
-        raise ValueError("Compressed save is truncated")
-    return output
+def _decompress_limited(data: bytes, limit: int = MAX_SAVE_BYTES) -> bytes:
+    """Decode GD's zlib-wrapped save data, with safe gzip/raw compatibility."""
+    last_error: Exception | None = None
+    for window_bits in (zlib.MAX_WBITS, -zlib.MAX_WBITS, zlib.MAX_WBITS | 16):
+        try:
+            decoder = zlib.decompressobj(window_bits)
+            output = decoder.decompress(data, limit + 1)
+            if len(output) > limit or decoder.unconsumed_tail:
+                raise ValueError("Compressed save exceeds the 64 MiB safety limit")
+            output += decoder.flush()
+            if len(output) > limit:
+                raise ValueError("Decompressed save exceeds the 64 MiB safety limit")
+            if not decoder.eof:
+                raise ValueError("Compressed save is truncated")
+            return output
+        except zlib.error as exc:
+            last_error = exc
+    raise ValueError(f"Compressed Geometry Dash data is invalid: {last_error}")
 
 
 def decode_save(raw: bytes) -> bytes:
@@ -37,14 +44,18 @@ def decode_save(raw: bytes) -> bytes:
         raise ValueError("CCLocalLevels.dat is empty")
     xor_data = bytes(value ^ SAVE_XOR_KEY for value in raw)
     try:
-        compressed = base64.b64decode(xor_data, altchars=b"-_", validate=True)
+        # GD saves are URL-safe base64 text after XOR; accept omitted padding.
+        compact = b"".join(xor_data.split())
+        compact += b"=" * ((-len(compact)) % 4)
+        compressed = base64.b64decode(compact, altchars=b"-_", validate=True)
     except Exception as exc:
         raise ValueError(f"CCLocalLevels.dat base64 decoding failed: {exc}") from exc
-    return _gzip_decompress_limited(compressed)
+    return _decompress_limited(compressed)
 
 
 def encode_save(xml_data: bytes) -> bytes:
-    compressed = gzip.compress(xml_data, compresslevel=9, mtime=0)
+    # Geometry Dash's save codec uses the zlib wrapper (not the gzip container).
+    compressed = zlib.compress(xml_data, level=9)
     encoded = base64.urlsafe_b64encode(compressed)
     return bytes(value ^ SAVE_XOR_KEY for value in encoded)
 
@@ -119,9 +130,7 @@ def build_level() -> tuple[str, dict[str, Any]]:
 
 def build_level_entry() -> tuple[dict[str, Any], dict[str, Any]]:
     level_string, counts = build_level()
-    compressed_level = gzip.compress(
-        level_string.encode("utf-8"), compresslevel=9, mtime=0
-    )
+    compressed_level = zlib.compress(level_string.encode("utf-8"), level=9)
     encoded_level = base64.urlsafe_b64encode(compressed_level).decode("ascii")
     description = base64.urlsafe_b64encode(
         LEVEL_DESCRIPTION.encode("utf-8")
@@ -180,7 +189,7 @@ def inject_level(xml_data: bytes) -> tuple[bytes, dict[str, Any]]:
     first = verified["LLM_01"]["k_0"]
     if first.get("k2") != LEVEL_NAME:
         raise ValueError("Generated level did not round-trip as the first local level")
-    decoded_level = _gzip_decompress_limited(
+    decoded_level = _decompress_limited(
         base64.urlsafe_b64decode(first["k4"].encode("ascii"))
     )
     if decoded_level.count(b";1,") < summary["total_objects"]:
