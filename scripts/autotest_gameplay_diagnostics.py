@@ -21,7 +21,7 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
     marker = marker_lines[-1] if marker_lines else ""
 
     def token(name: str) -> str | None:
-        match = re.search(rf"\\b{re.escape(name)}=([^\\s,]+)", marker)
+        match = re.search(rf"\b{re.escape(name)}=([^\s,]+)", marker)
         return match.group(1) if match else None
 
     def integer(name: str) -> int | None:
@@ -130,7 +130,7 @@ def main() -> int:
     print("AUTOTEST-MODE: generated local level; gameplay diagnostics only.")
     print(f"AUTOTEST-LEVEL: {args.level_name} | objects={level_manifest.get('total_objects')}")
     print(f"AUTOTEST-OBSERVATION: {args.observation_seconds}s")
-    print("AUTOTEST-CONFIG: Performance Diagnostics=OFF; Render Pipeline Diagnostics=ON; static culling=OFF.")
+    print("AUTOTEST-CONFIG: capture-object-diagnostics=ON; vanilla rendering remains unchanged.")
     run = runtime.run_variant(
         variant_args, "GAMEPLAY_DIAGNOSTICS", mod_enabled=True,
         culling_mode="off", diagnostics_mode="off", geometry_diagnostics=False,
@@ -179,7 +179,7 @@ def main() -> int:
             "input": f"fixed screen tap at (700,800) every 0.5 seconds during the {args.observation_seconds}-second observation window",
             "observation_seconds": args.observation_seconds,
             "completion_required": False,
-            "scope": "uses three reproducible object-density zones and verifies the ATTEMPT HUD while the 180-frame diagnostic sample is collected",
+            "scope": "uses three reproducible object-density zones and verifies the ATTEMPT HUD before the per-level capture summary is collected",
             "fixture": {
                 "object_count": level_manifest.get("total_objects"),
                 "floor_objects": level_manifest.get("floor_objects"),
