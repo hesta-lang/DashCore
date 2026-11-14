@@ -73,25 +73,38 @@ ExtensionList readCurrentContextExtensions(
 
 } // namespace
 
+core::GlesCapabilities queryCurrentContextCapabilities() noexcept {
+#if defined(__ANDROID__)
+    try {
+        if (eglGetCurrentContext() == EGL_NO_CONTEXT) return {};
+
+        auto const* version = reinterpret_cast<char const*>(glGetString(GL_VERSION));
+        if (!version) return {};
+
+        auto const baseCapabilities =
+            core::parseGlesCapabilities(version, nullptr, true);
+        if (!baseCapabilities.contextAvailable) return {};
+
+        auto const extensionList =
+            readCurrentContextExtensions(baseCapabilities.majorVersion);
+        return core::parseGlesCapabilities(
+            version,
+            extensionList.available ? extensionList.values.c_str() : nullptr,
+            true
+        );
+    } catch (...) {
+        return {};
+    }
+#else
+    return {};
+#endif
+}
+
 bool GLESBackend::initialize() {
     release();
 
 #if defined(__ANDROID__)
-    auto const* version = reinterpret_cast<char const*>(glGetString(GL_VERSION));
-    if (!version) return false;
-
-    auto const baseCapabilities =
-        core::parseGlesCapabilities(version, nullptr, true);
-    if (!baseCapabilities.contextAvailable) return false;
-
-    auto const extensionList =
-        readCurrentContextExtensions(baseCapabilities.majorVersion);
-    m_capabilities = core::parseGlesCapabilities(
-        version,
-        extensionList.available ? extensionList.values.c_str() : nullptr,
-        true
-    );
-
+    m_capabilities = queryCurrentContextCapabilities();
     if (!m_capabilities.contextAvailable || !m_capabilities.supportsBufferObjects) {
         return false;
     }
@@ -112,7 +125,6 @@ bool GLESBackend::initialize() {
     return false;
 #endif
 }
-
 bool GLESBackend::prepare(core::GeometryData const& geometry) {
 #if defined(__ANDROID__)
     if (!m_ready) return false;
