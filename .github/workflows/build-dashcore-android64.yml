@@ -22,6 +22,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate Launcher Diagnostics analyzer
+        run: |
+          python3 -m py_compile scripts/analyze_launcher_diagnostics.py scripts/test_launcher_diagnostics_analyzer.py
+          python3 -m unittest discover -s scripts -p 'test_launcher_diagnostics_analyzer.py' -v
+
       - name: Run renderer contract and host-model tests
         run: |
           python3 -m py_compile scripts/test_renderer_product_contract.py
@@ -71,7 +76,7 @@ jobs:
           echo "- Commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo "- Build outcome: **$BUILD_OUTCOME**" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$BUILD_OUTPUT" ] && [ -d "$BUILD_OUTPUT" ]; then
-            find "$BUILD_OUTPUT" -maxdepth 2 -type f -name '*.geode' -print -exec stat -c 'Artifact size: %s bytes' {} \;
+            find "$BUILD_OUTPUT" -maxdepth 2 -type f -name '*.geode' -print -exec stat -c 'Artifact size: %s bytes' {} \\;
           else
             echo "Build output directory was not produced."
           fi
