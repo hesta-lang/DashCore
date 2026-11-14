@@ -76,7 +76,7 @@ jobs:
           echo "- Commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo "- Build outcome: **$BUILD_OUTCOME**" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$BUILD_OUTPUT" ] && [ -d "$BUILD_OUTPUT" ]; then
-            find "$BUILD_OUTPUT" -maxdepth 2 -type f -name '*.geode' -print -exec stat -c 'Artifact size: %s bytes' {} \\;
+            find "$BUILD_OUTPUT" -maxdepth 2 -type f -name '*.geode' -print -exec stat -c 'Artifact size: %s bytes' {} +
           else
             echo "Build output directory was not produced."
           fi
