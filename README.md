@@ -1,6 +1,6 @@
 # DashCore — Experimental Renderer for Android level objects
 
-## 0.11.4-alpha — indexed capture and A/B diagnostic modes
+## 0.11.5-alpha — indexed capture and A/B diagnostic modes
 
 This branch develops a separate rendering path for Geometry Dash level objects on Android64. This milestone adds bounded diagnostics to the read-only live snapshot stage; it does not change rendering.
 
@@ -30,6 +30,10 @@ The repeatable phone workflow, ZIP export instructions, JSONL analyzer usage, an
 The Android64 workflow checks the product contract, compiles the standalone renderer model and diagnostics tests with C++20, runs Cppcheck, and builds the Geode package for Android64 with Android API 29 minimum.
 
 Cloud gameplay automation and physical Huawei Y9s validation are separate gates. A cloud emulator result is not evidence of performance on Kirin 710F / Mali-G51 hardware.
+
+## Bismuth Android64 port groundwork
+
+The 0.11.5-alpha milestone adds indexed GLES extension discovery and an explicit capability profile for single-command indirect draws, multi-draw indirect, shader draw parameters, SPIR-V shaders, and disjoint GPU timer queries. This is platform groundwork only: no Bismuth rendering path or new draw submission is enabled. The port plan and device-specific substitutions are documented in [docs/BISMUTH_ANDROID64_PORT.md](docs/BISMUTH_ANDROID64_PORT.md).
 
 ## Launcher Diagnostics bridge
 

@@ -46,10 +46,13 @@ jobs:
 
       - name: Run renderer contract and host-model tests
         run: |
+          set -euo pipefail
           python3 -m py_compile scripts/test_renderer_product_contract.py
           python3 scripts/test_renderer_product_contract.py
           c++ -std=c++20 -Wall -Wextra -Werror -Isrc tests/renderer_model_tests.cpp src/renderer/core/*.cpp -o /tmp/dashcore-renderer-model-tests
           /tmp/dashcore-renderer-model-tests
+          c++ -std=c++20 -Wall -Wextra -Werror -Isrc tests/gles_capabilities_tests.cpp src/renderer/core/GlesCapabilities.cpp -o /tmp/dashcore-gles-capabilities-tests
+          /tmp/dashcore-gles-capabilities-tests
           c++ -std=c++20 -Wall -Wextra -Werror -Isrc tests/renderer_diagnostics_tests.cpp src/renderer/core/RendererDiagnostics.cpp -o /tmp/dashcore-renderer-diagnostics-tests
           /tmp/dashcore-renderer-diagnostics-tests
 

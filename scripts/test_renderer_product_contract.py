@@ -22,16 +22,39 @@ class RendererProductContract(unittest.TestCase):
         cls.readme = (ROOT / "README.md").read_text(encoding="utf-8")
         cls.cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
         cls.module = (ROOT / "src/renderer/geode/ExperimentalRendererModule.cpp").read_text(encoding="utf-8")
+        cls.gles_header = (ROOT / "src/renderer/core/GlesCapabilities.hpp").read_text(encoding="utf-8")
+        cls.gles_source = (ROOT / "src/renderer/core/GlesCapabilities.cpp").read_text(encoding="utf-8")
+        cls.gles_backend = (ROOT / "src/renderer/gles/GLESBackend.cpp").read_text(encoding="utf-8")
+        cls.bismuth_port = (ROOT / "docs/BISMUTH_ANDROID64_PORT.md").read_text(encoding="utf-8")
 
     def test_package_identity_and_diagnostic_prerelease(self):
         self.assertEqual(self.metadata["id"], "hesta.optgod")
-        self.assertEqual(self.metadata["version"], "0.11.4-alpha")
+        self.assertEqual(self.metadata["version"], "0.11.5-alpha")
         self.assertEqual(self.metadata["name"], "DashCore Experimental Renderer")
         self.assertFalse(self.metadata["settings"]["capture-object-diagnostics"]["default"])
         self.assertIn('getSettingValue<bool>("capture-object-diagnostics")', self.hooks)
         self.assertIn("capture_enabled", self.hooks)
-        self.assertIn("project(optgod VERSION 0.11.4)", self.cmake)
-        self.assertIn("0.11.4-alpha", self.module)
+        self.assertIn("project(optgod VERSION 0.11.5)", self.cmake)
+        self.assertIn("0.11.5-alpha", self.module)
+
+    def test_gles_profile_covers_bismuth_android_requirements(self):
+        for marker in (
+            "supportsDrawIndirect",
+            "supportsMultiDrawIndirect",
+            "supportsShaderDrawParameters",
+            "supportsSpirVShaders",
+            "supportsDisjointTimerQuery",
+            "extensionEnumerationAvailable",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.gles_header)
+                self.assertIn(marker, self.gles_source)
+        self.assertIn('eglGetProcAddress("glGetStringi")', self.gles_backend)
+        self.assertIn("kGlNumExtensions", self.gles_backend)
+        self.assertIn("GL_EXT_multi_draw_indirect", self.gles_source)
+        self.assertIn("GL_EXT_disjoint_timer_query", self.gles_source)
+        self.assertIn("no se activa", self.bismuth_port.lower())
+        self.assertIn("glsl es 3.20", self.bismuth_port.lower())
 
     def test_legacy_probes_culling_and_draw_interception_are_absent(self):
         forbidden = (
@@ -141,7 +164,7 @@ class RendererProductContract(unittest.TestCase):
         self.assertIn("renderCoordinator.onLevelExit()", exit_hook)
 
     def test_readme_describes_diagnostic_stage_without_optimization_claim(self):
-        self.assertIn("0.11.4-alpha", self.readme)
+        self.assertIn("0.11.5-alpha", self.readme)
         self.assertIn("read-only", self.readme.lower())
         self.assertIn("vanilla rendering", self.readme.lower())
         self.assertIn("latest 512 captures", self.readme)

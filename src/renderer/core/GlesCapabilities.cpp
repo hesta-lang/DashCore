@@ -57,6 +57,7 @@ GlesCapabilities parseGlesCapabilities(
     result.contextAvailable = true;
     result.majorVersion = static_cast<std::uint8_t>(major);
     result.minorVersion = static_cast<std::uint8_t>(minor);
+    result.extensionEnumerationAvailable = extensionString != nullptr;
     result.supportsBufferObjects = atLeast(result.majorVersion, result.minorVersion, 2, 0) ||
         hasExtension(extensionString, "GL_OES_vertex_buffer_object");
     result.supportsVertexArrayObjects = atLeast(result.majorVersion, result.minorVersion, 3, 0) ||
@@ -65,6 +66,21 @@ GlesCapabilities parseGlesCapabilities(
         hasExtension(extensionString, "GL_EXT_compute_shader");
     result.supportsShaderStorageBuffers = atLeast(result.majorVersion, result.minorVersion, 3, 1) ||
         hasExtension(extensionString, "GL_EXT_shader_storage_buffer_object");
+
+    // GLES 3.1 exposes single-command indirect drawing. Multi-draw is a
+    // separate optional extension and must never be inferred from GLES 3.x.
+    result.supportsDrawIndirect = atLeast(result.majorVersion, result.minorVersion, 3, 1) ||
+        hasExtension(extensionString, "GL_EXT_draw_indirect");
+    result.supportsMultiDrawIndirect =
+        hasExtension(extensionString, "GL_EXT_multi_draw_indirect");
+    result.supportsShaderDrawParameters =
+        hasExtension(extensionString, "GL_EXT_shader_draw_parameters") ||
+        hasExtension(extensionString, "GL_ARB_shader_draw_parameters");
+    result.supportsSpirVShaders =
+        hasExtension(extensionString, "GL_ARB_gl_spirv");
+    result.supportsDisjointTimerQuery =
+        hasExtension(extensionString, "GL_EXT_disjoint_timer_query");
+
     return result;
 }
 

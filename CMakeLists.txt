@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-project(optgod VERSION 0.11.4)
+project(optgod VERSION 0.11.5)
 
 if (NOT DEFINED ENV{GEODE_SDK})
     message(FATAL_ERROR "Unable to find Geode SDK! Please define GEODE_SDK environment variable to point to Geode")
@@ -22,7 +22,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/s
 setup_geode_mod(${PROJECT_NAME})
 
 if (ANDROID)
-    # Ordinary GLES backend support for runtime capability checks and future resource preparation.
-    # The read-only pipeline does not require compute shaders, SSBOs, or indirect drawing.
-    target_link_libraries(${PROJECT_NAME} GLESv3)
+    # GLES is used only for the isolated, read-only preparation backend.
+    # No draw submission is enabled by this capability-profile milestone.
+    target_link_libraries(${PROJECT_NAME} GLESv3 EGL)
 endif()
