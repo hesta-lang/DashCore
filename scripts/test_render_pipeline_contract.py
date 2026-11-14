@@ -142,15 +142,14 @@ class RenderPipelineContractTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.source)
 
-        # drawScene is supplementary: the Android binding map has no
-        # Android implementation address, so it must not gate sample readiness.
-        self.assertIn(
-            "g_renderPipelineHooksReady = nodeReady && postUpdateReady &&",
-            self.source,
-        )
+        # postUpdate controls only the bounded sample lifecycle. No renderer
+        # callback is allowed to gate or disable any other renderer callback.
+        self.assertIn("g_renderPipelineHooksReady = postUpdateReady;", self.source)
         readiness = self.source.split("g_renderPipelineHooksReady =", 1)[1].split(";", 1)[0]
+        self.assertEqual(readiness.strip(), "postUpdateReady")
         self.assertNotIn("drawSceneReady", readiness)
-        self.assertIn("atlasQuadsReady && atlasCountReady;", self.source)
+        self.assertNotIn("nodeReady", readiness)
+        self.assertNotIn("atlasQuadsReady", readiness)
 
     def test_renderer_callbacks_are_sampled_independently_of_director(self):
         self.assertNotIn("sampleThisFrame", self.source)
