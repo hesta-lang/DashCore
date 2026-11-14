@@ -20,6 +20,9 @@ namespace {
 constexpr std::size_t kMaximumLevelObjects = 1000000;
 constexpr std::size_t kMaximumPulseActions = 131072;
 constexpr std::size_t kColorChannelCount = 1101;
+// Object IDs defined by upstream Bismuth's common.hpp for Geometry Dash 2.2081.
+constexpr int kAlphaTriggerObjectId = 1007;
+constexpr int kToggleTriggerObjectId = 1049;
 
 bool validGroupId(std::int32_t value) noexcept {
     return value >= 0 &&
@@ -73,8 +76,8 @@ bool BismuthTriggerAdapter::initialize(
             objectKeys.push_back(key);
             objectPresent.push_back(1u);
 
-            if (object->m_objectID == ALPHA_TRIGGER_ID ||
-                object->m_objectID == TOGGLE_TRIGGER_ID) {
+            if (object->m_objectID == kAlphaTriggerObjectId ||
+                object->m_objectID == kToggleTriggerObjectId) {
                 auto* effectObject = static_cast<EffectGameObject*>(object);
                 auto const targetGroup = static_cast<std::int32_t>(effectObject->m_targetGroupID);
                 if (validGroupId(targetGroup) && targetGroup != 0)
