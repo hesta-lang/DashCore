@@ -351,6 +351,7 @@ void GeodeLevelObjectSource::reset(PlayLayer* layer) noexcept {
     m_indexedObjectCount = 0;
     m_indexBuilt = false;
     m_cachedRoots.clear();
+    m_frameRoots.clear();
     m_lastStats = {};
 }
 
@@ -368,10 +369,10 @@ bool GeodeLevelObjectSource::rebuildObjectIndex() const {
     for (std::size_t index = 0; index < objects.size(); ++index) {
         auto* object = objects[index];
         if (!object || !isDescendantOfPlayLayer(object, m_layer)) {
-            ++m_lastStats.counters.objectsOutsideVisiblePlayLayerTree;
+            ++m_lastStats.counters.objectsOutsidePlayLayerTree;
             continue;
         }
-        ++m_lastStats.counters.objectsInVisiblePlayLayerTree;
+        ++m_lastStats.counters.objectsInPlayLayerTree;
         if (index > std::numeric_limits<std::uint32_t>::max()) return false;
         m_cachedRoots.push_back({object, static_cast<std::uint32_t>(index)});
     }
@@ -413,15 +414,17 @@ bool GeodeLevelObjectSource::collect(
         );
     }
 
-    std::vector<CachedRootObject> roots;
-    roots.reserve(m_cachedRoots.size());
+    m_frameRoots.clear();
+    if (m_frameRoots.capacity() < m_cachedRoots.size()) {
+        m_frameRoots.reserve(m_cachedRoots.size());
+    }
     for (auto const& root : m_cachedRoots) {
         if (root.object && isVisibleDescendantOfPlayLayer(root.object, m_layer)) {
-            roots.push_back(root);
+            m_frameRoots.push_back(root);
         }
     }
 
-    std::stable_sort(roots.begin(), roots.end(), [](CachedRootObject const& left, CachedRootObject const& right) {
+    std::stable_sort(m_frameRoots.begin(), m_frameRoots.end(), [](CachedRootObject const& left, CachedRootObject const& right) {
         if (left.object->getZOrder() != right.object->getZOrder()) {
             return left.object->getZOrder() < right.object->getZOrder();
         }
@@ -431,7 +434,7 @@ bool GeodeLevelObjectSource::collect(
         return left.objectIndex < right.objectIndex;
     });
 
-    m_lastStats.counters.rootObjects = roots.size();
+    m_lastStats.counters.rootObjects = m_frameRoots.size();
 
     CaptureState state{};
     state.layer = m_layer;
@@ -439,7 +442,7 @@ bool GeodeLevelObjectSource::collect(
     state.counters = &m_lastStats.counters;
     state.output = &output;
 
-    for (auto const& root : roots) {
+    for (auto const& root : m_frameRoots) {
         std::uint32_t nextChildIndex = 0;
         if (!captureNode(root.object, 0, root.objectIndex, nextChildIndex, state)) {
             output.clear();

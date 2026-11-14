@@ -10,8 +10,8 @@ struct CaptureCounters {
     std::uint64_t nodesVisited = 0;
     std::uint64_t objectArrayIndexBuilds = 0;
     std::uint64_t objectArrayEntries = 0;
-    std::uint64_t objectsInVisiblePlayLayerTree = 0;
-    std::uint64_t objectsOutsideVisiblePlayLayerTree = 0;
+    std::uint64_t objectsInPlayLayerTree = 0;
+    std::uint64_t objectsOutsidePlayLayerTree = 0;
     std::uint64_t rootObjects = 0;
     std::uint64_t candidateSprites = 0;
     std::uint64_t acceptedSprites = 0;

@@ -51,8 +51,8 @@ std::string makeLauncherDiagnosticsJson(
          << ",\"nodes_visited_total\":" << counters.nodesVisited
          << ",\"object_array_index_builds_total\":" << counters.objectArrayIndexBuilds
          << ",\"object_array_entries_indexed_total\":" << counters.objectArrayEntries
-         << ",\"objects_cached_in_visible_playlayer_tree_total\":" << counters.objectsInVisiblePlayLayerTree
-         << ",\"objects_excluded_from_playlayer_tree_index_total\":" << counters.objectsOutsideVisiblePlayLayerTree
+         << ",\"objects_cached_in_playlayer_tree_total\":" << counters.objectsInPlayLayerTree
+         << ",\"objects_excluded_from_playlayer_tree_index_total\":" << counters.objectsOutsidePlayLayerTree
          << ",\"root_objects_total\":" << counters.rootObjects
          << ",\"sprite_candidates_total\":" << counters.candidateSprites
          << ",\"sprites_accepted_total\":" << counters.acceptedSprites

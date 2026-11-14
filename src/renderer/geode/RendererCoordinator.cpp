@@ -40,8 +40,8 @@ void logLevelDiagnostics(core::RendererDiagnosticSummary const& report) {
          << " nodes_visited_total=" << report.totals.nodesVisited
          << " object_array_index_builds_total=" << report.totals.objectArrayIndexBuilds
          << " object_array_entries_indexed_total=" << report.totals.objectArrayEntries
-         << " objects_cached_in_visible_playlayer_tree_total=" << report.totals.objectsInVisiblePlayLayerTree
-         << " objects_excluded_from_playlayer_tree_index_total=" << report.totals.objectsOutsideVisiblePlayLayerTree
+         << " objects_cached_in_playlayer_tree_total=" << report.totals.objectsInPlayLayerTree
+         << " objects_excluded_from_playlayer_tree_index_total=" << report.totals.objectsOutsidePlayLayerTree
          << " root_objects_total=" << report.totals.rootObjects
          << " sprite_candidates_total=" << report.totals.candidateSprites
          << " sprites_accepted_total=" << report.totals.acceptedSprites

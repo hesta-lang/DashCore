@@ -25,8 +25,8 @@ void addCounters(CaptureCounters& target, CaptureCounters const& value) noexcept
     addSaturated(target.nodesVisited, value.nodesVisited);
     addSaturated(target.objectArrayIndexBuilds, value.objectArrayIndexBuilds);
     addSaturated(target.objectArrayEntries, value.objectArrayEntries);
-    addSaturated(target.objectsInVisiblePlayLayerTree, value.objectsInVisiblePlayLayerTree);
-    addSaturated(target.objectsOutsideVisiblePlayLayerTree, value.objectsOutsideVisiblePlayLayerTree);
+    addSaturated(target.objectsInPlayLayerTree, value.objectsInVisiblePlayLayerTree);
+    addSaturated(target.objectsOutsidePlayLayerTree, value.objectsOutsideVisiblePlayLayerTree);
     addSaturated(target.rootObjects, value.rootObjects);
     addSaturated(target.candidateSprites, value.candidateSprites);
     addSaturated(target.acceptedSprites, value.acceptedSprites);

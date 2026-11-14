@@ -47,6 +47,7 @@ private:
     mutable std::size_t m_indexedObjectCount = 0;
     mutable bool m_indexBuilt = false;
     mutable std::vector<CachedRootObject> m_cachedRoots;
+    mutable std::vector<CachedRootObject> m_frameRoots;
     mutable GeodeCaptureStats m_lastStats{};
 };
 
