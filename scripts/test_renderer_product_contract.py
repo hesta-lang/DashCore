@@ -141,7 +141,7 @@ class RendererProductContract(unittest.TestCase):
         self.assertIn("renderCoordinator.onLevelExit()", exit_hook)
 
     def test_readme_describes_diagnostic_stage_without_optimization_claim(self):
-        self.assertIn("0.11.3-alpha", self.readme)
+        self.assertIn("0.11.4-alpha", self.readme)
         self.assertIn("read-only", self.readme.lower())
         self.assertIn("vanilla rendering", self.readme.lower())
         self.assertIn("latest 512 captures", self.readme)
