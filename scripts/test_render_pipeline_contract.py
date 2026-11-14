@@ -218,5 +218,14 @@ class RenderPipelineContractTests(unittest.TestCase):
         self.assertIn("does not change rendering", self.metadata["settings"]["render-pipeline-diagnostics"]["description"])
 
 
+    def test_missing_renderer_callback_does_not_disable_other_callbacks(self):
+        self.assertIn("g_renderPipelineHooksReady = postUpdateReady;", self.source)
+        self.assertNotIn("g_renderPipelineHooksReady = nodeReady &&", self.source)
+        self.assertNotIn("disableIfEnabled(g_spriteDrawHook)", self.source)
+        self.assertNotIn("disableIfEnabled(g_batchDrawHook)", self.source)
+        self.assertIn("RENDER-CALLBACK-STATUS", self.source)
+        self.assertIn("state=RUNNING", self.source)
+        self.assertIn("state=ABSENT", self.source)
+
 if __name__ == "__main__":
     unittest.main()
