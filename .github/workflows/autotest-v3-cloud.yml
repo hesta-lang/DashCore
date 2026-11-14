@@ -127,13 +127,14 @@ jobs:
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json, os, urllib.request
           token = os.environ["ANDROID_LAUNCHER_TOKEN"]
-          url = "https://api.github.com/repos/hesta-lang/android-launcher/actions/workflows/build.yml/runs?branch=spotify-app-remote-integration&status=success&per_page=1"
+          url = "https://api.github.com/repos/hesta-lang/android-launcher/actions/workflows/build.yml/runs?branch=launcher-diagnostics&status=completed&per_page=10"
           request = urllib.request.Request(url, headers={"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}"})
           with urllib.request.urlopen(request, timeout=30) as response:
               runs = json.load(response).get("workflow_runs", [])
-          if not runs:
-              raise SystemExit("No successful launcher build found on spotify-app-remote-integration.")
-          print(f"run_id={runs[0]['id']}")
+          successful = [item for item in runs if item.get("conclusion") == "success"]
+          if not successful:
+              raise SystemExit("No successful Geode Launcher build found on launcher-diagnostics.")
+          print(f"run_id={successful[0]['id']}")
           PY
 
       - name: Download Geode Launcher APK
