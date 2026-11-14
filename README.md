@@ -1,6 +1,6 @@
 # DashCore — Experimental Renderer for Android level objects
 
-## 0.11.1-alpha — bounded capture diagnostics
+## 0.11.2-alpha — launcher-linked level diagnostics
 
 This branch develops a separate rendering path for Geometry Dash level objects on Android64. This milestone adds bounded diagnostics to the read-only live snapshot stage; it does not change rendering.
 
@@ -31,4 +31,4 @@ Cloud gameplay automation and physical Huawei Y9s validation are separate gates.
 
 On Android, the experimental PlayLayer hooks send `onLevelStarted(null, null)` and `onLevelEnded()` lifecycle markers to `com.geode.launcher.LauncherDiagnostics` when that launcher component is present. The launcher remains responsible for recording frame cadence, Cocos callback wall time, GL-thread CPU time, process memory and thermal status. If the launcher class or method is unavailable, the bridge clears the lookup exception and leaves gameplay unchanged.
 
-This bridge supplies exact level boundaries; it does not inspect or replace the rendered scene, query GPU execution time, or collect object/texture statistics on behalf of the launcher.
+The bridge also forwards the completed `RendererDiagnosticSummary` as a structured JSON payload through `LauncherDiagnostics.onDashCoreLevelDiagnostics(String)`. The counters originate in DashCore's bounded read-only capture pass and are stored in the launcher session alongside Cocos callback cadence and process samples. They are not GPU draw-call counts, do not inspect/replace the visible draw path, and do not measure GPU execution time.
