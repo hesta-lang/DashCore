@@ -40,8 +40,8 @@ enum class SpriteSheet : std::uint8_t {
     Count = 9
 };
 
-// Engine pointers in these views are borrowed and valid only for the duration
-// of the visitor call. The bridge never retains or mutates them.
+// Engine pointers are borrowed and valid only for the duration of the visitor call.
+// The bridge never retains or mutates them.
 struct ObjectView {
     GameObject* object = nullptr;
     std::uint32_t objectIndex = 0;
