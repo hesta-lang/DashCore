@@ -81,7 +81,7 @@ El workflow Android64 de la rama `experimental-renderer` ejecuta las pruebas uni
 
 ## 7. AutoTest de gameplay en emulador cloud
 
-El workflow `.github/workflows/autotest-v3-cloud.yml` ejecuta una sesión real de Geometry Dash dentro de un emulador Android administrado desde GitHub Actions.
+El workflow `.github/workflows/autotest-v3-cloud.yml` ejecuta una sesión real de Geometry Dash dentro de un emulador Android administrado desde GitHub Actions. También se dispara automáticamente cuando termina correctamente una compilación Android64 de la rama `experimental-renderer`; la ejecución manual sigue disponible desde **Actions**.
 
 ### Qué hace
 
