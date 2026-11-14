@@ -1,27 +1,32 @@
-# DashCore — Geode Native Renderer
+# DashCore — Android Object Renderer Research
 
-## 0.11.8-alpha — restore the original Geode rendering path
+## 0.11.8-alpha — clean-room Android backend groundwork
 
-This validation release removes the experimental Bismuth/OpenGL ES bridge and returns rendering to Geometry Dash's original Cocos renderer supplied through Geode.
+This source-only branch prepares an independent Android object-rendering path while preserving the original Geometry Dash/Geode Cocos renderer as the only visible renderer.
 
-- Removes the Bismuth sprite/object bridge and the CPU trigger-state mirror.
-- Removes the custom GLES backend that created OpenGL buffers and uploaded prepared geometry.
-- Removes GLES capability probing, Android Bismuth bridge helpers, and the corresponding tests.
-- Removes explicit GLESv3/EGL link dependencies from DashCore.
-- Keeps only CPU-side level lifecycle and timing diagnostics. The capture-object-diagnostics setting remains off by default.
-- The original PlayLayer::postUpdate method is called first; DashCore measures its CPU duration afterward. It does not hook Cocos draw/visit/present functions.
-- No trigger functions are replaced or mirrored. No GameObject, Cocos node, sprite, batch, Z-order, visibility, physics, or gameplay state is changed.
+- Adds a pure OpenGL ES capability model for the active context version, exact extension tokens, and compute limits.
+- Selects a conservative path: vanilla fallback, CPU-prepared vertex/index buffers, compute with single indirect draws, or compute with multi-draw indirect when its extension is actually advertised.
+- Does not call GL/EGL, allocate GPU resources, submit draw commands, alter the EGL context, or change launcher initialization.
+- Keeps the existing object collector, geometry model, and backend interface separate from platform API calls.
+- Does not copy or link Bismuth source code. The Android implementation is independent and uses public API specifications as its platform contract.
+- Does not package or distribute a modified Bismuth binary. This branch is source research only; it does not produce a .geode artifact.
 
-There is no custom OpenGL ES renderer, no GPU buffer upload, no Compute Shader, and no Bismuth draw submission in this version. The only visible renderer is the original Geometry Dash/Geode Cocos renderer.
+The original Cocos renderer remains the only visible renderer. All capture diagnostics remain disabled by default. No triggers, shader effects, physics, gameplay state, menus, editor, or player rendering are replaced.
 
-## Diagnostics
+## Current implementation boundary
 
-The optional capture-object-diagnostics mode is a CPU-side read-only inspection path for A/B diagnosis. It is disabled by default and should remain off during normal play. With it disabled, DashCore does not traverse the level object tree or capture sprites; it only observes the existing PlayLayer lifecycle and records CPU callback timing.
+GlesCapabilities is a pure decision model. A future context probe must supply values from the real current GLES context on the render thread. Until that probe is wired and verified on hardware, the capability result is not evidence that a device exposes a feature.
 
-Launcher Diagnostics can continue recording callback cadence, wall time, thread CPU time, process memory and thermal state. GPU timer queries, GL capability probing and EGL swap-interval overrides are removed from the launcher diagnostic path.
+The preferred path is conservative:
 
-## Build and validation
+- Unknown or pre-ES 2.0 context: vanilla fallback.
+- ES 2.0 or ES 3.0: CPU-prepared VBO/IBO geometry.
+- ES 3.1+: compute shaders, SSBOs, and single indirect drawing are eligible only when the queried storage/work-group limits are non-zero.
+- ES 3.1+ with GL_EXT_multi_draw_indirect: multi-draw indirect is eligible; otherwise use single indirect calls.
+- GL_EXT_disjoint_timer_query is optional and is not required for rendering.
 
-The Android64 workflow tests the CPU geometry/diagnostic models and product contract, runs Cppcheck, and builds the Geode package for Android64 with Android API 29 minimum.
+## Source-only tests
 
-This is a rollback/validation prerelease, not an optimization release. It makes no FPS, rendering-parity, or performance-improvement claim.
+The DashCore Android Renderer Source Tests workflow compiles the CPU model and capability selector, runs the contract tests, and checks portability. It does not build, sign, upload, or publish a Geode package.
+
+This is not an optimization release and makes no FPS or visual-parity claim. The next acceptance gate is to inspect the actual context version, extension list, and limits on the Huawei device without changing the renderer or launcher.

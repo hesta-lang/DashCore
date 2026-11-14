@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Product contract for the Geode-native DashCore rollback build."""
+"""Product contract for DashCore's source-only Android renderer research branch."""
 from __future__ import annotations
 
 import json
@@ -18,6 +18,8 @@ class NativeRendererContract(unittest.TestCase):
         cls.readme = read("README.md")
         cls.cmake = read("CMakeLists.txt")
         cls.module = read("src/renderer/geode/ExperimentalRendererModule.cpp")
+        cls.gles_header = read("src/renderer/core/GlesCapabilities.hpp")
+        cls.gles_source = read("src/renderer/core/GlesCapabilities.cpp")
         cls.metadata = json.loads(read("mod.json"))
 
     def test_package_is_alpha_and_capture_is_off(self):
@@ -29,15 +31,13 @@ class NativeRendererContract(unittest.TestCase):
         self.assertIn("project(optgod VERSION 0.11.8)", self.cmake)
         self.assertIn("0.11.8-alpha", self.module)
 
-    def test_no_custom_gles_or_bismuth_backend_is_built(self):
+    def test_no_live_gles_or_bismuth_draw_backend_is_built(self):
         for marker in ("GLESv3", "GLES", "EGL", "GLESBackend", "bismuth_bridge", "android-port"):
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, self.cmake)
         forbidden_paths = (
             "src/renderer/gles/GLESBackend.cpp",
             "src/renderer/gles/GLESBackend.hpp",
-            "src/renderer/core/GlesCapabilities.cpp",
-            "src/renderer/core/GlesCapabilities.hpp",
             "src/bismuth_bridge/BismuthBridge.hpp",
             "src/bismuth_bridge/BismuthTriggerAdapter.cpp",
             "android-port/src/GLCapabilities.cpp",
@@ -83,6 +83,28 @@ class NativeRendererContract(unittest.TestCase):
         self.assertIn("disabled by default", self.readme.lower())
         self.assertNotIn("improves FPS", self.readme)
         self.assertNotIn("increases FPS", self.readme)
+
+    def test_gles_capability_model_is_pure_and_conservative(self):
+        self.assertIn("GL_EXT_multi_draw_indirect", self.gles_source)
+        self.assertIn("GL_EXT_disjoint_timer_query", self.gles_source)
+        self.assertIn("GlesRenderPath::VanillaFallback", self.gles_source)
+        self.assertIn("supportsSpirvSpecialization = false", self.gles_header)
+        self.assertIn("supportsOpenClInterop = false", self.gles_header)
+        forbidden = (
+            "glGetString(",
+            "glBindBuffer(",
+            "glBufferData(",
+            "glDrawElements(",
+            "eglGetProcAddress(",
+            "wglGetProcAddress(",
+            "glSpecializeShader(",
+            "#include <GLES",
+            "#include <EGL",
+        )
+        combined = self.gles_header + self.gles_source
+        for marker in forbidden:
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, combined)
 
 
 if __name__ == "__main__":
