@@ -18,7 +18,7 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
         "RENDER-PIPELINE-HOOKS", "RENDER-PIPELINE FINAL:",
         "RENDER-PIPELINE-PROGRESS:", "RENDER-UPDATE-PROGRESS:", "RENDER-UPDATE:",
         "RENDER-UPDATE-SUBPHASES:", "RENDER-TIMING-BINS:",
-        "RENDER-UPDATE-BINS-NOTE:", "OBJECT-VISUAL-HIERARCHY:",
+        "RENDER-CALLBACK", "RENDER-UPDATE-BINS-NOTE:", "OBJECT-VISUAL-HIERARCHY:",
         "OBJECT-SECTION-LAYOUT:", "OBJECT-SECTION-ROWS:", "setupHasCompleted",
     )
     selected = [line for line in lines if any(m in line for m in selected_markers)]
@@ -64,9 +64,37 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
         for line in histogram_lines
         if (match := re.search(r"RENDER-TIMING-BINS: callback=([^,]+)", line))
     }
-    # CCDirector::drawScene is supplementary and did not execute in the
-    # observed Android AutoTest runtime. Its absence must be reported, not
-    # treated as failure of the confirmed PlayLayer::postUpdate sample.
+    callback_metrics: dict[str, dict[str, int | float]] = {}
+    for line in lines:
+        match = re.search(
+            r"RENDER-CALLBACK (.+?): calls=(\d+), timedCalls=(\d+), "
+            r"inclusiveAvgUs=([0-9.]+), inclusiveTotalUs=(\d+), inclusiveMaxUs=(\d+)",
+            line,
+        )
+        if match:
+            name, calls, timed_calls, average_us, total_us, max_us = match.groups()
+            callback_metrics[name] = {
+                "calls": int(calls),
+                "timed_calls": int(timed_calls),
+                "inclusive_avg_us": float(average_us),
+                "inclusive_total_us": int(total_us),
+                "inclusive_max_us": int(max_us),
+            }
+    draw_callback_names = (
+        "CCSprite::draw",
+        "CCSpriteBatchNode::draw",
+        "CCTextureAtlas::drawQuads",
+        "CCTextureAtlas::drawNumberOfQuads",
+    )
+    draw_callbacks_observed = [
+        name for name in draw_callback_names
+        if callback_metrics.get(name, {}).get("timed_calls", 0) > 0
+    ]
+    node_visit_observed = (
+        callback_metrics.get("CCNode::visit", {}).get("timed_calls", 0) > 0
+    )
+    # CCDirector::drawScene remains supplementary. Renderer callback timings
+    # use independent per-callback sampling and do not depend on it.
     required_callbacks = {
         "PlayLayer::postUpdate", "CCNode::visit",
         "CCSprite::draw", "CCSpriteBatchNode::draw", "CCTextureAtlas::drawQuads",
@@ -84,6 +112,8 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
         "base_layer_update_histogram": "callback=GJBaseGameLayer::update (PlayLayer)" in log_text,
         "visibility_update_histogram": "callback=PlayLayer::updateVisibility" in log_text,
         "required_timing_histograms": required_callbacks.issubset(histogram_callbacks),
+        "render_callback_summary_present": bool(callback_metrics),
+        "renderer_draw_callback_timing_observed": bool(draw_callbacks_observed),
         "visual_hierarchy_census": "OBJECT-VISUAL-HIERARCHY:" in log_text,
         "section_layout_census": "OBJECT-SECTION-LAYOUT:" in log_text,
         "static_culling_confirmed_off": culling_off,
@@ -96,6 +126,10 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
         "draw_scene_frames": draw_scene_frames,
         "sample_coverage": sample_coverage,
         "draw_scene_callback_observed": draw_scene_frames > 0,
+        "render_callback_metrics": callback_metrics,
+        "node_visit_callback_observed": node_visit_observed,
+        "renderer_draw_callback_names_observed": draw_callbacks_observed,
+        "renderer_draw_callback_timing_observed": bool(draw_callbacks_observed),
         "last_render_pipeline_progress_frames": max(draw_progress) if draw_progress else None,
         "last_render_update_progress_frames": max(update_progress) if update_progress else None,
         "timing_histogram_lines": histogram_lines,
@@ -166,7 +200,7 @@ def main() -> int:
             "This AutoTest performs one DashCore-enabled gameplay session only; there is no no-mod baseline or culling-ON pass.",
             "The fixed tap pattern is a gameplay stimulus, not a level-completion or gameplay-correctness test.",
             "CPU callback timings are inclusive and include instrumentation overhead; they are not GPU execution timings.",
-            "When sample coverage is update-only, no drawScene callback was observed; the report does not claim draw-path or GPU coverage.",
+            "When CCDirector::drawScene is unavailable, its supplementary timing is omitted; Cocos callback coverage is reported independently. CPU callback timings are not GPU execution timings.",
             "A successful cloud AutoTest does not establish a physical-device FPS improvement.",
         ],
     }
@@ -185,9 +219,11 @@ def main() -> int:
         "- Passes: **one gameplay run only**",
         "- Baseline / culling-ON comparisons: **not run**",
         f"- Full 180-frame render sample: **{diagnostics['render_pipeline_frames'] == 180}**",
-        f"- Highest drawScene progress marker: **{diagnostics['last_render_pipeline_progress_frames']}**",
-        f"- DrawScene callbacks observed: **{diagnostics['draw_scene_callback_observed']}**",
-        f"- Sample coverage: **{diagnostics['sample_coverage']}**",
+        f"- Highest Director drawScene progress marker: **{diagnostics['last_render_pipeline_progress_frames']}**",
+        f"- Director drawScene callbacks observed: **{diagnostics['draw_scene_callback_observed']}**",
+        f"- Director supplementary sample coverage: **{diagnostics['sample_coverage']}**",
+        f"- CCNode::visit timed callback observed: **{diagnostics['node_visit_callback_observed']}**",
+        f"- Timed sprite / batch / atlas draw callbacks: **{', '.join(diagnostics['renderer_draw_callback_names_observed']) or 'none'}**",
         f"- Highest postUpdate progress marker: **{diagnostics['last_render_update_progress_frames']}**",
         f"- Completion marker source: **{run.get('render_pipeline_sample_marker_source')}**",
         "", "## Diagnostic checks", "",
