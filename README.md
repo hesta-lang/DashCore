@@ -1,20 +1,25 @@
 # DashCore — Bismuth Android Bridge
 
-## 0.11.6-alpha — read-only Cocos compatibility bridge
+## 0.11.6-alpha — read-only Bismuth bridge and A/B diagnostics
 
-This diagnostic prerelease adds only the Android64 adapter boundary needed to connect Bismuth's object pipeline to Geometry Dash's existing Cocos renderer. It does not install or activate a second renderer.
+This branch develops a separate rendering path for Geometry Dash level objects on Android64. This milestone adds bounded diagnostics to the read-only live snapshot stage; it does not change rendering.
 
-- Enumerates the existing level-object array and exposes the object index, ZLayer, normalized ZLayer, object draw order, spritesheet/parent mode, and base/detail blend flag.
-- Unpacks each GameObject into glow, detail/color, base, black, and black-child sprite roles using Bismuth's expected traversal order: glow first; detail behind or in front according to the object's layering flag; and each sprite's negative-z children, sprite, then non-negative-z children.
-- Exposes the existing Cocos batch nodes for each supported ZLayer, spritesheet, and blend combination. It reports their existing z-order and arrival order; it does not create, hide, remove, or reorder batch nodes.
-- Sprite and object pointers are borrowed only during a visitor callback. The bridge copies the affine transform and classification values, does not retain engine objects, and never mutates Cocos state.
-- Provides a read-only query of the EGL/GLES context that Cocos already made current. It never creates, destroys, switches, or replaces an EGL context and does not alter GL bindings.
-- Keeps the original Cocos renderer as the only visible draw path; Geometry Dash vanilla rendering remains responsible for all visible output. There are no draw, visit, batch-submit, or present hooks in the Bismuth bridge. The bridge does not issue GL draw calls or change node visibility.
-- The previous value-only renderer diagnostics remain separate and optional. The `capture-object-diagnostics` setting is **off by default**. With it off, DashCore does not scan `m_objects` or collect per-frame sprite snapshots.
+- Adds a renderer-only Geode runtime, pure C++20 value model, validated sprite descriptor extractor, bounded value-only snapshot collector, stable z/traversal ordering, and contiguous batch planner keyed by layer, texture, and blend state.
+- Rejects descriptors with unknown textures, unsupported blending, hidden sprites, invalid bounds, or non-finite transforms.
+- Snapshot data owns values only; the collector rejects mixed level generations, duplicate sprite IDs, incomplete source reads, invalid attributes, and oversized snapshots. It never retains pointers to live Geometry Dash or Cocos nodes.
+- Adds CPU quad-geometry preparation and an Android GLES buffer-upload backend with explicit capability detection. It preserves existing Cocos buffer bindings and does not expose a draw/present API.
+- Adds a Geode adapter over GJBaseGameLayer::m_objects that builds a root-object index once per level. The full game-object array is scanned only when the array identity or element count changes; subsequent frames filter and traverse the cached PlayLayer descendants. Cocos child arrays are copied and traversed in z-order/order-of-arrival order without mutating the live tree.
+- The snapshot path remains conservative: batched sprites and sprites with unsupported flags are skipped and counted separately from other validation failures. This build does not assume those common Geometry Dash sprite forms are errors, and it does not change the game's batch rendering.
+- Measures the original PlayLayer::postUpdate(float) CPU wall-clock duration separately from the extra snapshot capture and source-collection durations. The **post-update time** measurement stops before the capture call begins.
+- Records index rebuilds, array entries indexed, cached PlayLayer roots, objects excluded from the index, per-frame root/node/sprite counts, skipped batch/flag candidates, unique textures, snapshot vector capacity, and CPU timing distributions. Array-index counters are once-per-index-build; tree and sprite counters remain cumulative per captured frame.
+- Keeps a fixed 512-sample timing window. Per-level averages cover the full session; p95 values cover the latest 512 captures. One summary is written when leaving the level; there is no per-frame logging.
+- The snapshot_vector_capacity_bytes field estimates only the snapshot vector's element-buffer capacity. It is not total process memory and excludes allocator overhead, temporary child vectors, hash tables, Cocos objects, and GPU resources.
+- The `capture-object-diagnostics` setting is **off by default**. With it off, DashCore sends only level lifecycle markers and performs no `m_objects` scan or snapshot collection; Launcher Diagnostics continues measuring frame cadence, callback CPU time, process memory, and thermal status. With it on, the cached object index and read-only per-frame capture are enabled from the next level.
+- Capture timings are CPU wall-clock measurements. The post-update duration covers the original callback; capture and collection durations cover DashCore's work. They are not GPU timings or full-frame timings.
 
-The original Geode launcher EGL path is restored: request GLES 2, install the original EGLConfigChooser, then call Cocos `initView()`. The bridge reads whichever context is current; it does not request GLES 3.1. A GLES 2 context does not provide compute shaders, SSBOs, or indirect drawing, so those Bismuth GPU paths must remain disabled unless a future runtime query confirms support from the game's actual context.
+Geometry preparation and GLES buffer upload are not invoked by the game. This milestone does not submit GPU draw calls, replace any original draw call, or change visibility. Geometry Dash's vanilla rendering remains the only visible draw path. Menus, HUD, editor, player, effects, shaders, gameplay, physics, triggers, and input remain vanilla.
 
-This milestone is an integration foundation, not a Bismuth renderer port or an optimization release. It makes no FPS, frame-time, or visual-parity claim.
+This diagnostic build is a measurement stage, not an optimization release. The A/B baseline is DashCore installed with `capture-object-diagnostics` off; the capture variant is the same setup with it on. Keep the same level, StartPos, duration, refresh rate, graphics settings, and background-app state for both runs. Compare `render_window` frame-interval and callback wall/CPU statistics plus process CPU/PSS; use `capture_avg_ms`, `collection_avg_ms`, and `index_build_total_ms` to quantify the added diagnostic work. No FPS improvement or performance claim is made.
 
 ## Semiautomatic physical-device testing
 
@@ -22,16 +27,21 @@ The repeatable phone workflow, ZIP export instructions, JSONL analyzer usage, an
 
 ## Build and validation
 
-The Android64 workflow checks the read-only bridge product contract, compiles the standalone renderer model and diagnostics tests with C++20, runs Cppcheck, and builds the Geode package for Android64 with Android API 29 minimum.
+The Android64 workflow checks the product contract, compiles the standalone renderer model and diagnostics tests with C++20, runs Cppcheck, and builds the Geode package for Android64 with Android API 29 minimum.
 
 Cloud gameplay automation and physical Huawei Y9s validation are separate gates. A cloud emulator result is not evidence of performance on Kirin 710F / Mali-G51 hardware.
 
-## Bismuth Android64 port boundary
+## Bismuth Android64 read-only bridge
 
-Bismuth's desktop renderer requires APIs and shader behavior that are not guaranteed by the original Geode GLES 2 context. The bridge exposes the live capability profile and the Cocos object/sprite/batch metadata needed for a staged port. It does not emulate desktop OpenGL 4.3, compute shaders, SSBOs, SPIR-V, or multi-draw indirect on an unsupported context. See [docs/BISMUTH_ANDROID64_PORT.md](docs/BISMUTH_ANDROID64_PORT.md) and [docs/BISMUTH_BRIDGE.md](docs/BISMUTH_BRIDGE.md).
+The 0.11.6-alpha bridge exposes the existing level-object array, Bismuth sprite roles and traversal order, accumulated Cocos affine transforms, and the existing ZLayer/spritesheet/blend batch nodes. All engine pointers are borrowed only during visitor callbacks; no Cocos nodes are retained, mutated, hidden or reordered. The bridge queries the already-current EGL/GLES context and does not create or replace it. The original Geode GLES 2 initialization is restored, so unsupported compute, SSBO and indirect paths remain disabled. This is a data adapter only: Geometry Dash vanilla rendering remains the sole visible draw path. See [docs/BISMUTH_BRIDGE.md](docs/BISMUTH_BRIDGE.md) and [docs/BISMUTH_ANDROID64_PORT.md](docs/BISMUTH_ANDROID64_PORT.md).
 
 ## Launcher Diagnostics bridge
 
-On Android, the existing PlayLayer hooks send `onLevelStarted(null, null)` and `onLevelEnded()` lifecycle markers to `com.geode.launcher.LauncherDiagnostics` when that launcher component is present. The launcher remains responsible for recording frame cadence, Cocos callback wall time, GL-thread CPU time, process memory and thermal status. If the launcher class or method is unavailable, the bridge clears the lookup exception and leaves gameplay unchanged.
+On Android, the experimental PlayLayer hooks send `onLevelStarted(null, null)` and `onLevelEnded()` lifecycle markers to `com.geode.launcher.LauncherDiagnostics` when that launcher component is present. The launcher remains responsible for recording frame cadence, Cocos callback wall time, GL-thread CPU time, process memory and thermal status. If the launcher class or method is unavailable, the bridge clears the lookup exception and leaves gameplay unchanged.
 
 The bridge also forwards the completed `RendererDiagnosticSummary` as a structured JSON payload through `LauncherDiagnostics.onDashCoreLevelDiagnostics(String)`. Each level summary includes `capture_enabled`, `capture_skipped_frames`, index-build counters, and capture timings. This lets the exported JSONL identify its A/B variant without relying on the filename. These values are CPU-side diagnostics; they are not GPU draw-call counts, do not inspect/replace the visible draw path, and do not measure GPU execution time.
+
+
+## Bridge safety boundary
+
+No Bismuth draw submission is enabled. The bridge does not hook `CCNode::visit`, `CCSprite::draw`, `CCSpriteBatchNode::draw`, or presentation; it does not create EGL contexts, bind or upload GL buffers, change visibility, or replace the original Cocos renderer. Menus, HUD, editor, player, effects, shaders, gameplay, physics, triggers, and input continue through Geometry Dash vanilla rendering.
