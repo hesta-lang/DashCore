@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Product contract for the read-only DashCore experimental renderer."""
+# Keep the private Android64 Bismuth port prerequisites under CI.
 from __future__ import annotations
 
 import json
