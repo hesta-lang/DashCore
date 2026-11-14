@@ -182,11 +182,11 @@ class $modify(DashCoreExperimentalPlayLayer, PlayLayer) {
     }
 
     void onExit() {
+        notifyLauncherLevelEnded();
 #if defined(GEODE_IS_ANDROID)
         auto const report = dashcore::renderer::geode::coordinator().summary();
         notifyLauncherLevelDiagnostics(report);
 #endif
-        notifyLauncherLevelEnded();
         dashcore::renderer::geode::coordinator().onLevelExit();
         PlayLayer::onExit();
     }
