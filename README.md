@@ -2,7 +2,7 @@
 
 ## 0.11.7-alpha — Bismuth trigger-state adapter and A/B diagnostics
 
-This branch preserves the vanilla Geometry Dash renderer and adds an optional CPU-side Bismuth-compatible trigger-state mirror for Android64. The mirror is disabled by default and does not change gameplay or visible rendering.
+This branch preserves vanilla rendering through the original Geometry Dash renderer and adds an optional CPU-side Bismuth-compatible trigger-state mirror for Android64. The mirror is disabled by default and does not change gameplay or visible rendering.
 
 - Adds a Bismuth-style group-combination model: unique sets of up to ten group IDs share one transform/opacity state, with CPU move/rotation updates, toggle state, pulse offsets and checkpoint snapshots.
 - Observes the native Move, Rotate, Follow and Toggle trigger state while still calling every original Geometry Dash method. It samples Alpha opacity, Color channel state and Pulse action metadata after vanilla postUpdate.
@@ -30,3 +30,10 @@ Cloud gameplay automation and physical Huawei Y9s validation are separate gates.
 On Android, the experimental PlayLayer hooks send onLevelStarted(null, null) and onLevelEnded() lifecycle markers to com.geode.launcher.LauncherDiagnostics when that launcher component is present. The launcher remains responsible for recording frame cadence, Cocos callback wall time, GL-thread CPU time, process memory and thermal status. If the launcher class or method is unavailable, the bridge clears the lookup exception and leaves gameplay unchanged.
 
 The bridge also forwards the completed RendererDiagnosticSummary as a structured JSON payload through LauncherDiagnostics.onDashCoreLevelDiagnostics(String). These values are CPU-side diagnostics, not GPU draw-call counts, and do not inspect or replace the visible draw path.
+
+
+## Retained 0.11.6-alpha A/B diagnostic baseline
+
+The original object/sprite compatibility bridge remains read-only: it borrows Cocos objects only during visitor callbacks and never changes the scene tree. The 0.11.6-alpha snapshot milestone and the 0.11.7-alpha trigger-state mirror both keep the vanilla rendering path as the only visible draw path.
+
+The capture-object-diagnostics option is an A/B measurement mode. The A/B baseline is DashCore installed with capture-object-diagnostics off; the capture variant uses the same level and settings with it on. The fixed timing window reports p95 values for the latest 512 captures. The post-update time measures the original PlayLayer callback and stops before snapshot capture begins. Snapshot vector capacity is an estimate only, not total process memory. These diagnostic measurements do not establish a GPU cost, visual parity, or an FPS improvement.

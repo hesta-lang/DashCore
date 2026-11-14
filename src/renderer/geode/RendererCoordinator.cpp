@@ -194,7 +194,7 @@ void RendererCoordinator::storeCheckpoint(CheckpointObject* checkpoint) {
 void RendererCoordinator::restoreCheckpoint(CheckpointObject* checkpoint) noexcept {
     if (m_active && m_triggerAdapterEnabled &&
         !m_triggerAdapter.restoreCheckpoint(checkpoint)) {
-        ::geode::log::debug("DashCore trigger checkpoint state was not available; native checkpoint handling is unchanged.");
+        // A missing optional shadow snapshot never changes native checkpoint handling.
     }
 }
 
