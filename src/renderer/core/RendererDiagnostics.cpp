@@ -49,10 +49,13 @@ void RendererDiagnostics::reset() noexcept {
     m_successfulFrames = 0;
     m_failedFrames = 0;
     m_totals = {};
+    m_totalPostUpdateNanoseconds = 0;
     m_totalCaptureNanoseconds = 0;
     m_totalCollectionNanoseconds = 0;
+    m_maximumPostUpdateNanoseconds = 0;
     m_maximumCaptureNanoseconds = 0;
     m_maximumCollectionNanoseconds = 0;
+    m_postUpdateSamples = {};
     m_captureSamples = {};
     m_collectionSamples = {};
     m_timingSampleCount = 0;
@@ -74,9 +77,14 @@ void RendererDiagnostics::record(CaptureFrameSample const& sample) noexcept {
     }
 
     addCounters(m_totals, sample.counters);
+    addSaturated(m_totalPostUpdateNanoseconds, sample.postUpdateNanoseconds);
     addSaturated(m_totalCaptureNanoseconds, sample.captureNanoseconds);
     addSaturated(m_totalCollectionNanoseconds, sample.collectionNanoseconds);
 
+    m_maximumPostUpdateNanoseconds = std::max(
+        m_maximumPostUpdateNanoseconds,
+        sample.postUpdateNanoseconds
+    );
     m_maximumCaptureNanoseconds = std::max(
         m_maximumCaptureNanoseconds,
         sample.captureNanoseconds
@@ -86,6 +94,7 @@ void RendererDiagnostics::record(CaptureFrameSample const& sample) noexcept {
         sample.collectionNanoseconds
     );
 
+    m_postUpdateSamples[m_nextTimingSample] = sample.postUpdateNanoseconds;
     m_captureSamples[m_nextTimingSample] = sample.captureNanoseconds;
     m_collectionSamples[m_nextTimingSample] = sample.collectionNanoseconds;
     m_nextTimingSample = (m_nextTimingSample + 1u) % kTimingSampleWindow;
@@ -116,6 +125,7 @@ RendererDiagnosticSummary RendererDiagnostics::summary() const noexcept {
     result.successfulFrames = m_successfulFrames;
     result.failedFrames = m_failedFrames;
     result.totals = m_totals;
+    result.maximumPostUpdateNanoseconds = m_maximumPostUpdateNanoseconds;
     result.maximumCaptureNanoseconds = m_maximumCaptureNanoseconds;
     result.maximumCollectionNanoseconds = m_maximumCollectionNanoseconds;
     result.timingWindowSamples = m_timingSampleCount;
@@ -127,9 +137,11 @@ RendererDiagnosticSummary RendererDiagnostics::summary() const noexcept {
     result.maximumUniqueTextureCount = m_maximumUniqueTextureCount;
 
     if (m_totalFrames != 0) {
+        result.averagePostUpdateNanoseconds = m_totalPostUpdateNanoseconds / m_totalFrames;
         result.averageCaptureNanoseconds = m_totalCaptureNanoseconds / m_totalFrames;
         result.averageCollectionNanoseconds = m_totalCollectionNanoseconds / m_totalFrames;
     }
+    result.p95PostUpdateNanoseconds = percentile95(m_postUpdateSamples, m_timingSampleCount);
     result.p95CaptureNanoseconds = percentile95(m_captureSamples, m_timingSampleCount);
     result.p95CollectionNanoseconds = percentile95(m_collectionSamples, m_timingSampleCount);
     return result;
