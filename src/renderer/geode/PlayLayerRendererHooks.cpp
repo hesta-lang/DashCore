@@ -4,6 +4,9 @@
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/binding/PlayLayer.hpp>
 
+#include <chrono>
+#include <cstdint>
+
 using namespace geode::prelude;
 
 class $modify(DashCoreExperimentalPlayLayer, PlayLayer) {
@@ -13,8 +16,13 @@ class $modify(DashCoreExperimentalPlayLayer, PlayLayer) {
     }
 
     void postUpdate(float dt) {
+        auto const updateStart = std::chrono::steady_clock::now();
         PlayLayer::postUpdate(dt);
-        dashcore::renderer::geode::coordinator().onFrame(this);
+        auto const updateElapsed = std::chrono::steady_clock::now() - updateStart;
+        auto const updateNanoseconds = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(updateElapsed).count()
+        );
+        dashcore::renderer::geode::coordinator().onFrame(this, updateNanoseconds);
     }
 
     void onExit() {
