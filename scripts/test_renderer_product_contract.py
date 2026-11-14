@@ -20,12 +20,16 @@ class RendererProductContract(unittest.TestCase):
         cls.diagnostics_source = (ROOT / "src/renderer/core/RendererDiagnostics.cpp").read_text(encoding="utf-8")
         cls.metadata = json.loads((ROOT / "mod.json").read_text(encoding="utf-8"))
         cls.readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        cls.cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        cls.module = (ROOT / "src/renderer/geode/ExperimentalRendererModule.cpp").read_text(encoding="utf-8")
 
     def test_package_identity_and_diagnostic_prerelease(self):
         self.assertEqual(self.metadata["id"], "hesta.optgod")
         self.assertEqual(self.metadata["version"], "0.11.1-alpha")
         self.assertEqual(self.metadata["name"], "DashCore Experimental Renderer")
         self.assertFalse(self.metadata.get("settings"))
+        self.assertIn("project(optgod VERSION 0.11.1)", self.cmake)
+        self.assertIn("0.11.1-alpha", self.module)
 
     def test_legacy_probes_culling_and_draw_interception_are_absent(self):
         forbidden = (
@@ -113,6 +117,7 @@ class RendererProductContract(unittest.TestCase):
         self.assertIn("vanilla rendering", self.readme.lower())
         self.assertIn("latest 512 captures", self.readme)
         self.assertIn("not total process memory", self.readme.lower())
+        self.assertIn("post-update time", self.readme.lower())
         self.assertIn("post-update time", self.readme.lower())
         self.assertNotIn("improves FPS", self.readme)
         self.assertNotIn("increases FPS", self.readme)
