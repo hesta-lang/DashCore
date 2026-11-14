@@ -26,3 +26,9 @@ This diagnostic build is a measurement stage, not an optimization release. Captu
 The Android64 workflow checks the product contract, compiles the standalone renderer model and diagnostics tests with C++20, runs Cppcheck, and builds the Geode package for Android64 with Android API 29 minimum.
 
 Cloud gameplay automation and physical Huawei Y9s validation are separate gates. A cloud emulator result is not evidence of performance on Kirin 710F / Mali-G51 hardware.
+
+## Launcher Diagnostics bridge
+
+On Android, the experimental PlayLayer hooks send `onLevelStarted(null, null)` and `onLevelEnded()` lifecycle markers to `com.geode.launcher.LauncherDiagnostics` when that launcher component is present. The launcher remains responsible for recording frame cadence, Cocos callback wall time, GL-thread CPU time, process memory and thermal status. If the launcher class or method is unavailable, the bridge clears the lookup exception and leaves gameplay unchanged.
+
+This bridge supplies exact level boundaries; it does not inspect or replace the rendered scene, query GPU execution time, or collect object/texture statistics on behalf of the launcher.
