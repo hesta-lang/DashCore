@@ -13,69 +13,87 @@ import autotest_ab as runtime
 
 
 def inspect_runtime_log(log_text: str) -> dict[str, Any]:
+    """Validate the current DashCore per-level, read-only capture summary."""
     lines = log_text.splitlines()
-    selected_markers = (
-        "RENDER-PIPELINE-HOOKS", "RENDER-PIPELINE FINAL:",
-        "RENDER-PIPELINE-PROGRESS:", "RENDER-UPDATE-PROGRESS:", "RENDER-UPDATE:",
-        "RENDER-UPDATE-SUBPHASES:", "RENDER-TIMING-BINS:",
-        "RENDER-UPDATE-BINS-NOTE:", "OBJECT-VISUAL-HIERARCHY:",
-        "OBJECT-SECTION-LAYOUT:", "OBJECT-SECTION-ROWS:", "setupHasCompleted",
-    )
-    selected = [line for line in lines if any(m in line for m in selected_markers)]
-    pipeline_match = re.search(r"RENDER-PIPELINE FINAL: frames=(\d+)", log_text)
-    draw_progress = [
-        int(value) for value in re.findall(
-            r"RENDER-PIPELINE-PROGRESS: drawSceneFrames=(\d+)", log_text
-        )
+    marker_lines = [
+        line for line in lines if "DashCore_CAPTURE_DIAGNOSTICS" in line
     ]
-    update_progress = [
-        int(value) for value in re.findall(
-            r"RENDER-UPDATE-PROGRESS: postUpdateFrames=(\d+)", log_text
-        )
-    ]
-    hooks_ready = bool(re.search(
-        r"RENDER-PIPELINE-HOOKS:.*?ready=true", log_text, re.IGNORECASE
-    ))
-    culling_off = bool(re.search(
-        r"static-culling-requested=false,\s*static-culling-active=false",
-        log_text, re.IGNORECASE
-    ))
-    histogram_lines = [line for line in lines if "RENDER-TIMING-BINS:" in line]
-    histogram_callbacks = {
-        match.group(1)
-        for line in histogram_lines
-        if (match := re.search(r"RENDER-TIMING-BINS: callback=([^,]+)", line))
+    marker = marker_lines[-1] if marker_lines else ""
+
+    def token(name: str) -> str | None:
+        match = re.search(rf"\\b{re.escape(name)}=([^\\s,]+)", marker)
+        return match.group(1) if match else None
+
+    def integer(name: str) -> int | None:
+        value = token(name)
+        try:
+            return int(value) if value is not None else None
+        except ValueError:
+            return None
+
+    def decimal(name: str) -> float | None:
+        value = token(name)
+        try:
+            return float(value) if value is not None else None
+        except ValueError:
+            return None
+
+    values = {
+        "frames": integer("frames"),
+        "successful_frames": integer("successful"),
+        "failed_frames": integer("failed"),
+        "capture_enabled": token("capture_enabled"),
+        "capture_performed_frames": integer("capture_performed_frames"),
+        "capture_skipped_frames": integer("capture_skipped_frames"),
+        "index_build_total_ms": decimal("index_build_total_ms"),
+        "post_update_avg_ms": decimal("post_update_avg_ms"),
+        "post_update_p95_last512_ms": decimal("post_update_p95_last512_ms"),
+        "capture_avg_ms": decimal("capture_avg_ms"),
+        "capture_p95_last512_ms": decimal("capture_p95_last512_ms"),
+        "capture_max_ms": decimal("capture_max_ms"),
+        "collection_avg_ms": decimal("collection_avg_ms"),
+        "object_array_index_builds_total": integer("object_array_index_builds_total"),
+        "object_array_entries_indexed_total": integer("object_array_entries_indexed_total"),
+        "objects_cached_in_playlayer_tree_total": integer("objects_cached_in_playlayer_tree_total"),
+        "objects_excluded_from_playlayer_tree_index_total": integer(
+            "objects_excluded_from_playlayer_tree_index_total"
+        ),
+        "sprite_candidates_total": integer("sprite_candidates_total"),
+        "sprites_accepted_total": integer("sprites_accepted_total"),
+        "sprites_skipped_unsupported_flags_total": integer(
+            "sprites_skipped_unsupported_flags_total"
+        ),
+        "sprites_skipped_batch_node_total": integer("sprites_skipped_batch_node_total"),
+        "source_failures_total": integer("source_failures_total"),
     }
-    required_callbacks = {
-        "CCDirector::drawScene", "PlayLayer::postUpdate", "CCNode::visit",
-        "CCSprite::draw", "CCSpriteBatchNode::draw", "CCTextureAtlas::drawQuads",
-    }
+
     checks = {
-        "render_pipeline_hooks_ready": hooks_ready,
-        "full_180_frame_sample": bool(pipeline_match and int(pipeline_match.group(1)) == 180),
-        "post_update_summary": "RENDER-UPDATE:" in log_text,
-        "update_subphase_summary": "RENDER-UPDATE-SUBPHASES:" in log_text,
-        "histogram_summary": "RENDER-UPDATE-BINS-NOTE:" in log_text,
-        "render_pipeline_progress_observed": bool(draw_progress),
-        "render_update_progress_observed": bool(update_progress),
-        "base_layer_update_histogram": "callback=GJBaseGameLayer::update (PlayLayer)" in log_text,
-        "visibility_update_histogram": "callback=PlayLayer::updateVisibility" in log_text,
-        "required_timing_histograms": required_callbacks.issubset(histogram_callbacks),
-        "visual_hierarchy_census": "OBJECT-VISUAL-HIERARCHY:" in log_text,
-        "section_layout_census": "OBJECT-SECTION-LAYOUT:" in log_text,
-        "static_culling_confirmed_off": culling_off,
+        "per_level_capture_summary_found": bool(marker),
+        "capture_setting_confirmed_on": values["capture_enabled"] == "true",
+        "gameplay_frames_observed": bool(values["frames"] and values["frames"] > 0),
+        "read_only_capture_attempted": bool(
+            values["capture_performed_frames"]
+            and values["capture_performed_frames"] > 0
+        ),
+        "at_least_one_capture_succeeded": bool(
+            values["successful_frames"] and values["successful_frames"] > 0
+        ),
+        "object_array_index_built": bool(
+            values["object_array_index_builds_total"]
+            and values["object_array_index_builds_total"] > 0
+        ),
+        "level_objects_indexed": bool(
+            values["object_array_entries_indexed_total"]
+            and values["object_array_entries_indexed_total"] > 0
+        ),
     }
     return {
         "required_checks": checks,
         "all_diagnostics_present": all(checks.values()),
-        "render_pipeline_frames": int(pipeline_match.group(1)) if pipeline_match else None,
-        "last_render_pipeline_progress_frames": max(draw_progress) if draw_progress else None,
-        "last_render_update_progress_frames": max(update_progress) if update_progress else None,
-        "timing_histogram_lines": histogram_lines,
-        "histogram_callbacks_found": sorted(histogram_callbacks),
-        "diagnostic_lines": selected,
+        "capture_summary": values,
+        "capture_summary_line": marker,
+        "diagnostic_lines": marker_lines,
     }
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -116,10 +134,10 @@ def main() -> int:
     run = runtime.run_variant(
         variant_args, "GAMEPLAY_DIAGNOSTICS", mod_enabled=True,
         culling_mode="off", diagnostics_mode="off", geometry_diagnostics=False,
-        render_pipeline_mode="on",
-        render_pipeline_wait_s=60,
+        render_pipeline_mode="off", render_pipeline_wait_s=0,
         test_level_name=args.level_name,
         observation_seconds=args.observation_seconds,
+        capture_object_diagnostics=True,
     )
 
     session_dir = args.report_dir / "gameplay-diagnostics"
@@ -129,7 +147,11 @@ def main() -> int:
     gameplay_ok = run.get("gameplay_verified") is True
     level_selection_ok = run.get("level_selection_verified") is True
     crash_free = run.get("crash_detected") is False
-    passed = level_selection_ok and gameplay_ok and crash_free and diagnostics["all_diagnostics_present"]
+    passed = (
+        level_selection_ok and gameplay_ok and crash_free
+        and run.get("capture_summary_marker_source") is not None
+        and diagnostics["all_diagnostics_present"]
+    )
     report = {
         "result": "passed" if passed else "incomplete",
         "test_mode": "single_generated_level_gameplay_diagnostics_only",
@@ -144,12 +166,13 @@ def main() -> int:
             "manifest_sha256": level_manifest.get("output_sha256"),
         },
         "launcher_crash_detected": run.get("crash_detected"),
-        "render_pipeline_sample_marker_source": run.get("render_pipeline_sample_marker_source"),
+        "capture_summary_marker_source": run.get("capture_summary_marker_source"),
         "dashcore_package": str(args.mod_file),
         "dashcore_mod_enabled_for_session": True,
-        "performance_diagnostics": "OFF",
-        "render_pipeline_diagnostics": "ON",
-        "static_culling": "OFF",
+        "capture_object_diagnostics": "ON",
+        "vanilla_rendering": "UNCHANGED",
+        "draw_replacement": False,
+        "visibility_or_gameplay_changes": False,
         "automated_gameplay": {
             "level_selection": f"generated local level {args.level_name}; no official or saved-level fallback",
             "level_selection_verified": level_selection_ok,
@@ -169,18 +192,18 @@ def main() -> int:
         "diagnostics": diagnostics,
         "limitations": [
             "Cloud Android emulator only; Huawei Y9s / Kirin 710F / Mali-G51 hardware is NOT EMULATED.",
-            "This AutoTest performs one DashCore-enabled gameplay session only; there is no no-mod baseline or culling-ON pass.",
-            "The generated runway contains no gameplay hazards; the fixed tap pattern is only a repeatable input stimulus, not a level-completion or correctness test.",
-            "The workflow inserts a local CCLocalLevels entry on the cloud guest; it does not modify a user phone or user save file.",
-            "CPU callback timings are inclusive and include instrumentation overhead; they are not GPU execution timings.",
-            "A successful cloud AutoTest does not establish a physical-device FPS improvement.",
+            "This is one capture-enabled DashCore session, not a no-mod baseline or an optimization A/B comparison.",
+            "The generated runway contains no gameplay hazards; the fixed tap pattern is a repeatable input stimulus, not a level-completion or correctness test.",
+            "The workflow writes the generated local-level save and Geode settings only inside the disposable cloud emulator.",
+            "Capture and collection timings are CPU wall-clock measurements, not GPU execution or full-frame presentation timings.",
+            "A successful cloud AutoTest verifies instrumentation and repeatability; it does not establish a physical-device FPS improvement.",
         ],
     }
     (args.report_dir / "autotest-gameplay-diagnostics.json").write_text(
         json.dumps(report, indent=2) + "\n", encoding="utf-8"
     )
     report_lines = [
-        "# DashCore AutoTest — gameplay and diagnostics only", "",
+        "# DashCore AutoTest — generated level and read-only object capture", "",
         f"**Result: {'PASSED' if passed else 'INCOMPLETE'}**", "",
         f"- Dedicated level selected: **{args.level_name} ({level_selection_ok})**",
         f"- In-level HUD verified: **{gameplay_ok}**",
@@ -188,23 +211,24 @@ def main() -> int:
         f"- Observation window: **{args.observation_seconds}s**",
         f"- Launcher crash detected: **{run.get('crash_detected')}**",
         "- DashCore enabled: **yes**",
-        "- Performance Diagnostics: **OFF**",
-        "- Render Pipeline Diagnostics: **ON**",
-        "- Static culling: **OFF**",
-        "- Passes: **one gameplay run only**",
-        "- Baseline / culling-ON comparisons: **not run**",
-        f"- Full 180-frame render sample: **{diagnostics['render_pipeline_frames'] == 180}**",
-        f"- Highest drawScene progress marker: **{diagnostics['last_render_pipeline_progress_frames']}**",
-        f"- Highest postUpdate progress marker: **{diagnostics['last_render_update_progress_frames']}**",
-        f"- Completion marker source: **{run.get('render_pipeline_sample_marker_source')}**",
+        "- Capture object diagnostics: **ON**",
+        "- Vanilla renderer / gameplay / visibility: **unchanged**",
+        "- Passes: **one capture-enabled gameplay run only**",
+        "- No-mod baseline / optimization comparison: **not run**",
+        f"- DashCore per-level summary source: **{run.get('capture_summary_marker_source')}**",
+        f"- Captured gameplay frames: **{diagnostics['capture_summary'].get('frames')}**",
+        f"- Successful capture frames: **{diagnostics['capture_summary'].get('successful_frames')}**",
+        f"- Indexed game-object entries: **{diagnostics['capture_summary'].get('object_array_entries_indexed_total')}**",
+        f"- Capture average / p95 (ms): **{diagnostics['capture_summary'].get('capture_avg_ms')} / {diagnostics['capture_summary'].get('capture_p95_last512_ms')}**",
+        f"- Post-update average / p95 (ms): **{diagnostics['capture_summary'].get('post_update_avg_ms')} / {diagnostics['capture_summary'].get('post_update_p95_last512_ms')}**",
         "", "## Diagnostic checks", "",
     ]
     report_lines.extend(
         f"- {name}: **{'PASS' if ok else 'MISSING'}**"
         for name, ok in diagnostics["required_checks"].items()
     )
-    report_lines += ["", "## Timing histograms", ""]
-    report_lines.extend(f"- {line}" for line in diagnostics["timing_histogram_lines"])
+    report_lines += ["", "## Per-level capture summary", ""]
+    report_lines.append(f"- {diagnostics['capture_summary_line'] or 'DashCore_CAPTURE_DIAGNOSTICS marker missing'}")
     report_lines += ["", "## Scope and limitations", "",
                      *[f"- {item}" for item in report["limitations"]]]
     (args.report_dir / "autotest-gameplay-diagnostics.md").write_text(
