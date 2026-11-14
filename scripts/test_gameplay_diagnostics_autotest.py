@@ -30,6 +30,11 @@ class GameplayDiagnosticsAutoTest(unittest.TestCase):
         DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=CCDirector::drawScene, samples=180.
         DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=PlayLayer::postUpdate, samples=180.
         DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=CCNode::visit, samples=20.
+        DashCore 0.10.11-alpha RENDER-CALLBACK CCNode::visit: calls=900, timedCalls=113, inclusiveAvgUs=9.00, inclusiveTotalUs=1017, inclusiveMaxUs=30.
+        DashCore 0.10.11-alpha RENDER-CALLBACK CCSprite::draw: calls=50, timedCalls=7, inclusiveAvgUs=4.00, inclusiveTotalUs=28, inclusiveMaxUs=12.
+        DashCore 0.10.11-alpha RENDER-CALLBACK CCSpriteBatchNode::draw: calls=3, timedCalls=1, inclusiveAvgUs=20.00, inclusiveTotalUs=20, inclusiveMaxUs=20.
+        DashCore 0.10.11-alpha RENDER-CALLBACK CCTextureAtlas::drawQuads: calls=4, timedCalls=1, inclusiveAvgUs=15.00, inclusiveTotalUs=15, inclusiveMaxUs=15.
+        DashCore 0.10.11-alpha RENDER-CALLBACK CCTextureAtlas::drawNumberOfQuads: calls=4, timedCalls=1, inclusiveAvgUs=12.00, inclusiveTotalUs=12, inclusiveMaxUs=12.
         DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=CCSprite::draw, samples=20.
         DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=CCSpriteBatchNode::draw, samples=20.
         DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=CCTextureAtlas::drawQuads, samples=20.
@@ -79,6 +84,11 @@ class GameplayDiagnosticsAutoTest(unittest.TestCase):
         DashCore 0.10.11-alpha RENDER-UPDATE-BINS-NOTE: histogram ranges are mutually exclusive CPU-duration buckets.
         DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=PlayLayer::postUpdate, samples=180.
         DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=CCNode::visit, samples=20.
+        DashCore 0.10.11-alpha RENDER-CALLBACK CCNode::visit: calls=900, timedCalls=113, inclusiveAvgUs=9.00, inclusiveTotalUs=1017, inclusiveMaxUs=30.
+        DashCore 0.10.11-alpha RENDER-CALLBACK CCSprite::draw: calls=50, timedCalls=7, inclusiveAvgUs=4.00, inclusiveTotalUs=28, inclusiveMaxUs=12.
+        DashCore 0.10.11-alpha RENDER-CALLBACK CCSpriteBatchNode::draw: calls=3, timedCalls=1, inclusiveAvgUs=20.00, inclusiveTotalUs=20, inclusiveMaxUs=20.
+        DashCore 0.10.11-alpha RENDER-CALLBACK CCTextureAtlas::drawQuads: calls=4, timedCalls=1, inclusiveAvgUs=15.00, inclusiveTotalUs=15, inclusiveMaxUs=15.
+        DashCore 0.10.11-alpha RENDER-CALLBACK CCTextureAtlas::drawNumberOfQuads: calls=4, timedCalls=1, inclusiveAvgUs=12.00, inclusiveTotalUs=12, inclusiveMaxUs=12.
         DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=CCSprite::draw, samples=20.
         DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=CCSpriteBatchNode::draw, samples=20.
         DashCore 0.10.11-alpha RENDER-TIMING-BINS: callback=CCTextureAtlas::drawQuads, samples=20.
@@ -93,7 +103,41 @@ class GameplayDiagnosticsAutoTest(unittest.TestCase):
         self.assertEqual(result["render_pipeline_frames"], 180)
         self.assertEqual(result["sample_coverage"], "update-only")
         self.assertFalse(result["draw_scene_callback_observed"])
+        self.assertTrue(result["required_checks"]["renderer_draw_callback_timing_observed"])
+        self.assertEqual(
+            result["renderer_draw_callback_names_observed"],
+            ["CCSprite::draw", "CCSpriteBatchNode::draw", "CCTextureAtlas::drawQuads",
+             "CCTextureAtlas::drawNumberOfQuads"],
+        )
         self.assertEqual(result["last_render_update_progress_frames"], 180)
+
+    def test_zero_draw_callback_timing_is_incomplete(self):
+        sample = """
+        setupHasCompleted; performance-diagnostics=OFF, render-pipeline-diagnostics-requested=true, render-pipeline-hooks-ready=true, static-culling-requested=false, static-culling-active=false.
+        DashCore RENDER-PIPELINE-HOOKS: requested=true, ready=true.
+        DashCore RENDER-UPDATE-PROGRESS: postUpdateFrames=180, drawSceneFrames=0, sampleActive=false.
+        DashCore RENDER-PIPELINE FINAL: frames=180, drawSceneFrames=0, postUpdateFrames=180, sampleCoverage=update-only, timedDrawFrames=0, timingStride=8, drawSceneAvgUs=0.00.
+        DashCore RENDER-UPDATE: frames=180, avgPostUpdateUs=1200.
+        DashCore RENDER-UPDATE-SUBPHASES: baseGameLayerUpdateHookReady=true, playLayerUpdateVisibilityHookReady=true.
+        DashCore RENDER-UPDATE-BINS-NOTE: histogram ranges are mutually exclusive CPU-duration buckets.
+        DashCore RENDER-TIMING-BINS: callback=PlayLayer::postUpdate, samples=180.
+        DashCore RENDER-TIMING-BINS: callback=CCNode::visit, samples=0.
+        DashCore RENDER-TIMING-BINS: callback=CCSprite::draw, samples=0.
+        DashCore RENDER-TIMING-BINS: callback=CCSpriteBatchNode::draw, samples=0.
+        DashCore RENDER-TIMING-BINS: callback=CCTextureAtlas::drawQuads, samples=0.
+        DashCore RENDER-TIMING-BINS: callback=GJBaseGameLayer::update (PlayLayer), samples=20.
+        DashCore RENDER-TIMING-BINS: callback=PlayLayer::updateVisibility, samples=20.
+        DashCore RENDER-CALLBACK CCNode::visit: calls=0, timedCalls=0, inclusiveAvgUs=0.00, inclusiveTotalUs=0, inclusiveMaxUs=0.
+        DashCore RENDER-CALLBACK CCSprite::draw: calls=0, timedCalls=0, inclusiveAvgUs=0.00, inclusiveTotalUs=0, inclusiveMaxUs=0.
+        DashCore RENDER-CALLBACK CCSpriteBatchNode::draw: calls=0, timedCalls=0, inclusiveAvgUs=0.00, inclusiveTotalUs=0, inclusiveMaxUs=0.
+        DashCore RENDER-CALLBACK CCTextureAtlas::drawQuads: calls=0, timedCalls=0, inclusiveAvgUs=0.00, inclusiveTotalUs=0, inclusiveMaxUs=0.
+        DashCore OBJECT-VISUAL-HIERARCHY: arrayEntries=100.
+        DashCore OBJECT-SECTION-LAYOUT: sectionOuterSlots=10.
+        static-culling-requested=false, static-culling-active=false.
+        """
+        result = MODULE.inspect_runtime_log(sample)
+        self.assertFalse(result["all_diagnostics_present"])
+        self.assertFalse(result["required_checks"]["renderer_draw_callback_timing_observed"])
 
     def test_missing_sample_is_incomplete(self):
         result = MODULE.inspect_runtime_log(
