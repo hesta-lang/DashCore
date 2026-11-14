@@ -149,7 +149,10 @@ def build_level() -> tuple[str, dict[str, Any]]:
 
 def build_level_entry() -> tuple[dict[str, Any], dict[str, Any]]:
     level_string, counts = build_level()
-    compressed_level = zlib.compress(level_string.encode("utf-8"), level=9)
+    # Local level payload k4 is gzip-compressed before URL-safe Base64.
+    compressed_level = gzip.compress(
+        level_string.encode("utf-8"), compresslevel=9, mtime=0
+    )
     encoded_level = base64.urlsafe_b64encode(compressed_level).decode("ascii")
     description = base64.urlsafe_b64encode(
         LEVEL_DESCRIPTION.encode("utf-8")
