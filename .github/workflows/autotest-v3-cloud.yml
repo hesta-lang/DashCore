@@ -2,7 +2,7 @@ name: DashCore AutoTest - Generated level on cloud emulator
 
 on:
   workflow_run:
-    workflows: ["Build DashCore (Android64)"]
+    workflows: ["Build DashCore Experimental Renderer (Android64)"]
     types: [completed]
     branches: [experimental-renderer]
   workflow_dispatch:
@@ -102,7 +102,7 @@ jobs:
       - name: Download and validate DashCore package
         uses: actions/download-artifact@v4
         with:
-          name: OptGod-Android64
+          name: DashCore-Experimental-Renderer-Android64
           path: artifacts/mod
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
@@ -229,81 +229,65 @@ jobs:
         id: fixture
         env:
           SERIAL: ${{ steps.device.outputs.serial }}
-          GAME_PACKAGE: ${{ steps.device.outputs.game_package }}
+          BASE_DIR: /sdcard/Android/media/com.geode.launcher
         run: |
           set -euo pipefail
           mkdir -p test-input reports/autotest-level
-          adb -s "$SERIAL" root
-          adb -s "$SERIAL" wait-for-device
-          DEVICE_ID="$(adb -s "$SERIAL" shell id | tr -d '\r')"
-          echo "$DEVICE_ID" | tee reports/autotest-level/adb-root.txt
-          if ! echo "$DEVICE_ID" | grep -q 'uid=0'; then
-            echo "::error::The cloud emulator did not grant adb root; the test level cannot be installed into Geometry Dash's private save."
-            exit 1
-          fi
-
-          # A first game launch creates its private save directory on a clean emulator.
+          SAVE_DIR="$BASE_DIR/save"
           adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d geode-launcher://main/launch -p com.geode.launcher || true
           sleep 25
           adb -s "$SERIAL" shell am force-stop com.geode.launcher || true
+          adb -s "$SERIAL" shell "mkdir -p '$SAVE_DIR/geode/mods/hesta.optgod'"
 
-          SAVE_PATH="$(adb -s "$SERIAL" shell "find /data/user/0 /data/data /sdcard/Android/media -type f -name CCLocalLevels.dat 2>/dev/null | head -n 1" | tr -d '\r')"
-          if [ -n "$SAVE_PATH" ]; then
-            SAVE_DIR="$(dirname "$SAVE_PATH")"
+          # Android Launcher separates the game directory and save directory.
+          SAVE_PATH="$SAVE_DIR/CCLocalLevels.dat"
+          if adb -s "$SERIAL" shell "test -s '$SAVE_PATH'"; then
             adb -s "$SERIAL" pull "$SAVE_PATH" test-input/CCLocalLevels.original.dat
             python3 scripts/build_autotest_level.py \
               --input test-input/CCLocalLevels.original.dat \
               --output test-input/CCLocalLevels.autotest.dat \
               --summary reports/autotest-level/autotest-level.json
           else
-            MANAGER_PATH="$(adb -s "$SERIAL" shell "find /data/user/0 /data/data /sdcard/Android/media -type f -name CCGameManager.dat 2>/dev/null | head -n 1" | tr -d '\r')"
-            if [ -n "$MANAGER_PATH" ]; then
-              SAVE_DIR="$(dirname "$MANAGER_PATH")"
-            else
-              SAVE_DIR="/data/user/0/$GAME_PACKAGE/files"
-            fi
-            adb -s "$SERIAL" shell "test -d '$SAVE_DIR'" || {
-              echo "::error::Could not locate the Geometry Dash private save directory after first launch."
-              exit 1
-            }
             python3 scripts/build_autotest_level.py \
               --output test-input/CCLocalLevels.autotest.dat \
               --summary reports/autotest-level/autotest-level.json
-            SAVE_PATH="$SAVE_DIR/CCLocalLevels.dat"
-          fi
-
-          OWNER="$(adb -s "$SERIAL" shell "stat -c '%u:%g' '$SAVE_DIR'" | tr -d '\r')"
-          if [ -z "$OWNER" ]; then
-            echo "::error::Could not determine the Geometry Dash save-directory owner."
-            exit 1
           fi
           adb -s "$SERIAL" push test-input/CCLocalLevels.autotest.dat "$SAVE_PATH"
-          adb -s "$SERIAL" shell "chown '$OWNER' '$SAVE_PATH' && chmod 600 '$SAVE_PATH'"
           EXPECTED_SHA="$(python3 -c 'import json; print(json.load(open("reports/autotest-level/autotest-level.json"))["output_sha256"])')"
-          ACTUAL_SHA="$(adb -s "$SERIAL" shell "sha256sum '$SAVE_PATH'" | awk '{print $1}' | tr -d '\r')"
+          ACTUAL_SHA="$(adb -s "$SERIAL" shell "sha256sum '$SAVE_PATH'" | awk '{print $1}')"
           if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
             echo "::error::Installed CCLocalLevels.dat checksum does not match generated fixture."
             exit 1
           fi
+
+          # Geode stores settings under save/geode/mods/<mod-id>/settings.json.
+          printf '%s\n' '{"capture-object-diagnostics":true}' > test-input/hesta.optgod-settings.json
+          adb -s "$SERIAL" push test-input/hesta.optgod-settings.json \
+            "$SAVE_DIR/geode/mods/hesta.optgod/settings.json"
+          adb -s "$SERIAL" pull "$SAVE_DIR/geode/mods/hesta.optgod/settings.json" \
+            reports/autotest-level/hesta.optgod-settings.json
+          python3 -c 'import json; p="reports/autotest-level/hesta.optgod-settings.json"; d=json.load(open(p)); assert d.get("capture-object-diagnostics") is True'
+
           {
             echo "save_path=$SAVE_PATH"
-            echo "save_owner=$OWNER"
             echo "save_sha256=$ACTUAL_SHA"
+            echo "capture_object_diagnostics=true"
+            echo "settings_path=$SAVE_DIR/geode/mods/hesta.optgod/settings.json"
           } >> "$GITHUB_OUTPUT"
           {
             echo "Installed local level: DashCore AutoTest"
             echo "Save path: $SAVE_PATH"
-            echo "Owner: $OWNER"
             echo "SHA-256: $ACTUAL_SHA"
+            echo "Object capture setting: ON"
           } | tee reports/autotest-level/install.txt
 
       - name: Validate generated-level AutoTest and histogram parser
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/autotest_ab.py scripts/autotest_gameplay_diagnostics.py scripts/build_autotest_level.py scripts/test_autotest_level_builder.py scripts/test_gameplay_diagnostics_autotest.py
+          python3 -m py_compile scripts/autotest_ab.py scripts/autotest_gameplay_diagnostics.py scripts/build_autotest_level.py scripts/test_autotest_level_builder.py scripts/test_gameplay_diagnostics_autotest.py scripts/autotest_geode.py
           python3 scripts/test_autotest_level_builder.py
           python3 scripts/test_gameplay_diagnostics_autotest.py
-          python3 scripts/test_render_pipeline_contract.py
+          python3 scripts/test_renderer_product_contract.py
 
       - name: Run one gameplay session and collect diagnostics
         env:
