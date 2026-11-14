@@ -77,13 +77,14 @@ jobs:
           else:
               from urllib.parse import quote
               url = (f"{base}/workflows/build-dashcore-android64.yml/runs"
-                     f"?branch={quote(branch, safe='')}&status=success&per_page=20")
+                     f"?branch={quote(branch, safe='')}&status=completed&per_page=20")
               req = urllib.request.Request(url, headers=headers)
               with urllib.request.urlopen(req, timeout=30) as response:
                   runs = json.load(response).get("workflow_runs", [])
-              if not runs:
+              successful = [item for item in runs if item.get("conclusion") == "success"]
+              if not successful:
                   raise SystemExit(f"No successful Android64 build found on {branch}.")
-              selected = runs[0]
+              selected = successful[0]
           print(f"run_id={selected['id']}")
           print(f"head_sha={selected['head_sha']}")
           PY
@@ -281,7 +282,7 @@ jobs:
             echo "Object capture setting: ON"
           } | tee reports/autotest-level/install.txt
 
-      - name: Validate generated-level AutoTest and histogram parser
+      - name: Validate generated-level AutoTest and capture parser
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/autotest_ab.py scripts/autotest_gameplay_diagnostics.py scripts/build_autotest_level.py scripts/test_autotest_level_builder.py scripts/test_gameplay_diagnostics_autotest.py scripts/autotest_geode.py
