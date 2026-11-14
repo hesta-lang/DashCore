@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib.util
 import pathlib
 import plistlib
+import base64
+import gzip
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -54,6 +56,47 @@ class AutoTestLevelBuilderTests(unittest.TestCase):
             if key.startswith("k_") and isinstance(value, dict)
         ]
         self.assertEqual(names.count(builder.LEVEL_NAME), 1)
+
+    def test_encrypted_save_uses_gzip_container_before_base64_and_xor(self):
+        xml_data = plistlib.dumps(
+            {"LLM_01": {"_isArr": True}, "LLM_02": 2200},
+            fmt=plistlib.FMT_XML,
+            sort_keys=False,
+        )
+        encrypted = builder.encode_save(xml_data)
+        base64_bytes = bytes(value ^ builder.SAVE_XOR_KEY for value in encrypted)
+        compressed = base64.urlsafe_b64decode(base64_bytes)
+        self.assertTrue(compressed.startswith(b"\\x1f\\x8b"))
+        self.assertEqual(gzip.decompress(compressed), xml_data)
+
+    def test_local_level_names_are_read_from_the_encoded_save(self):
+        document = {
+            "LLM_01": {
+                "_isArr": True,
+                "k_0": {"kCEK": 4, "k2": "DashCore AutoTest"},
+                "k_1": {"kCEK": 4, "k2": "Existing level"},
+            },
+            "LLM_02": 2200,
+        }
+        raw = builder.encode_save(
+            plistlib.dumps(document, fmt=plistlib.FMT_XML, sort_keys=False)
+        )
+        self.assertEqual(
+            builder.local_level_names(raw),
+            ["DashCore AutoTest", "Existing level"],
+        )
+
+    def test_legacy_zlib_save_remains_readable(self):
+        xml_data = plistlib.dumps(
+            {"LLM_01": {"_isArr": True}, "LLM_02": 2200},
+            fmt=plistlib.FMT_XML,
+            sort_keys=False,
+        )
+        legacy = bytes(
+            value ^ builder.SAVE_XOR_KEY
+            for value in base64.urlsafe_b64encode(__import__("zlib").compress(xml_data))
+        )
+        self.assertEqual(builder.decode_save(legacy), xml_data)
 
     def test_corrupt_save_is_rejected(self):
         with self.assertRaises(ValueError):
