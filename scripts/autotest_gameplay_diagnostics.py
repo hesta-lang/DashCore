@@ -185,16 +185,16 @@ def main() -> int:
             ],
         }
         (args.report_dir / "autotest-gameplay-diagnostics.json").write_text(
-            json.dumps(report, indent=2) + "\\n", encoding="utf-8"
+            json.dumps(report, indent=2) + "\n", encoding="utf-8"
         )
         (args.report_dir / "autotest-gameplay-diagnostics.md").write_text(
-            "# DashCore AutoTest — INCOMPLETE\\n\\n"
-            f"- Result: **INCOMPLETE**\\n"
-            f"- Stage: **{report['runtime_error']['stage']}**\\n"
-            f"- Error: **{report['runtime_error']['type']}**\\n"
-            f"- Reason: {report['runtime_error']['message']}\\n"
-            "- Gameplay verified: **no**\\n"
-            "- No optimization conclusion can be drawn from this run.\\n",
+            "# DashCore AutoTest — INCOMPLETE\n\n"
+            f"- Result: **INCOMPLETE**\n"
+            f"- Stage: **{report['runtime_error']['stage']}**\n"
+            f"- Error: **{report['runtime_error']['type']}**\n"
+            f"- Reason: {report['runtime_error']['message']}\n"
+            "- Gameplay verified: **no**\n"
+            "- No optimization conclusion can be drawn from this run.\n",
             encoding="utf-8",
         )
         print("AUTOTEST-RESULT: INCOMPLETE (runtime navigation/capture error)")
