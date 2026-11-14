@@ -20,6 +20,3 @@ add_library($\{PROJECT_NAME} SHARED $\{SOURCES})
 target_include_directories($\{PROJECT_NAME} PRIVATE $\{CMAKE_CURRENT_SOURCE_DIR}/src)
 
 setup_geode_mod($\{PROJECT_NAME})
-
-# DashCore intentionally has no custom OpenGL ES/EGL backend.
-# Visible rendering stays in Geometry Dash / Geode's original Cocos renderer.

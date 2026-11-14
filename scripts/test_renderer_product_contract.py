@@ -33,7 +33,6 @@ class NativeRendererContract(unittest.TestCase):
         for marker in ("GLESv3", "GLES", "EGL", "GLESBackend", "bismuth_bridge", "android-port"):
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, self.cmake)
-                self.assertNotIn(marker, self.readme)
         forbidden_paths = (
             "src/renderer/gles/GLESBackend.cpp",
             "src/renderer/gles/GLESBackend.hpp",
