@@ -78,3 +78,36 @@ Los intervalos y duraciones de callbacks son mediciones de CPU/cadencia del call
 ## 6. Validación del analizador en GitHub Actions
 
 El workflow Android64 de la rama `experimental-renderer` ejecuta las pruebas unitarias del analizador antes de compilar DashCore. Así se comprueba el procesamiento de JSONL, la lectura de ZIP, los registros corruptos y las condiciones del comparador en cada cambio de código.
+
+## 7. AutoTest de gameplay en emulador cloud
+
+El workflow `.github/workflows/autotest-v3-cloud.yml` ejecuta una sesión real de Geometry Dash dentro de un emulador Android administrado desde GitHub Actions.
+
+### Qué hace
+
+1. Descarga el último paquete Android64 exitoso de DashCore para la rama seleccionada y la APK autorizada de Geometry Dash 2.2081.
+2. Inicia un emulador Pixel 2 con Android 11 (API 30), instala Geode Launcher y el juego.
+3. Genera un nivel local llamado **DashCore AutoTest**. El fixture tiene una pista sin obstáculos y tres zonas reproducibles de densidad de objetos (escasa, media y alta), con 890 objetos en total.
+4. Inserta el nivel en el archivo local `CCLocalLevels.dat` del emulador y verifica el SHA-256 del archivo instalado.
+5. Activa `capture-object-diagnostics` para esa ejecución, entra al nivel generado mediante OCR y mantiene la sesión durante 20 segundos.
+6. Sale del nivel para que DashCore emita `DashCore_CAPTURE_DIAGNOSTICS`; valida el resumen y guarda capturas, OCR, logs y métricas como artefacto de Actions.
+
+El nivel se crea en el emulador desechable. El workflow no escribe en los archivos de guardado del teléfono. La ejecución activa únicamente la captura de diagnóstico: no habilita una optimización, no reemplaza el renderer vanilla y no cambia la visibilidad, la física ni el gameplay.
+
+### Cómo ejecutarlo
+
+1. Abre la pestaña **Actions** del repositorio.
+2. Selecciona **DashCore AutoTest - Generated level on cloud emulator**.
+3. Pulsa **Run workflow** y selecciona la rama `experimental-renderer`.
+4. Deja vacío `build_run_id` para usar el último build Android64 exitoso de esa rama. También puedes indicar un ID de ejecución de build exitoso.
+5. Espera el resultado y abre el artefacto `DashCore-AutoTest-Cloud-...`.
+
+Se requieren los secretos `EW_API_TOKEN` (emulador cloud) y `ANDROID_LAUNCHER_TOKEN` (descarga del APK de Geode Launcher con permiso de lectura sobre `hesta-lang/android-launcher`). La URL de la APK de Geometry Dash puede dejarse con el valor predeterminado o suministrarse como `GEOMETRY_DASH_MEDIAFIRE_URL`.
+
+### Interpretación
+
+- **PASSED** significa que se seleccionó el nivel generado, se observó el HUD de gameplay, no se detectó un crash y el resumen confirma captura activa, frames y objetos indexados.
+- **INCOMPLETE** significa que faltó una de esas pruebas. No se sustituye silenciosamente el fixture por un nivel oficial o guardado.
+- El emulador cloud no reproduce el Kirin 710F ni la GPU Mali-G51 del Huawei Y9s. Por eso el resultado valida la ejecución y el diagnóstico automatizado, no una mejora de FPS en el teléfono.
+- Esta primera etapa es una sola sesión con captura activada. No es aún una comparación A/B ni una validación de optimización.
+
