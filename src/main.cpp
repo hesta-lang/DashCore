@@ -171,6 +171,7 @@ namespace {
     StartupProfile g_profile;
     RenderPipelineProfile g_rendererProfile;
     bool g_renderPipelineDiagnosticsRequested = false;
+    // The sample controller is separate from every independently measured callback.
     bool g_renderPipelineHooksReady = false;
     bool g_baseGameLayerUpdateHookReady = false;
     bool g_playLayerVisibilityHookReady = false;
