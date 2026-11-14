@@ -18,7 +18,7 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
         "RENDER-PIPELINE-HOOKS", "RENDER-PIPELINE FINAL:",
         "RENDER-PIPELINE-PROGRESS:", "RENDER-UPDATE-PROGRESS:", "RENDER-UPDATE:",
         "RENDER-UPDATE-SUBPHASES:", "RENDER-TIMING-BINS:",
-        "RENDER-CALLBACK", "RENDER-UPDATE-BINS-NOTE:", "OBJECT-VISUAL-HIERARCHY:",
+        "RENDER-CALLBACK", "RENDER-CALLBACK-STATUS", "RENDER-UPDATE-BINS-NOTE:", "OBJECT-VISUAL-HIERARCHY:",
         "OBJECT-SECTION-LAYOUT:", "OBJECT-SECTION-ROWS:", "setupHasCompleted",
     )
     selected = [line for line in lines if any(m in line for m in selected_markers)]
@@ -80,6 +80,43 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
                 "inclusive_total_us": int(total_us),
                 "inclusive_max_us": int(max_us),
             }
+    callback_statuses: dict[str, dict[str, Any]] = {}
+    for line in lines:
+        match = re.search(
+            r"RENDER-CALLBACK-STATUS (.+?): state=([^,]+), hookFound=(true|false), "
+            r"hookEnabled=(true|false), calls=(\d+), timedCalls=(\d+)",
+            line,
+        )
+        if match:
+            name, state, found, enabled, calls, timed_calls = match.groups()
+            callback_statuses[name] = {
+                "state": state,
+                "hook_found": found == "true",
+                "hook_enabled": enabled == "true",
+                "calls": int(calls),
+                "timed_calls": int(timed_calls),
+            }
+    expected_callback_names = (
+        "CCDirector::drawScene",
+        "PlayLayer::postUpdate",
+        "CCNode::visit",
+        "CCSprite::draw",
+        "CCSpriteBatchNode::draw",
+        "CCTextureAtlas::drawQuads",
+        "CCTextureAtlas::drawNumberOfQuads",
+        "GJBaseGameLayer::update (PlayLayer)",
+        "PlayLayer::updateVisibility",
+    )
+    callback_inventory = {
+        name: callback_statuses.get(name, {
+            "state": "STATUS_NOT_REPORTED",
+            "hook_found": None,
+            "hook_enabled": None,
+            "calls": 0,
+            "timed_calls": 0,
+        })
+        for name in expected_callback_names
+    }
     draw_callback_names = (
         "CCSprite::draw",
         "CCSpriteBatchNode::draw",
@@ -113,6 +150,7 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
         "visibility_update_histogram": "callback=PlayLayer::updateVisibility" in log_text,
         "required_timing_histograms": required_callbacks.issubset(histogram_callbacks),
         "render_callback_summary_present": bool(callback_metrics),
+        "callback_inventory_complete": set(expected_callback_names).issubset(callback_statuses),
         "renderer_draw_callback_timing_observed": bool(draw_callbacks_observed),
         "visual_hierarchy_census": "OBJECT-VISUAL-HIERARCHY:" in log_text,
         "section_layout_census": "OBJECT-SECTION-LAYOUT:" in log_text,
@@ -127,6 +165,20 @@ def inspect_runtime_log(log_text: str) -> dict[str, Any]:
         "sample_coverage": sample_coverage,
         "draw_scene_callback_observed": draw_scene_frames > 0,
         "render_callback_metrics": callback_metrics,
+        "callback_inventory": callback_inventory,
+        "callbacks_absent": [
+            name for name, item in callback_inventory.items() if item["state"] == "ABSENT"
+        ],
+        "callbacks_running": [
+            name for name, item in callback_inventory.items() if item["state"] == "RUNNING"
+        ],
+        "callbacks_enabled_not_observed": [
+            name for name, item in callback_inventory.items()
+            if item["state"] == "ENABLED_NOT_OBSERVED"
+        ],
+        "callbacks_disabled": [
+            name for name, item in callback_inventory.items() if item["state"] == "HOOK_DISABLED"
+        ],
         "node_visit_callback_observed": node_visit_observed,
         "renderer_draw_callback_names_observed": draw_callbacks_observed,
         "renderer_draw_callback_timing_observed": bool(draw_callbacks_observed),
@@ -224,6 +276,17 @@ def main() -> int:
         f"- Director supplementary sample coverage: **{diagnostics['sample_coverage']}**",
         f"- CCNode::visit timed callback observed: **{diagnostics['node_visit_callback_observed']}**",
         f"- Timed sprite / batch / atlas draw callbacks: **{', '.join(diagnostics['renderer_draw_callback_names_observed']) or 'none'}**",
+        f"- Callbacks running: **{', '.join(diagnostics['callbacks_running']) or 'none'}**",
+        f"- Callbacks absent: **{', '.join(diagnostics['callbacks_absent']) or 'none'}**",
+        f"- Callbacks enabled but not observed: **{', '.join(diagnostics['callbacks_enabled_not_observed']) or 'none'}**",
+        f"- Callbacks disabled / failed to enable: **{', '.join(diagnostics['callbacks_disabled']) or 'none'}**",
+        "", "## Callback inventory", "",
+        "| Callback | State | Calls | Timed calls |",
+        "|---|---|---:|---:|",
+        *[
+            f"| {name} | {item['state']} | {item['calls']} | {item['timed_calls']} |"
+            for name, item in diagnostics["callback_inventory"].items()
+        ],
         f"- Highest postUpdate progress marker: **{diagnostics['last_render_update_progress_frames']}**",
         f"- Completion marker source: **{run.get('render_pipeline_sample_marker_source')}**",
         "", "## Diagnostic checks", "",
