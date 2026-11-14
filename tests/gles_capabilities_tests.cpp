@@ -53,7 +53,7 @@ int main() {
         "GL_EXT_draw_indirect",
         true
     );
-    assert(!es30.supportsDrawIndirect);
+    assert(es30.supportsDrawIndirect);
     assert(es30.supportsComputeShaders);
     assert(es30.supportsShaderStorageBuffers);
 }
