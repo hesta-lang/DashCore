@@ -513,12 +513,22 @@ def open_custom_autotest_level(serial: str, mode: str,
     menu_text = take_state_screenshot(
         serial, mode, "custom-level-menu-check", variant_dir / "custom-level-menu-check.png"
     )
-    if not is_main_menu_text(menu_text):
-        # If startup restored an interrupted run, leave it before navigating.
-        shell(serial, "input keyevent 4", check=False)
-        wait_for_main_menu(serial, mode, variant_dir, timeout_s=60)
-    else:
+    if is_main_menu_text(menu_text):
         wait_for_main_menu(serial, mode, variant_dir, timeout_s=30)
+    else:
+        # Do not send Back while the game is still on its loading/logo screen.
+        # If a gameplay/pause state was restored, leave it; otherwise wait for
+        # the actual main-menu landmarks before attempting the UI navigation.
+        if is_gameplay_text(menu_text) or any(
+            marker in menu_text for marker in ("resume", "restart", "exit")
+        ):
+            shell(serial, "input keyevent 4", check=False)
+            time.sleep(1.0)
+        try:
+            wait_for_main_menu(serial, mode, variant_dir, timeout_s=45)
+        except RuntimeError:
+            shell(serial, "input keyevent 4", check=False)
+            wait_for_main_menu(serial, mode, variant_dir, timeout_s=45)
 
     navigation: dict[str, Any] = {
         "requested_level": level_name,
