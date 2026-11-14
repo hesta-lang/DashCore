@@ -85,7 +85,7 @@ class LauncherDiagnosticsAnalyzerTests(unittest.TestCase):
     def test_off_to_on_comparison_requires_matching_device_game_display_and_level(self):
         baseline = analyzer.read_session(encode(sample_session(False, 16.7, 22.0)), "off.jsonl")
         candidate = analyzer.read_session(encode(sample_session(True, 17.5, 25.0)), "on.jsonl")
-        result = analyzer.compare_sessions(baseline, candidate)
+        result = analyzer.compare_sessions(baseline, candidate, same_route_confirmed=True)
         self.assertTrue(result["metadata_compatible"], result["checks"])
         self.assertEqual(result["status"], "metadata-compatible-not-route-verified")
         self.assertEqual(len(result["matched_levels"]), 1)
@@ -94,6 +94,14 @@ class LauncherDiagnosticsAnalyzerTests(unittest.TestCase):
             (17.5 - 16.7) / 16.7 * 100
         )
         self.assertTrue(any("StartPos" in item for item in result["manual_confirmation_required"]))
+
+
+    def test_a_b_pair_is_not_controlled_without_manual_route_confirmation(self):
+        baseline = analyzer.read_session(encode(sample_session(False)), "off.jsonl")
+        candidate = analyzer.read_session(encode(sample_session(True)), "on.jsonl")
+        result = analyzer.compare_sessions(baseline, candidate)
+        self.assertFalse(result["metadata_compatible"])
+        self.assertFalse(result["checks"]["same_level_route_user_confirmed"])
 
     def test_capture_variant_mismatch_is_not_marked_controlled(self):
         baseline = analyzer.read_session(encode(sample_session(True)), "on-a.jsonl")
