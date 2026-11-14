@@ -1,3 +1,9 @@
+## 0.10.13-alpha — independent renderer callback sampling
+- Samples CCNode::visit, CCSprite::draw, CCSpriteBatchNode::draw, and CCTextureAtlas draw callbacks using independent per-callback counters and the bounded timing stride.
+- Removes the dependency on CCDirector::drawScene to activate callback timing. drawScene remains supplementary telemetry.
+- AutoTest parses positive calls/timedCalls counters and reports INCOMPLETE if no sprite, batch, or texture-atlas draw callback was timed.
+- Original callbacks are still forwarded exactly once. No rendering, gameplay, physics, draw-order, UI, or culling behavior changes; diagnostics remain opt-in and culling remains OFF.
+
 ## 0.10.12-alpha — update-clocked diagnostic completion
 - Completes the 180-update sample from the confirmed `PlayLayer::postUpdate` callback; sample completion no longer depends on `CCDirector::drawScene` invoking its hook.
 - Adds separate `drawSceneFrames`, `postUpdateFrames`, and `sampleCoverage` fields. Zero draw callbacks are reported as `update-only`, not treated as draw-path or GPU evidence.
