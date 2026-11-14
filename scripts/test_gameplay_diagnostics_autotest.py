@@ -35,15 +35,6 @@ class GameplayDiagnosticsAutoTest(unittest.TestCase):
         DashCore 0.10.11-alpha RENDER-CALLBACK CCSpriteBatchNode::draw: calls=3, timedCalls=1, inclusiveAvgUs=20.00, inclusiveTotalUs=20, inclusiveMaxUs=20.
         DashCore 0.10.11-alpha RENDER-CALLBACK CCTextureAtlas::drawQuads: calls=4, timedCalls=1, inclusiveAvgUs=15.00, inclusiveTotalUs=15, inclusiveMaxUs=15.
         DashCore 0.10.11-alpha RENDER-CALLBACK CCTextureAtlas::drawNumberOfQuads: calls=4, timedCalls=1, inclusiveAvgUs=12.00, inclusiveTotalUs=12, inclusiveMaxUs=12.
-        DashCore RENDER-CALLBACK-STATUS CCDirector::drawScene: state=ENABLED_NOT_OBSERVED, hookFound=true, hookEnabled=true, calls=0, timedCalls=0.
-        DashCore RENDER-CALLBACK-STATUS PlayLayer::postUpdate: state=RUNNING, hookFound=true, hookEnabled=true, calls=180, timedCalls=180.
-        DashCore RENDER-CALLBACK-STATUS CCNode::visit: state=RUNNING, hookFound=true, hookEnabled=true, calls=900, timedCalls=113.
-        DashCore RENDER-CALLBACK-STATUS CCSprite::draw: state=RUNNING, hookFound=true, hookEnabled=true, calls=50, timedCalls=7.
-        DashCore RENDER-CALLBACK-STATUS CCSpriteBatchNode::draw: state=RUNNING, hookFound=true, hookEnabled=true, calls=3, timedCalls=1.
-        DashCore RENDER-CALLBACK-STATUS CCTextureAtlas::drawQuads: state=RUNNING, hookFound=true, hookEnabled=true, calls=4, timedCalls=1.
-        DashCore RENDER-CALLBACK-STATUS CCTextureAtlas::drawNumberOfQuads: state=RUNNING, hookFound=true, hookEnabled=true, calls=4, timedCalls=1.
-        DashCore RENDER-CALLBACK-STATUS GJBaseGameLayer::update (PlayLayer): state=RUNNING, hookFound=true, hookEnabled=true, calls=23, timedCalls=23.
-        DashCore RENDER-CALLBACK-STATUS PlayLayer::updateVisibility: state=RUNNING, hookFound=true, hookEnabled=true, calls=23, timedCalls=23.
         DashCore RENDER-CALLBACK-STATUS CCDirector::drawScene: state=RUNNING, hookFound=true, hookEnabled=true, calls=180, timedCalls=180.
         DashCore RENDER-CALLBACK-STATUS PlayLayer::postUpdate: state=RUNNING, hookFound=true, hookEnabled=true, calls=180, timedCalls=180.
         DashCore RENDER-CALLBACK-STATUS CCNode::visit: state=RUNNING, hookFound=true, hookEnabled=true, calls=900, timedCalls=113.
@@ -175,6 +166,12 @@ class GameplayDiagnosticsAutoTest(unittest.TestCase):
         result = MODULE.inspect_runtime_log(sample)
         self.assertFalse(result["all_diagnostics_present"])
         self.assertFalse(result["required_checks"]["renderer_draw_callback_timing_observed"])
+        self.assertEqual(
+            result["callback_inventory"]["CCTextureAtlas::drawNumberOfQuads"]["state"],
+            "ABSENT",
+        )
+        self.assertIn("CCNode::visit", result["callbacks_enabled_not_observed"])
+        self.assertIn("PlayLayer::postUpdate", result["callbacks_running"])
 
     def test_callback_inventory_distinguishes_absent_and_running(self):
         sample = """
