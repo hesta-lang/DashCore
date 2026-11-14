@@ -34,6 +34,9 @@ void logLevelDiagnostics(core::RendererDiagnosticSummary const& report) {
          << " collection_max_ms=" << nanosecondsToMilliseconds(report.maximumCollectionNanoseconds)
          << " p95_window_frames=" << report.timingWindowSamples
          << " nodes_visited_total=" << report.totals.nodesVisited
+         << " object_array_entries_total=" << report.totals.objectArrayEntries
+         << " objects_in_visible_playlayer_tree_total=" << report.totals.objectsInVisiblePlayLayerTree
+         << " objects_outside_visible_playlayer_tree_total=" << report.totals.objectsOutsideVisiblePlayLayerTree
          << " root_objects_total=" << report.totals.rootObjects
          << " sprite_candidates_total=" << report.totals.candidateSprites
          << " sprites_accepted_total=" << report.totals.acceptedSprites

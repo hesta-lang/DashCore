@@ -23,6 +23,9 @@ std::uint64_t percentile95(
 
 void addCounters(CaptureCounters& target, CaptureCounters const& value) noexcept {
     addSaturated(target.nodesVisited, value.nodesVisited);
+    addSaturated(target.objectArrayEntries, value.objectArrayEntries);
+    addSaturated(target.objectsInVisiblePlayLayerTree, value.objectsInVisiblePlayLayerTree);
+    addSaturated(target.objectsOutsideVisiblePlayLayerTree, value.objectsOutsideVisiblePlayLayerTree);
     addSaturated(target.rootObjects, value.rootObjects);
     addSaturated(target.candidateSprites, value.candidateSprites);
     addSaturated(target.acceptedSprites, value.acceptedSprites);

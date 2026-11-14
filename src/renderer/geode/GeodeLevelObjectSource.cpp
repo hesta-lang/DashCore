@@ -58,6 +58,21 @@ struct RootObject {
     std::uint32_t objectIndex = 0;
 };
 
+bool isVisibleDescendantOfPlayLayer(
+    cocos2d::CCNode* node,
+    PlayLayer* layer
+) noexcept {
+    if (!node || !layer) return false;
+
+    auto* const layerNode = static_cast<cocos2d::CCNode*>(layer);
+    auto* current = node;
+    while (current && current != layerNode) {
+        if (!current->isVisible()) return false;
+        current = current->getParent();
+    }
+    return current == layerNode;
+}
+
 struct CaptureState {
     PlayLayer* layer = nullptr;
     std::uint32_t generation = 0;
@@ -336,16 +351,22 @@ bool GeodeLevelObjectSource::collect(
         return false;
     };
 
-    if (!m_layer || !m_layer->m_objects || !m_layer->m_objectLayer) return fail();
+    if (!m_layer || !m_layer->m_objects) return fail();
 
     ::geode::cocos::CCArrayExt<GameObject, false> objects(m_layer->m_objects);
     if (objects.size() > core::LevelObjectCollector::kMaximumSprites) return fail();
+
+    m_lastStats.counters.objectArrayEntries = objects.size();
 
     std::vector<RootObject> roots;
     roots.reserve(objects.size());
     for (std::size_t index = 0; index < objects.size(); ++index) {
         auto* object = objects[index];
-        if (!object || object->getParent() != m_layer->m_objectLayer) continue;
+        if (!object || !isVisibleDescendantOfPlayLayer(object, m_layer)) {
+            ++m_lastStats.counters.objectsOutsideVisiblePlayLayerTree;
+            continue;
+        }
+        ++m_lastStats.counters.objectsInVisiblePlayLayerTree;
         if (index > std::numeric_limits<std::uint32_t>::max()) return fail();
         roots.push_back({object, static_cast<std::uint32_t>(index)});
     }

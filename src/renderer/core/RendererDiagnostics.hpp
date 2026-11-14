@@ -8,6 +8,9 @@ namespace dashcore::renderer::core {
 
 struct CaptureCounters {
     std::uint64_t nodesVisited = 0;
+    std::uint64_t objectArrayEntries = 0;
+    std::uint64_t objectsInVisiblePlayLayerTree = 0;
+    std::uint64_t objectsOutsideVisiblePlayLayerTree = 0;
     std::uint64_t rootObjects = 0;
     std::uint64_t candidateSprites = 0;
     std::uint64_t acceptedSprites = 0;

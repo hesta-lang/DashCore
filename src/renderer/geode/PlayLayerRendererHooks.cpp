@@ -45,6 +45,9 @@ std::string makeLauncherDiagnosticsJson(
          << ",\"collection_max_ms\":" << nanosecondsToMilliseconds(report.maximumCollectionNanoseconds)
          << ",\"p95_window_frames\":" << report.timingWindowSamples
          << ",\"nodes_visited_total\":" << counters.nodesVisited
+         << ",\"object_array_entries_total\":" << counters.objectArrayEntries
+         << ",\"objects_in_visible_playlayer_tree_total\":" << counters.objectsInVisiblePlayLayerTree
+         << ",\"objects_outside_visible_playlayer_tree_total\":" << counters.objectsOutsideVisiblePlayLayerTree
          << ",\"root_objects_total\":" << counters.rootObjects
          << ",\"sprite_candidates_total\":" << counters.candidateSprites
          << ",\"sprites_accepted_total\":" << counters.acceptedSprites
@@ -182,12 +185,15 @@ class $modify(DashCoreExperimentalPlayLayer, PlayLayer) {
     }
 
     void onExit() {
-        notifyLauncherLevelEnded();
+        auto& renderCoordinator = dashcore::renderer::geode::coordinator();
+        if (renderCoordinator.active()) {
+            notifyLauncherLevelEnded();
 #if defined(GEODE_IS_ANDROID)
-        auto const report = dashcore::renderer::geode::coordinator().summary();
-        notifyLauncherLevelDiagnostics(report);
+            auto const report = renderCoordinator.summary();
+            notifyLauncherLevelDiagnostics(report);
 #endif
-        dashcore::renderer::geode::coordinator().onLevelExit();
+            renderCoordinator.onLevelExit();
+        }
         PlayLayer::onExit();
     }
 };

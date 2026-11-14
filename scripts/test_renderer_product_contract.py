@@ -25,11 +25,11 @@ class RendererProductContract(unittest.TestCase):
 
     def test_package_identity_and_diagnostic_prerelease(self):
         self.assertEqual(self.metadata["id"], "hesta.optgod")
-        self.assertEqual(self.metadata["version"], "0.11.2-alpha")
+        self.assertEqual(self.metadata["version"], "0.11.3-alpha")
         self.assertEqual(self.metadata["name"], "DashCore Experimental Renderer")
         self.assertFalse(self.metadata.get("settings"))
-        self.assertIn("project(optgod VERSION 0.11.2)", self.cmake)
-        self.assertIn("0.11.2-alpha", self.module)
+        self.assertIn("project(optgod VERSION 0.11.3)", self.cmake)
+        self.assertIn("0.11.3-alpha", self.module)
 
     def test_legacy_probes_culling_and_draw_interception_are_absent(self):
         forbidden = (
@@ -78,7 +78,12 @@ class RendererProductContract(unittest.TestCase):
 
     def test_geode_source_is_bounded_conservative_and_instrumented(self):
         self.assertIn("m_layer->m_objects", self.adapter)
-        self.assertIn("m_layer->m_objectLayer", self.adapter)
+        self.assertIn("isVisibleDescendantOfPlayLayer", self.adapter)
+        self.assertIn("current->getParent()", self.adapter)
+        self.assertNotIn("object->getParent() != m_layer->m_objectLayer", self.adapter)
+        self.assertIn("objectArrayEntries", self.adapter)
+        self.assertIn("objectsInVisiblePlayLayerTree", self.adapter)
+        self.assertIn("objectsOutsideVisiblePlayLayerTree", self.adapter)
         self.assertIn("node->getChildren()", self.adapter)
         self.assertIn("getZOrder()", self.adapter)
         self.assertIn("getOrderOfArrival()", self.adapter)
@@ -102,6 +107,9 @@ class RendererProductContract(unittest.TestCase):
         self.assertIn("m_diagnostics.record(sample)", self.coordinator)
         self.assertIn("DashCore_CAPTURE_DIAGNOSTICS", self.coordinator)
         self.assertIn("post_update_avg_ms", self.coordinator)
+        self.assertIn("object_array_entries_total", self.coordinator)
+        self.assertIn("objects_in_visible_playlayer_tree_total", self.coordinator)
+        self.assertIn("objects_outside_visible_playlayer_tree_total", self.coordinator)
         self.assertIn("memory_scope=snapshot_vector_capacity_only", self.coordinator)
         on_frame = self.coordinator.split("void RendererCoordinator::onFrame", 1)[1].split(
             "void RendererCoordinator::onLevelExit", 1
@@ -111,8 +119,20 @@ class RendererProductContract(unittest.TestCase):
         self.assertIn("logLevelDiagnostics(report)", on_exit)
         self.assertIn("percentile95", self.diagnostics_source)
 
+
+    def test_level_exit_bridge_is_idempotent(self):
+        self.assertIn("if (renderCoordinator.active())", self.hooks)
+        exit_hook = self.hooks.split("void onExit()", 1)[1]
+        self.assertLess(
+            exit_hook.index("if (renderCoordinator.active())"),
+            exit_hook.index("PlayLayer::onExit()"),
+        )
+        self.assertIn("notifyLauncherLevelEnded()", exit_hook)
+        self.assertIn("notifyLauncherLevelDiagnostics(report)", exit_hook)
+        self.assertIn("renderCoordinator.onLevelExit()", exit_hook)
+
     def test_readme_describes_diagnostic_stage_without_optimization_claim(self):
-        self.assertIn("0.11.2-alpha", self.readme)
+        self.assertIn("0.11.3-alpha", self.readme)
         self.assertIn("read-only", self.readme.lower())
         self.assertIn("vanilla rendering", self.readme.lower())
         self.assertIn("latest 512 captures", self.readme)
