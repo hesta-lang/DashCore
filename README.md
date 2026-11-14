@@ -1,5 +1,14 @@
 # DashCore — Android rendering optimization
 
+## 0.10.14-alpha — independent callback inventory
+
+- Keeps each Cocos renderer callback independently enabled and sampled. A missing `CCNode::visit`, sprite, batch-node, or texture-atlas hook no longer disables the callbacks that are available.
+- Adds a runtime inventory for every monitored callback: `ABSENT`, `HOOK_DISABLED`, `ENABLED_NOT_OBSERVED`, or `RUNNING`, including hook registration, enablement, invocation count, and timed sample count.
+- AutoTest includes the inventory in JSON and Markdown reports, so a zero count can be distinguished from a missing hook instead of guessing from timing histograms.
+- `PlayLayer::postUpdate` remains only the bounded 180-update sample controller; it does not gate individual renderer callback counters. `CCDirector::drawScene` remains supplementary.
+- Diagnostics stay opt-in and culling stays OFF. Original callbacks are forwarded once; no rendering, gameplay, physics, draw-order, or UI behavior changes. No optimization or FPS improvement is claimed.
+
+
 ## 0.10.13-alpha — independent renderer callback sampling
 
 - Samples `CCNode::visit`, sprite, batch-node, and texture-atlas callbacks using each callback's own bounded call counter; their timing no longer depends on the optional `CCDirector::drawScene` hook.
