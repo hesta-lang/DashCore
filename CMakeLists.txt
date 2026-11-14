@@ -12,16 +12,16 @@ else()
     message(STATUS "Found Geode: $ENV{GEODE_SDK}")
 endif()
 
-add_subdirectory($ENV{GEODE_SDK} \${CMAKE_CURRENT_BINARY_DIR}/geode)
+add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 
-add_library(\${PROJECT_NAME} SHARED \${SOURCES})
-target_include_directories(\${PROJECT_NAME} PRIVATE \${CMAKE_CURRENT_SOURCE_DIR}/src)
+add_library(${PROJECT_NAME} SHARED ${SOURCES})
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-setup_geode_mod(\${PROJECT_NAME})
+setup_geode_mod(${PROJECT_NAME})
 
 if (ANDROID)
     # Current adapter is CPU-only. Link GLES/EGL for the existing read-only context probe.
-    target_link_libraries(\${PROJECT_NAME} GLESv3 EGL)
+    target_link_libraries(${PROJECT_NAME} GLESv3 EGL)
 endif()

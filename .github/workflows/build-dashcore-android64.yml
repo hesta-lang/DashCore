@@ -22,12 +22,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Validate Launcher Diagnostics analyzer
         run: |
           python3 -m py_compile scripts/analyze_launcher_diagnostics.py scripts/test_launcher_diagnostics_analyzer.py
           python3 -m unittest discover -s scripts -p 'test_launcher_diagnostics_analyzer.py' -v
-
       - name: Validate cloud AutoTest fixture and runtime parsers
         run: |
           set -euo pipefail
@@ -43,7 +41,6 @@ jobs:
           python3 scripts/test_autotest_level_builder.py
           python3 scripts/test_gameplay_diagnostics_autotest.py
           python3 scripts/test_autotest_navigation.py
-
       - name: Run renderer, Bismuth bridge and trigger model tests
         run: |
           set -euo pipefail
@@ -69,7 +66,6 @@ jobs:
             tests/renderer_diagnostics_tests.cpp src/renderer/core/RendererDiagnostics.cpp \
             -o /tmp/dashcore-renderer-diagnostics-tests
           /tmp/dashcore-renderer-diagnostics-tests
-
       - name: Run Cppcheck
         run: |
           sudo apt-get update
@@ -82,14 +78,12 @@ jobs:
             --std=c++20 \
             --suppress=missingIncludeSystem \
             src/renderer src/bismuth_bridge
-
   build:
     needs: tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Build Geode mod for Android64
         id: build
         uses: ./.github/actions/build-geode-mod
@@ -99,12 +93,11 @@ jobs:
           android-min-sdk: 29
           build-config: Release
           use-lto: false
-
       - name: Build diagnostics
         if: always()
         env:
-          BUILD_OUTCOME: \${{ steps.build.outcome }}
-          BUILD_OUTPUT: \${{ steps.build.outputs.build-output }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          BUILD_OUTPUT: ${{ steps.build.outputs.build-output }}
         run: |
           echo "## Bismuth trigger adapter Android64 build" >> "$GITHUB_STEP_SUMMARY"
           echo "- Commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
@@ -114,10 +107,9 @@ jobs:
           else
             echo "Build output directory was not produced."
           fi
-
       - name: Upload Android64 package
         uses: actions/upload-artifact@v4
         with:
           name: DashCore-Bismuth-Trigger-Adapter-Android64
-          path: \${{ steps.build.outputs.build-output }}/*.geode
+          path: ${{ steps.build.outputs.build-output }}/*.geode
           if-no-files-found: error
