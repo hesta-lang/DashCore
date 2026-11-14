@@ -10,12 +10,12 @@ This branch develops a separate rendering path for Geometry Dash level objects o
 - Adds CPU quad-geometry preparation and an Android GLES buffer-upload backend with explicit capability detection. It preserves existing Cocos buffer bindings and does not expose a draw/present API.
 - Adds a synchronous Geode adapter over GJBaseGameLayer::m_objects and the main m_objectLayer. It traverses copied Cocos child arrays in z-order/order-of-arrival order without sorting or mutating the live tree.
 - Captures only unbatched sprites with supported blend factors, unrotated/unflipped atlas UVs, no vertex mods, zero vertex depth, rectangular axis-aligned quads, and uniform per-vertex color. Unsupported sprites and objects outside the main object layer remain on vanilla rendering.
-- Refreshes value-only snapshots after the original PlayLayer::postUpdate(float) and clears them on level exit. Engine pointers are not retained in snapshots or coordinator state.
-- Records node visits, root objects, candidate/accepted sprites, rejection reasons, unique textures, snapshot vector capacity, successful/failed captures, and CPU capture/collection durations.
+- Measures the original PlayLayer::postUpdate(float) CPU wall-clock duration separately from the extra snapshot capture and source-collection durations. The original update measurement stops before the capture call begins.
+- Records node visits, root objects, candidate/accepted sprites, rejection reasons, unique textures, snapshot vector capacity, successful/failed captures, and CPU timing distributions.
 - Keeps a fixed 512-sample timing window. Per-level averages cover the full session; p95 values cover the latest 512 captures. One summary is written when leaving the level; there is no per-frame logging.
 - The snapshot_vector_capacity_bytes field estimates only the snapshot vector's element-buffer capacity. It is not total process memory and excludes allocator overhead, temporary child vectors, hash tables, Cocos objects, and GPU resources.
 - Aggregated node/object/sprite counters are cumulative across captured frames. The same level object is counted again on every frame; these totals are work counters, not unique-level-object counts.
-- Capture timings are CPU wall-clock measurements for the adapter and collector. They are not GPU timings or full-frame timings, and they do not isolate the instrumentation's own overhead.
+- Capture timings are CPU wall-clock measurements. The post-update duration covers the original callback; capture and collection durations cover DashCore's work. They are not GPU timings or full-frame timings.
 
 Geometry preparation and GLES buffer upload are not invoked by the game. This milestone does not submit GPU draw calls, replace any original draw call, or change visibility. Geometry Dash's vanilla rendering remains the only visible draw path. Menus, HUD, editor, player, effects, shaders, gameplay, physics, triggers, and input remain vanilla.
 
