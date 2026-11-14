@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Product contract for the read-only DashCore experimental renderer."""
-# Keep the private Android64 Bismuth port prerequisites under CI.
+"""Product contract for the Geode-native DashCore rollback build."""
 from __future__ import annotations
 
 import json
@@ -10,180 +9,81 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
-class RendererProductContract(unittest.TestCase):
+class NativeRendererContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.source = (ROOT / "src/main.cpp").read_text(encoding="utf-8")
-        cls.hooks = (ROOT / "src/renderer/geode/PlayLayerRendererHooks.cpp").read_text(encoding="utf-8")
-        cls.adapter = (ROOT / "src/renderer/geode/GeodeLevelObjectSource.cpp").read_text(encoding="utf-8")
-        cls.coordinator = (ROOT / "src/renderer/geode/RendererCoordinator.cpp").read_text(encoding="utf-8")
-        cls.diagnostics_header = (ROOT / "src/renderer/core/RendererDiagnostics.hpp").read_text(encoding="utf-8")
-        cls.diagnostics_source = (ROOT / "src/renderer/core/RendererDiagnostics.cpp").read_text(encoding="utf-8")
-        cls.metadata = json.loads((ROOT / "mod.json").read_text(encoding="utf-8"))
-        cls.readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        cls.cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
-        cls.module = (ROOT / "src/renderer/geode/ExperimentalRendererModule.cpp").read_text(encoding="utf-8")
-        cls.gles_header = (ROOT / "src/renderer/core/GlesCapabilities.hpp").read_text(encoding="utf-8")
-        cls.gles_source = (ROOT / "src/renderer/core/GlesCapabilities.cpp").read_text(encoding="utf-8")
-        cls.gles_backend = (ROOT / "src/renderer/gles/GLESBackend.cpp").read_text(encoding="utf-8")
-        cls.bismuth_port = (ROOT / "docs/BISMUTH_ANDROID64_PORT.md").read_text(encoding="utf-8")
+        read = lambda path: (ROOT / path).read_text(encoding="utf-8")
+        cls.hooks = read("src/renderer/geode/PlayLayerRendererHooks.cpp")
+        cls.coordinator = read("src/renderer/geode/RendererCoordinator.cpp")
+        cls.readme = read("README.md")
+        cls.cmake = read("CMakeLists.txt")
+        cls.module = read("src/renderer/geode/ExperimentalRendererModule.cpp")
+        cls.metadata = json.loads(read("mod.json"))
 
-    def test_package_identity_and_diagnostic_prerelease(self):
+    def test_package_is_alpha_and_capture_is_off(self):
         self.assertEqual(self.metadata["id"], "hesta.optgod")
-        self.assertEqual(self.metadata["version"], "0.11.7-alpha")
-        self.assertEqual(self.metadata["name"], "DashCore Bismuth Bridge")
+        self.assertEqual(self.metadata["version"], "0.11.8-alpha")
+        self.assertEqual(self.metadata["name"], "DashCore Native Renderer Diagnostics")
         self.assertFalse(self.metadata["settings"]["capture-object-diagnostics"]["default"])
-        self.assertIn('getSettingValue<bool>("capture-object-diagnostics")', self.hooks)
-        self.assertIn("capture_enabled", self.hooks)
-        self.assertIn("project(optgod VERSION 0.11.7)", self.cmake)
-        self.assertIn("0.11.7-alpha", self.module)
+        self.assertIn('"capture-object-diagnostics"', self.hooks)
+        self.assertIn("project(optgod VERSION 0.11.8)", self.cmake)
+        self.assertIn("0.11.8-alpha", self.module)
 
-    def test_bismuth_bridge_keeps_vanilla_rendering_active(self):
-        self.assertIn("vanilla rendering", self.readme.lower())
-        self.assertIn("original cocos renderer", self.readme.lower())
-        self.assertIn("read-only", self.readme.lower())
-        self.assertIn("GLES 2", self.readme)
-
-    def test_gles_profile_covers_bismuth_android_requirements(self):
-        for marker in (
-            "supportsDrawIndirect",
-            "supportsMultiDrawIndirect",
-            "supportsShaderDrawParameters",
-            "supportsSpirVShaders",
-            "supportsDisjointTimerQuery",
-            "extensionEnumerationAvailable",
-        ):
+    def test_no_custom_gles_or_bismuth_backend_is_built(self):
+        for marker in ("GLESv3", "GLES", "EGL", "GLESBackend", "bismuth_bridge", "android-port"):
             with self.subTest(marker=marker):
-                self.assertIn(marker, self.gles_header)
-                self.assertIn(marker, self.gles_source)
-        self.assertIn('eglGetProcAddress("glGetStringi")', self.gles_backend)
-        self.assertIn("kGlNumExtensions", self.gles_backend)
-        self.assertIn("GL_EXT_multi_draw_indirect", self.gles_source)
-        self.assertIn("GL_EXT_disjoint_timer_query", self.gles_source)
-        self.assertIn("no bismuth rendering path", self.bismuth_port.lower())
-        self.assertIn("glsl es 3.20", self.bismuth_port.lower())
-
-    def test_legacy_probes_culling_and_draw_interception_are_absent(self):
-        forbidden = (
-            "StartupProfile",
-            "RenderPipelineProfile",
-            "CullingReasonTelemetry",
-            "render-pipeline-diagnostics",
-            "diagnostics-mode.txt",
-            "static-culling-mode.txt",
-            "load-last-level",
-            "rememberLastPlayedLevel",
-            "runGLESComputeProbeOnce",
-            "runGLESObjectCullingProbeOnce",
-            "AutoTest",
-            "CCDirector::drawScene",
-            "CCNode::visit",
-            "CCSprite::draw",
-            "CCSpriteBatchNode::draw",
-            "CCTextureAtlas::drawQuads",
+                self.assertNotIn(marker, self.cmake)
+                self.assertNotIn(marker, self.readme)
+        forbidden_paths = (
+            "src/renderer/gles/GLESBackend.cpp",
+            "src/renderer/gles/GLESBackend.hpp",
+            "src/renderer/core/GlesCapabilities.cpp",
+            "src/renderer/core/GlesCapabilities.hpp",
+            "src/bismuth_bridge/BismuthBridge.hpp",
+            "src/bismuth_bridge/BismuthTriggerAdapter.cpp",
+            "android-port/src/GLCapabilities.cpp",
         )
-        for marker in forbidden:
-            with self.subTest(marker=marker):
-                self.assertNotIn(marker, self.source)
+        for path in forbidden_paths:
+            with self.subTest(path=path):
+                self.assertFalse((ROOT / path).exists())
 
-    def test_live_capture_uses_only_update_lifecycle_and_never_draw_hooks(self):
-        self.assertIn("#include <Geode/modify/PlayLayer.hpp>", self.hooks)
+    def test_geode_cocos_renderer_is_the_only_visible_draw_path(self):
+        self.assertIn("original Cocos renderer", self.readme)
+        self.assertIn("only visible renderer", self.readme)
+        self.assertNotIn("CCDirector::drawScene", self.hooks)
+        self.assertNotIn("CCNode::visit", self.hooks)
+        self.assertNotIn("CCSprite::draw", self.hooks)
+        self.assertNotIn("CCSpriteBatchNode::draw", self.hooks)
+        self.assertNotIn("glDraw", self.hooks + self.coordinator)
+        self.assertNotIn("egl", (self.hooks + self.coordinator).lower())
+
+    def test_hooks_call_original_post_update_before_cpu_diagnostics(self):
         self.assertIn("PlayLayer::postUpdate(dt)", self.hooks)
-        self.assertIn("steady_clock::now()", self.hooks)
         self.assertIn("onFrame(this, updateNanoseconds)", self.hooks)
-        self.assertIn("PlayLayer::onEnterTransitionDidFinish()", self.hooks)
-        self.assertIn("PlayLayer::onExit()", self.hooks)
         self.assertLess(
             self.hooks.index("PlayLayer::postUpdate(dt)"),
             self.hooks.index("coordinator().onFrame(this, updateNanoseconds)"),
         )
-        for forbidden in (
-            "CCDirector::drawScene",
-            "CCNode::visit",
-            "CCSprite::draw",
-            "CCSpriteBatchNode::draw",
-            "CCTextureAtlas::drawQuads",
-            "present(",
-        ):
-            with self.subTest(forbidden=forbidden):
-                self.assertNotIn(forbidden, self.hooks)
-
-    def test_geode_source_is_bounded_conservative_and_instrumented(self):
-        self.assertIn("m_layer->m_objects", self.adapter)
-        self.assertIn("isVisibleDescendantOfPlayLayer", self.adapter)
-        self.assertIn("current->getParent()", self.adapter)
-        self.assertNotIn("object->getParent() != m_layer->m_objectLayer", self.adapter)
-        self.assertIn("objectArrayEntries", self.adapter)
-        self.assertIn("objectArrayIndexBuilds", self.adapter)
-        self.assertIn("m_cachedRoots", self.adapter)
-        self.assertIn("rebuildObjectIndex", self.adapter)
-        self.assertIn("objectsInPlayLayerTree", self.adapter)
-        self.assertIn("objectsOutsidePlayLayerTree", self.adapter)
-        self.assertIn("node->getChildren()", self.adapter)
-        self.assertIn("getZOrder()", self.adapter)
-        self.assertIn("getOrderOfArrival()", self.adapter)
-        self.assertIn("std::stable_sort", self.adapter)
-        self.assertNotIn("sortAllChildren", self.adapter)
-        self.assertIn("getBatchNode()", self.adapter)
-        self.assertIn("m_bRectRotated", self.adapter)
-        self.assertIn("m_bUseVertexMod", self.adapter)
-        self.assertIn("m_bShouldBeHidden", self.adapter)
-        self.assertIn("getName()", self.adapter)
-        self.assertIn("kMaximumDepth", self.adapter)
-        self.assertIn("kMaximumNodes", self.adapter)
-        self.assertIn("candidateSprites", self.adapter)
-        self.assertIn("uniqueTextures", self.adapter)
-        self.assertIn("collectionNanoseconds", self.adapter)
-
-    def test_diagnostics_are_bounded_and_logged_only_on_level_exit(self):
-        self.assertIn("kTimingSampleWindow = 512", self.diagnostics_header)
-        self.assertIn("std::array<std::uint64_t, kTimingSampleWindow>", self.diagnostics_header)
-        self.assertIn("postUpdateNanoseconds", self.diagnostics_header)
         self.assertIn("m_diagnostics.record(sample)", self.coordinator)
         self.assertIn("if (m_captureEnabled)", self.coordinator)
-        self.assertIn("capture_skipped_frames", self.coordinator)
-        self.assertIn("index_build_total_ms", self.coordinator)
-        self.assertIn("DashCore_CAPTURE_DIAGNOSTICS", self.coordinator)
-        self.assertIn("post_update_avg_ms", self.coordinator)
-        self.assertIn("object_array_entries_indexed_total", self.coordinator)
-        self.assertIn("objects_cached_in_playlayer_tree_total", self.coordinator)
-        self.assertIn("objects_excluded_from_playlayer_tree_index_total", self.coordinator)
-        self.assertIn("sprites_skipped_batch_node_total", self.coordinator)
-        self.assertIn("memory_scope=snapshot_vector_capacity_only", self.coordinator)
-        on_frame = self.coordinator.split("void RendererCoordinator::onFrame", 1)[1].split(
-            "void RendererCoordinator::onLevelExit", 1
-        )[0]
-        self.assertNotIn("log::", on_frame)
-        on_exit = self.coordinator.split("void RendererCoordinator::onLevelExit", 1)[1]
-        self.assertIn("logLevelDiagnostics(report)", on_exit)
-        self.assertIn("percentile95", self.diagnostics_source)
 
-
-    def test_level_exit_bridge_is_idempotent(self):
-        self.assertIn("if (renderCoordinator.active())", self.hooks)
-        exit_hook = self.hooks.split("void onExit()", 1)[1]
-        self.assertLess(
-            exit_hook.index("if (renderCoordinator.active())"),
-            exit_hook.index("PlayLayer::onExit()"),
-        )
-        self.assertIn("notifyLauncherLevelEnded()", exit_hook)
-        self.assertIn("notifyLauncherLevelDiagnostics(report)", exit_hook)
-        self.assertIn("renderCoordinator.onLevelExit()", exit_hook)
-
-    def test_readme_describes_diagnostic_stage_without_optimization_claim(self):
-        # Preserve the original A/B diagnostics contract while documenting the bridge.
-        self.assertIn("0.11.7-alpha", self.readme)
-        self.assertIn("read-only", self.readme.lower())
-        self.assertIn("vanilla rendering", self.readme.lower())
-        self.assertIn("latest 512 captures", self.readme)
-        self.assertIn("A/B baseline", self.readme)
-        self.assertIn("capture-object-diagnostics", self.readme)
-        self.assertIn("not total process memory", self.readme.lower())
-        self.assertIn("post-update time", self.readme.lower())
-        self.assertIn("post-update time", self.readme.lower())
+    def test_no_trigger_hooks_or_gpu_upload_path(self):
+        for marker in (
+            "processMoveActions",
+            "processRotationActions",
+            "processFollowActions",
+            "toggleGroup(",
+            "glGenBuffers",
+            "glBindBuffer",
+            "glBufferData",
+            "glDrawArrays",
+            "glDrawElements",
+        ):
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, self.hooks + self.coordinator)
+        self.assertIn("disabled by default", self.readme.lower())
         self.assertNotIn("improves FPS", self.readme)
         self.assertNotIn("increases FPS", self.readme)
-        self.assertNotIn("replaces the original renderer", self.readme.lower())
 
 
 if __name__ == "__main__":

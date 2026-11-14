@@ -2,10 +2,7 @@
 
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
-#include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/binding/PlayLayer.hpp>
-#include <Geode/binding/GJBaseGameLayer.hpp>
-#include <Geode/binding/CheckpointObject.hpp>
 
 #if defined(GEODE_IS_ANDROID)
 #include <Geode/cocos/platform/android/jni/JniHelper.h>
@@ -182,30 +179,8 @@ class $modify(DashCoreExperimentalPlayLayer, PlayLayer) {
         PlayLayer::onEnterTransitionDidFinish();
         auto const captureEnabled =
             Mod::get()->getSettingValue<bool>("capture-object-diagnostics");
-        auto const triggerAdapterEnabled =
-            Mod::get()->getSettingValue<bool>("enable-bismuth-trigger-state-adapter");
-        dashcore::renderer::geode::coordinator().onLevelInit(
-            this,
-            captureEnabled,
-            triggerAdapterEnabled
-        );
+        dashcore::renderer::geode::coordinator().onLevelInit(this, captureEnabled);
         notifyLauncherLevelStarted();
-    }
-
-    void resetLevel() {
-        PlayLayer::resetLevel();
-        dashcore::renderer::geode::coordinator().onLevelReset();
-    }
-
-    CheckpointObject* createCheckpoint() {
-        auto* checkpoint = PlayLayer::createCheckpoint();
-        dashcore::renderer::geode::coordinator().storeCheckpoint(checkpoint);
-        return checkpoint;
-    }
-
-    void loadFromCheckpoint(CheckpointObject* checkpoint) {
-        PlayLayer::loadFromCheckpoint(checkpoint);
-        dashcore::renderer::geode::coordinator().restoreCheckpoint(checkpoint);
     }
 
     void postUpdate(float dt) {
@@ -229,31 +204,5 @@ class $modify(DashCoreExperimentalPlayLayer, PlayLayer) {
             renderCoordinator.onLevelExit();
         }
         PlayLayer::onExit();
-    }
-};
-
-class $modify(DashCoreBismuthTriggerHooks, GJBaseGameLayer) {
-    // Move calculations are produced by the original method, so the shadow
-    // state consumes the resulting per-frame deltas immediately afterward.
-    void processMoveActions() {
-        GJBaseGameLayer::processMoveActions();
-        dashcore::renderer::geode::coordinator().onMoveActions(this);
-    }
-
-    // Rotation and follow command nodes are read before the vanilla routines
-    // consume their transient state, exactly as Bismuth's observer path does.
-    void processRotationActions() {
-        dashcore::renderer::geode::coordinator().onRotationActions(this);
-        GJBaseGameLayer::processRotationActions();
-    }
-
-    void processFollowActions() {
-        dashcore::renderer::geode::coordinator().onFollowActions(this);
-        GJBaseGameLayer::processFollowActions();
-    }
-
-    void toggleGroup(int groupId, bool enabled) {
-        GJBaseGameLayer::toggleGroup(groupId, enabled);
-        dashcore::renderer::geode::coordinator().onToggleGroup(groupId, enabled);
     }
 };

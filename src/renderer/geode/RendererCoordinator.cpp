@@ -3,7 +3,6 @@
 #include "renderer/geode/GeodeLevelObjectSource.hpp"
 
 #include <Geode/Geode.hpp>
-#include <Geode/binding/PlayLayer.hpp>
 
 #include <chrono>
 #include <iomanip>
@@ -74,11 +73,7 @@ void logLevelDiagnostics(core::RendererDiagnosticSummary const& report) {
 
 } // namespace
 
-void RendererCoordinator::onLevelInit(
-    PlayLayer* layer,
-    bool captureEnabled,
-    bool triggerAdapterEnabled
-) noexcept {
+void RendererCoordinator::onLevelInit(PlayLayer* layer, bool captureEnabled) noexcept {
     ++m_generation;
     if (m_generation == 0) m_generation = 1;
     m_collector.reset(m_generation);
@@ -87,27 +82,7 @@ void RendererCoordinator::onLevelInit(
     m_diagnostics.reset();
     m_frameIndex = 0;
     m_captureEnabled = captureEnabled;
-    m_triggerAdapterEnabled = triggerAdapterEnabled;
     m_active = true;
-
-    if (m_triggerAdapterEnabled) {
-        auto const initialized = layer &&
-            m_triggerAdapter.initialize(layer, layer->m_objects);
-        if (initialized) {
-            ::geode::log::info(
-                "DashCore Bismuth trigger adapter initialized: {} group combinations, {} maximum group ID; CPU reference state only.",
-                m_triggerAdapter.model().combinationCount(),
-                m_triggerAdapter.model().maximumGroupId()
-            );
-        } else {
-            m_triggerAdapterEnabled = false;
-            ::geode::log::warn(
-                "DashCore Bismuth trigger adapter could not initialize; vanilla Geometry Dash trigger processing remains active."
-            );
-        }
-    } else {
-        m_triggerAdapter.reset();
-    }
 }
 
 void RendererCoordinator::onFrame(
@@ -115,9 +90,6 @@ void RendererCoordinator::onFrame(
     std::uint64_t originalPostUpdateNanoseconds
 ) noexcept {
     if (!m_active || !layer) return;
-
-    if (m_triggerAdapterEnabled)
-        m_triggerAdapter.captureVisualEffects(layer->m_effectManager);
 
     core::CaptureFrameSample sample{};
     sample.postUpdateNanoseconds = originalPostUpdateNanoseconds;
@@ -161,59 +133,7 @@ void RendererCoordinator::onFrame(
     ++m_frameIndex;
 }
 
-void RendererCoordinator::onMoveActions(GJBaseGameLayer* layer) noexcept {
-    if (m_active && m_triggerAdapterEnabled)
-        m_triggerAdapter.observeMoveActions(layer);
-}
-
-void RendererCoordinator::onRotationActions(GJBaseGameLayer* layer) noexcept {
-    if (m_active && m_triggerAdapterEnabled)
-        m_triggerAdapter.observeRotationActions(layer);
-}
-
-void RendererCoordinator::onFollowActions(GJBaseGameLayer* layer) noexcept {
-    if (m_active && m_triggerAdapterEnabled)
-        m_triggerAdapter.observeFollowActions(layer);
-}
-
-void RendererCoordinator::onToggleGroup(std::int32_t groupId, bool enabled) noexcept {
-    if (m_active && m_triggerAdapterEnabled)
-        m_triggerAdapter.observeToggleGroup(groupId, enabled);
-}
-
-void RendererCoordinator::onLevelReset() noexcept {
-    if (m_active && m_triggerAdapterEnabled)
-        m_triggerAdapter.resetStates();
-}
-
-void RendererCoordinator::storeCheckpoint(CheckpointObject* checkpoint) {
-    if (m_active && m_triggerAdapterEnabled)
-        m_triggerAdapter.storeCheckpoint(checkpoint);
-}
-
-void RendererCoordinator::restoreCheckpoint(CheckpointObject* checkpoint) noexcept {
-    if (m_active && m_triggerAdapterEnabled &&
-        !m_triggerAdapter.restoreCheckpoint(checkpoint)) {
-        // A missing optional shadow snapshot never changes native checkpoint handling.
-    }
-}
-
 void RendererCoordinator::onLevelExit() noexcept {
-    if (m_active && m_triggerAdapterEnabled) {
-        auto const& stats = m_triggerAdapter.stats();
-        ::geode::log::info(
-            "DashCore_BISMUTH_TRIGGER_DIAGNOSTICS move={} rotate={} follow={} toggle={} opacity_frames={} pulse_entries={} color_channel_samples={} group_combinations={}",
-            stats.moveActions,
-            stats.rotationActions,
-            stats.followActions,
-            stats.toggleActions,
-            stats.opacityCaptures,
-            stats.pulseCaptures,
-            stats.colorChannelCaptures,
-            m_triggerAdapter.model().combinationCount()
-        );
-    }
-
     if (m_active) {
         auto const report = m_diagnostics.summary();
         if (report.totalFrames != 0) {
@@ -227,9 +147,7 @@ void RendererCoordinator::onLevelExit() noexcept {
 
     m_snapshot = {};
     m_source.reset(nullptr);
-    m_triggerAdapter.reset();
     m_captureEnabled = false;
-    m_triggerAdapterEnabled = false;
     m_active = false;
     m_frameIndex = 0;
 }

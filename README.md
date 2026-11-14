@@ -1,39 +1,27 @@
-# DashCore — Bismuth Android Bridge
+# DashCore — Geode Native Renderer
 
-## 0.11.7-alpha — Bismuth trigger-state adapter and A/B diagnostics
+## 0.11.8-alpha — restore the original Geode rendering path
 
-This branch preserves vanilla rendering through the original Geometry Dash renderer and adds an optional CPU-side Bismuth-compatible trigger-state mirror for Android64. The mirror is disabled by default and does not change gameplay or visible rendering.
+This validation release removes the experimental Bismuth/OpenGL ES bridge and returns rendering to Geometry Dash's original Cocos renderer supplied through Geode.
 
-- Adds a Bismuth-style group-combination model: unique sets of up to ten group IDs share one transform/opacity state, with CPU move/rotation updates, toggle state, pulse offsets and checkpoint snapshots.
-- Observes the native Move, Rotate, Follow and Toggle trigger state while still calling every original Geometry Dash method. It samples Alpha opacity, Color channel state and Pulse action metadata after vanilla postUpdate.
-- Exports a fixed 64-byte aligned group-state record layout for a future GPU backend. This is a data contract only; the current milestone does not upload a GPU buffer or dispatch a Compute Shader.
-- Keeps the original Cocos renderer as the only visible draw path. No object positions, rotations, visibility, physics, collisions, sections, Z-order, batching, Cocos nodes or draw calls are changed by the adapter.
-- The existing Bismuth sprite bridge still exposes object/sprite roles, traversal order, affine transforms and existing batch-layer metadata with borrowed pointers valid only during visitor callbacks.
-- The current launcher uses Geode's original GLES 2 context. Compute Shaders and SSBOs are unavailable in that active context; the bridge never creates another EGL context or changes the requested context version.
-- Keeps capture-object-diagnostics off by default. The new enable-bismuth-trigger-state-adapter setting is also off by default and enables only the CPU shadow-state mirror.
-- Retains existing object-capture diagnostics, launcher JSONL markers, A/B measurements and conservative sprite extraction.
+- Removes the Bismuth sprite/object bridge and the CPU trigger-state mirror.
+- Removes the custom GLES backend that created OpenGL buffers and uploaded prepared geometry.
+- Removes GLES capability probing, Android Bismuth bridge helpers, and the corresponding tests.
+- Removes explicit GLESv3/EGL link dependencies from DashCore.
+- Keeps only CPU-side level lifecycle and timing diagnostics. The capture-object-diagnostics setting remains off by default.
+- The original PlayLayer::postUpdate method is called first; DashCore measures its CPU duration afterward. It does not hook Cocos draw/visit/present functions.
+- No trigger functions are replaced or mirrored. No GameObject, Cocos node, sprite, batch, Z-order, visibility, physics, or gameplay state is changed.
 
-The adapter is a validation milestone, not an optimization release. It does not yet draw through Bismuth, does not claim pixel parity, and makes no FPS/performance claim. See docs/BISMUTH-TRIGGER-ADAPTER.md, docs/BISMUTH_BRIDGE.md, and docs/BISMUTH_ANDROID64_PORT.md.
+There is no custom OpenGL ES renderer, no GPU buffer upload, no Compute Shader, and no Bismuth draw submission in this version. The only visible renderer is the original Geometry Dash/Geode Cocos renderer.
 
-## Semiautomatic physical-device testing
+## Diagnostics
 
-The repeatable phone workflow, ZIP export instructions, JSONL analyzer usage, and OFF/ON comparison requirements are documented in docs/PRUEBAS_SEMIAUTOMATICAS.md. The standard-library analyzer is scripts/analyze_launcher_diagnostics.py; CI runs its unit tests before the Android64 build.
+The optional capture-object-diagnostics mode is a CPU-side read-only inspection path for A/B diagnosis. It is disabled by default and should remain off during normal play. With it disabled, DashCore does not traverse the level object tree or capture sprites; it only observes the existing PlayLayer lifecycle and records CPU callback timing.
+
+Launcher Diagnostics can continue recording callback cadence, wall time, thread CPU time, process memory and thermal state. GPU timer queries, GL capability probing and EGL swap-interval overrides are removed from the launcher diagnostic path.
 
 ## Build and validation
 
-The Android64 workflow checks the product contract, compiles the standalone renderer and trigger-state model tests with C++20, runs Cppcheck, and builds the Geode package for Android64 with Android API 29 minimum.
+The Android64 workflow tests the CPU geometry/diagnostic models and product contract, runs Cppcheck, and builds the Geode package for Android64 with Android API 29 minimum.
 
-Cloud gameplay automation and physical Huawei Y9s validation are separate gates. A cloud emulator result is not evidence of performance on Kirin 710F / Mali-G51 hardware.
-
-## Launcher Diagnostics bridge
-
-On Android, the experimental PlayLayer hooks send onLevelStarted(null, null) and onLevelEnded() lifecycle markers to com.geode.launcher.LauncherDiagnostics when that launcher component is present. The launcher remains responsible for recording frame cadence, Cocos callback wall time, GL-thread CPU time, process memory and thermal status. If the launcher class or method is unavailable, the bridge clears the lookup exception and leaves gameplay unchanged.
-
-The bridge also forwards the completed RendererDiagnosticSummary as a structured JSON payload through LauncherDiagnostics.onDashCoreLevelDiagnostics(String). These values are CPU-side diagnostics, not GPU draw-call counts, and do not inspect or replace the visible draw path.
-
-
-## Retained 0.11.6-alpha A/B diagnostic baseline
-
-The original object/sprite compatibility bridge remains read-only: it borrows Cocos objects only during visitor callbacks and never changes the scene tree. The 0.11.6-alpha snapshot milestone and the 0.11.7-alpha trigger-state mirror both keep the vanilla rendering path as the only visible draw path.
-
-The capture-object-diagnostics option is an A/B measurement mode. The A/B baseline is DashCore installed with capture-object-diagnostics off; the capture variant uses the same level and settings with it on. The fixed timing window reports p95 values for the latest 512 captures. The post-update time measures the original PlayLayer callback and stops before snapshot capture begins. Snapshot vector capacity is an estimate only, not total process memory. These diagnostic measurements do not establish a GPU cost, visual parity, or an FPS improvement.
+This is a rollback/validation prerelease, not an optimization release. It makes no FPS, rendering-parity, or performance-improvement claim.

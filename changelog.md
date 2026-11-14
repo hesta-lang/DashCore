@@ -1,13 +1,14 @@
-## 0.11.7-alpha — Bismuth-style Android trigger-state adapter
-- Adds a CPU group-combination model with stable per-object combination indices, Move/Rotate/Follow transforms, Toggle/Alpha state, Pulse metadata and checkpoint snapshots.
-- Observes vanilla trigger/effect state while always calling the original Geometry Dash trigger methods. The adapter is disabled by default.
-- Adds host-side unit tests for group combination indexing, transforms, opacity, toggle, checkpoint restore and the 64-byte GPU record layout.
-- Adds a GLES-compatible CPU reference milestone and a future SSBO record contract only. No GLES Compute Shader is dispatched, no GPU draw path is enabled, and no rendering/gameplay state is mutated.
-- Keeps the original Cocos renderer as the only visible draw path; no performance or pixel-parity claim is made.
+## 0.11.8-alpha — restore Geode's original renderer
+- Removes all DashCore Bismuth sprite/object and trigger-state adapters.
+- Removes the custom GLES backend, GL buffer creation/upload path, GLES capability probing, and GLESv3/EGL link dependencies.
+- Removes the unused Android Bismuth GL capability bridge and its documentation/tests.
+- Keeps the original Geometry Dash/Geode Cocos renderer as the only visible draw path.
+- Keeps optional CPU-only diagnostics, disabled by default. No performance or FPS claim is made.
 
-## 0.11.6-alpha — read-only Bismuth object bridge
-- Adds the Bismuth sprite/object view adapter and current EGL/GLES capability query.
-- Preserves the original Cocos renderer and does not submit replacement draw calls.
+## 0.11.5-alpha — indexed capture and A/B diagnostic modes
+- Adds bounded read-only level object/sprite capture and per-level CPU timing summaries.
+- Keeps capture disabled by default and leaves vanilla Cocos rendering as the only visible draw path.
+- Measures the original PlayLayer::postUpdate callback separately from optional snapshot capture.
 
 ## 0.11.1-alpha — bounded capture diagnostics
 - Adds per-level counts for nodes, root objects, candidate/accepted sprites, unsupported sprite categories, traversal limits, and unique texture keys.

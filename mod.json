@@ -1,22 +1,21 @@
 {
   "geode": "5.11.2",
-  "gd": { "android": "2.2081" },
+  "gd": {
+    "android": "2.2081"
+  },
   "id": "hesta.optgod",
-  "name": "DashCore Bismuth Bridge",
-  "version": "0.11.7-alpha",
+  "name": "DashCore Native Renderer Diagnostics",
+  "version": "0.11.8-alpha",
   "developer": "hesta-lang",
-  "description": "Optional CPU-side Bismuth-compatible trigger-state mirror for Android64. Observes vanilla Move, Rotate, Follow, Toggle, Alpha, Color and Pulse state while preserving original gameplay and rendering. Compute Shaders and replacement draw submission are not enabled.",
-  "tags": ["optimizations", "performance"],
+  "description": "CPU-only diagnostic tools for Geometry Dash Android. Uses the original Geometry Dash/Geode Cocos renderer; no custom OpenGL ES backend or Bismuth rendering bridge is included.",
+  "tags": [
+    "optimizations",
+    "performance"
+  ],
   "settings": {
     "capture-object-diagnostics": {
       "name": "Capture object diagnostics",
-      "description": "Enables per-frame read-only object and sprite capture for the A/B comparison. When disabled, DashCore only sends level lifecycle markers while Launcher Diagnostics measures the game. Changes apply from the next level.",
-      "type": "bool",
-      "default": false
-    },
-    "enable-bismuth-trigger-state-adapter": {
-      "name": "Enable Bismuth trigger-state adapter",
-      "description": "Mirrors vanilla Move, Rotate, Follow, Toggle, Alpha, Color and Pulse state into CPU group-combination snapshots. Does not replace trigger processing or render anything. Intended for alpha validation; disabled by default.",
+      "description": "Enables optional per-frame read-only CPU inspection of level objects for diagnostics. Disabled by default; no custom renderer or OpenGL calls are used.",
       "type": "bool",
       "default": false
     }
