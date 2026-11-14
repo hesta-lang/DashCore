@@ -6,6 +6,9 @@
 
 namespace dashcore::renderer::gles {
 
+// Read-only query of the already-current Cocos EGL/GLES context.
+core::GlesCapabilities queryCurrentContextCapabilities() noexcept;
+
 class GLESBackend final : public core::RenderBackend {
 public:
     bool initialize() override;
