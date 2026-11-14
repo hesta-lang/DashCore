@@ -152,6 +152,20 @@ class RenderPipelineContractTests(unittest.TestCase):
         self.assertNotIn("drawSceneReady", readiness)
         self.assertIn("atlasQuadsReady && atlasCountReady;", self.source)
 
+    def test_renderer_callbacks_are_sampled_independently_of_director(self):
+        self.assertNotIn("sampleThisFrame", self.source)
+        for marker in (
+            "g_rendererProfile.nodeVisit.calls % kRenderPipelineTimingStride == 0",
+            "g_rendererProfile.spriteDraw.calls % kRenderPipelineTimingStride == 0",
+            "g_rendererProfile.batchDraw.calls % kRenderPipelineTimingStride == 0",
+            "g_rendererProfile.atlasDrawQuads.calls % kRenderPipelineTimingStride == 0",
+            "g_rendererProfile.atlasDrawNumberOfQuads.calls % kRenderPipelineTimingStride == 0",
+            "bool const timedDrawFrame = rendererFrame &&",
+            "RENDER-CALLBACK {}: calls={}, timedCalls={}",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.source)
+
     def test_culling_remains_default_off(self):
         self.assertIs(
             self.metadata["settings"]["experimental-render-culling"]["default"],
@@ -198,7 +212,7 @@ class RenderPipelineContractTests(unittest.TestCase):
 
 
     def test_diagnostic_release_version_and_defaults(self):
-        self.assertEqual(self.metadata["version"], "0.10.12-alpha")
+        self.assertEqual(self.metadata["version"], "0.10.13-alpha")
         self.assertIs(self.metadata["settings"]["render-pipeline-diagnostics"]["default"], False)
         self.assertIs(self.metadata["settings"]["experimental-render-culling"]["default"], False)
         self.assertIn("does not change rendering", self.metadata["settings"]["render-pipeline-diagnostics"]["description"])
