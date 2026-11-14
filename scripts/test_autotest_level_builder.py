@@ -28,6 +28,13 @@ class AutoTestLevelBuilderTests(unittest.TestCase):
         self.assertEqual(stats["section_3_decorative_objects"], 474)
         self.assertEqual(level.count(";"), stats["total_objects"] + 1)
 
+    def test_level_payload_k4_uses_gzip_before_base64(self):
+        entry, stats = builder.build_level_entry()
+        compressed = base64.urlsafe_b64decode(entry["k4"].encode("ascii"))
+        self.assertEqual(compressed[:2], bytes((0x1f, 0x8b)))
+        decoded = gzip.decompress(compressed).decode("utf-8")
+        self.assertEqual(decoded.count(";1,"), stats["total_objects"])
+
     def test_encrypted_save_round_trip_preserves_existing_levels(self):
         fixture = {
             "LLM_01": {
