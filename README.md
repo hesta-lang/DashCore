@@ -21,6 +21,10 @@ Geometry preparation and GLES buffer upload are not invoked by the game. This mi
 
 This diagnostic build is a measurement stage, not an optimization release. The A/B baseline is DashCore installed with `capture-object-diagnostics` off; the capture variant is the same setup with it on. Keep the same level, StartPos, duration, refresh rate, graphics settings, and background-app state for both runs. Compare `render_window` frame-interval and callback wall/CPU statistics plus process CPU/PSS; use `capture_avg_ms`, `collection_avg_ms`, and `index_build_total_ms` to quantify the added diagnostic work. No FPS improvement or performance claim is made.
 
+## Semiautomatic physical-device testing
+
+The repeatable phone workflow, ZIP export instructions, JSONL analyzer usage, and OFF/ON comparison requirements are documented in [docs/PRUEBAS_SEMIAUTOMATICAS.md](docs/PRUEBAS_SEMIAUTOMATICAS.md). The standard-library analyzer is `scripts/analyze_launcher_diagnostics.py`; CI runs its unit tests before the Android64 build.
+
 ## Build and validation
 
 The Android64 workflow checks the product contract, compiles the standalone renderer model and diagnostics tests with C++20, runs Cppcheck, and builds the Geode package for Android64 with Android API 29 minimum.
