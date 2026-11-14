@@ -131,14 +131,75 @@ def main() -> int:
     print(f"AUTOTEST-LEVEL: {args.level_name} | objects={level_manifest.get('total_objects')}")
     print(f"AUTOTEST-OBSERVATION: {args.observation_seconds}s")
     print("AUTOTEST-CONFIG: capture-object-diagnostics=ON; vanilla rendering remains unchanged.")
-    run = runtime.run_variant(
-        variant_args, "GAMEPLAY_DIAGNOSTICS", mod_enabled=True,
-        culling_mode="off", diagnostics_mode="off", geometry_diagnostics=False,
-        render_pipeline_mode="off", render_pipeline_wait_s=0,
-        test_level_name=args.level_name,
-        observation_seconds=args.observation_seconds,
-        capture_object_diagnostics=True,
-    )
+    try:
+        run = runtime.run_variant(
+            variant_args, "GAMEPLAY_DIAGNOSTICS", mod_enabled=True,
+            culling_mode="off", diagnostics_mode="off", geometry_diagnostics=False,
+            render_pipeline_mode="off", render_pipeline_wait_s=0,
+            test_level_name=args.level_name,
+            observation_seconds=args.observation_seconds,
+            capture_object_diagnostics=True,
+        )
+    except Exception as exc:
+        # Preserve a structured INCOMPLETE result even when UI navigation fails.
+        # The workflow remains failed, but the trusted exporter can still send
+        # the failure reason and callback inventory (when available) to PostHog.
+        session_dir = args.report_dir / "gameplay-diagnostics"
+        log_path = session_dir / "combined-geode-log.txt"
+        combined_log = (
+            log_path.read_text(encoding="utf-8", errors="replace")
+            if log_path.is_file() else ""
+        )
+        diagnostics = inspect_runtime_log(combined_log)
+        report = {
+            "result": "incomplete",
+            "test_mode": "single_generated_level_gameplay_diagnostics_only",
+            "gameplay_verified": False,
+            "level_selection_verified": False,
+            "launcher_crash_detected": None,
+            "runtime_error": {
+                "stage": "level_navigation_or_gameplay_capture",
+                "type": type(exc).__name__,
+                "message": str(exc)[:600],
+            },
+            "test_level": {
+                "name": args.level_name,
+                "object_count": level_manifest.get("total_objects"),
+                "floor_objects": level_manifest.get("floor_objects"),
+                "density_sections": level_manifest.get("sections"),
+                "manifest_sha256": level_manifest.get("output_sha256"),
+            },
+            "dashcore_mod_enabled_for_session": True,
+            "capture_object_diagnostics": "ON",
+            "vanilla_rendering": "UNCHANGED",
+            "draw_replacement": False,
+            "visibility_or_gameplay_changes": False,
+            "device_profile_assessment": assessment,
+            "cloud_guest": actual_guest,
+            "runtime_metrics": {},
+            "diagnostics": diagnostics,
+            "limitations": [
+                "Gameplay and level selection were not verified because the runtime session ended before the capture window.",
+                "Cloud Android emulator only; Huawei Y9s / Kirin 710F / Mali-G51 hardware is NOT EMULATED.",
+                "An incomplete AutoTest is not evidence of an FPS improvement or regression.",
+            ],
+        }
+        (args.report_dir / "autotest-gameplay-diagnostics.json").write_text(
+            json.dumps(report, indent=2) + "\\n", encoding="utf-8"
+        )
+        (args.report_dir / "autotest-gameplay-diagnostics.md").write_text(
+            "# DashCore AutoTest — INCOMPLETE\\n\\n"
+            f"- Result: **INCOMPLETE**\\n"
+            f"- Stage: **{report['runtime_error']['stage']}**\\n"
+            f"- Error: **{report['runtime_error']['type']}**\\n"
+            f"- Reason: {report['runtime_error']['message']}\\n"
+            "- Gameplay verified: **no**\\n"
+            "- No optimization conclusion can be drawn from this run.\\n",
+            encoding="utf-8",
+        )
+        print("AUTOTEST-RESULT: INCOMPLETE (runtime navigation/capture error)")
+        print(f"AUTOTEST-ERROR: {type(exc).__name__}: {str(exc)[:600]}")
+        raise
 
     session_dir = args.report_dir / "gameplay-diagnostics"
     log_path = session_dir / "combined-geode-log.txt"
