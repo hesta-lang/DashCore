@@ -1,16 +1,21 @@
-name: DashCore AutoTest - Gameplay diagnostics only
+name: DashCore AutoTest - Generated level on cloud emulator
 
 on:
   workflow_run:
     workflows: ["Build DashCore (Android64)"]
     types: [completed]
-    branches: [main]
+    branches: [experimental-renderer]
   workflow_dispatch:
     inputs:
       mediafire_url:
         description: "MediaFire file-page URL for your authorized Geometry Dash 2.2081 APK. Can also be supplied as GEOMETRY_DASH_MEDIAFIRE_URL secret."
         required: false
         default: "https://www.mediafire.com/file/o9rk5i69nmu0nci/Geometry+Dash_2.2081.apk/file"
+        type: string
+      build_run_id:
+        description: "Optional successful DashCore Android64 build run ID; empty selects the latest successful build on this branch."
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -38,6 +43,8 @@ jobs:
           BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
           BUILD_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
           EVENT_NAME: ${{ github.event_name }}
+          BUILD_BRANCH: ${{ github.ref_name }}
+          INPUT_BUILD_RUN_ID: ${{ inputs.build_run_id }}
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "workflow_run" ]; then
@@ -52,13 +59,31 @@ jobs:
           import json, os, urllib.request
           repo = os.environ["GITHUB_REPOSITORY"]
           token = os.environ["GH_TOKEN"]
-          url = f"https://api.github.com/repos/{repo}/actions/workflows/build-dashcore-android64.yml/runs?branch=main&status=success&per_page=20"
-          req = urllib.request.Request(url, headers={"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}"})
-          with urllib.request.urlopen(req, timeout=30) as response:
-              runs = json.load(response).get("workflow_runs", [])
-          if not runs:
-              raise SystemExit("No successful Android64 build found on main.")
-          selected = runs[0]
+          branch = os.environ["BUILD_BRANCH"]
+          requested = os.environ.get("INPUT_BUILD_RUN_ID", "").strip()
+          if not branch or branch == "main":
+              raise SystemExit("Run this AutoTest from experimental-renderer, not main.")
+          base = f"https://api.github.com/repos/{repo}/actions"
+          headers = {"Accept":"application/vnd.github+json","Authorization":f"Bearer {token}"}
+          if requested:
+              url = f"{base}/runs/{requested}"
+              req = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  selected = json.load(response)
+              if selected.get("head_branch") != branch or selected.get("conclusion") != "success":
+                  raise SystemExit("The supplied build run must be successful and belong to this branch.")
+              if selected.get("path", "").endswith("build-dashcore-android64.yml") is False:
+                  raise SystemExit("The supplied run is not the DashCore Android64 build workflow.")
+          else:
+              from urllib.parse import quote
+              url = (f"{base}/workflows/build-dashcore-android64.yml/runs"
+                     f"?branch={quote(branch, safe='')}&status=success&per_page=20")
+              req = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  runs = json.load(response).get("workflow_runs", [])
+              if not runs:
+                  raise SystemExit(f"No successful Android64 build found on {branch}.")
+              selected = runs[0]
           print(f"run_id={selected['id']}")
           print(f"head_sha={selected['head_sha']}")
           PY
@@ -191,6 +216,7 @@ jobs:
           adb -s "$SERIAL" shell pm path "$GAME_PACKAGE" | grep '^package:' >/dev/null
           echo "Game package: $GAME_PACKAGE; versionName: $GAME_VERSION" | tee "$REPORT_DIR/game-version.txt"
           echo "serial=$SERIAL" >> "$GITHUB_OUTPUT"
+          echo "game_package=$GAME_PACKAGE" >> "$GITHUB_OUTPUT"
 
       - name: Install gameplay screenshot OCR
         run: |
@@ -198,10 +224,84 @@ jobs:
           sudo apt-get install -y --no-install-recommends tesseract-ocr
           python3 -m pip install --disable-pip-version-check pillow
 
-      - name: Validate gameplay-only AutoTest and histogram parser
+
+      - name: Initialize Geometry Dash and inject deterministic AutoTest level
+        id: fixture
+        env:
+          SERIAL: ${{ steps.device.outputs.serial }}
+          GAME_PACKAGE: ${{ steps.device.outputs.game_package }}
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/autotest_ab.py scripts/autotest_gameplay_diagnostics.py scripts/test_gameplay_diagnostics_autotest.py
+          mkdir -p test-input reports/autotest-level
+          adb -s "$SERIAL" root
+          adb -s "$SERIAL" wait-for-device
+          DEVICE_ID="$(adb -s "$SERIAL" shell id | tr -d '\\r')"
+          echo "$DEVICE_ID" | tee reports/autotest-level/adb-root.txt
+          if ! echo "$DEVICE_ID" | grep -q 'uid=0'; then
+            echo "::error::The cloud emulator did not grant adb root; the test level cannot be installed into Geometry Dash's private save."
+            exit 1
+          fi
+
+          # A first game launch creates its private save directory on a clean emulator.
+          adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d geode-launcher://main/launch -p com.geode.launcher || true
+          sleep 25
+          adb -s "$SERIAL" shell am force-stop com.geode.launcher || true
+
+          SAVE_PATH="$(adb -s "$SERIAL" shell "find /data/user/0 /data/data /sdcard/Android/media -type f -name CCLocalLevels.dat 2>/dev/null | head -n 1" | tr -d '\\r')"
+          if [ -n "$SAVE_PATH" ]; then
+            SAVE_DIR="$(dirname "$SAVE_PATH")"
+            adb -s "$SERIAL" pull "$SAVE_PATH" test-input/CCLocalLevels.original.dat
+            python3 scripts/build_autotest_level.py \
+              --input test-input/CCLocalLevels.original.dat \
+              --output test-input/CCLocalLevels.autotest.dat \
+              --summary reports/autotest-level/autotest-level.json
+          else
+            MANAGER_PATH="$(adb -s "$SERIAL" shell "find /data/user/0 /data/data /sdcard/Android/media -type f -name CCGameManager.dat 2>/dev/null | head -n 1" | tr -d '\\r')"
+            if [ -n "$MANAGER_PATH" ]; then
+              SAVE_DIR="$(dirname "$MANAGER_PATH")"
+            else
+              SAVE_DIR="/data/user/0/$GAME_PACKAGE/files"
+            fi
+            adb -s "$SERIAL" shell "test -d '$SAVE_DIR'" || {
+              echo "::error::Could not locate the Geometry Dash private save directory after first launch."
+              exit 1
+            }
+            python3 scripts/build_autotest_level.py \
+              --output test-input/CCLocalLevels.autotest.dat \
+              --summary reports/autotest-level/autotest-level.json
+            SAVE_PATH="$SAVE_DIR/CCLocalLevels.dat"
+          fi
+
+          OWNER="$(adb -s "$SERIAL" shell "stat -c '%u:%g' '$SAVE_DIR'" | tr -d '\\r')"
+          if [ -z "$OWNER" ]; then
+            echo "::error::Could not determine the Geometry Dash save-directory owner."
+            exit 1
+          fi
+          adb -s "$SERIAL" push test-input/CCLocalLevels.autotest.dat "$SAVE_PATH"
+          adb -s "$SERIAL" shell "chown '$OWNER' '$SAVE_PATH' && chmod 600 '$SAVE_PATH'"
+          EXPECTED_SHA="$(python3 -c 'import json; print(json.load(open("reports/autotest-level/autotest-level.json"))["output_sha256"])')"
+          ACTUAL_SHA="$(adb -s "$SERIAL" shell "sha256sum '$SAVE_PATH'" | awk '{print $1}' | tr -d '\\r')"
+          if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
+            echo "::error::Installed CCLocalLevels.dat checksum does not match generated fixture."
+            exit 1
+          fi
+          {
+            echo "save_path=$SAVE_PATH"
+            echo "save_owner=$OWNER"
+            echo "save_sha256=$ACTUAL_SHA"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "Installed local level: DashCore AutoTest"
+            echo "Save path: $SAVE_PATH"
+            echo "Owner: $OWNER"
+            echo "SHA-256: $ACTUAL_SHA"
+          } | tee reports/autotest-level/install.txt
+
+      - name: Validate generated-level AutoTest and histogram parser
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/autotest_ab.py scripts/autotest_gameplay_diagnostics.py scripts/build_autotest_level.py scripts/test_autotest_level_builder.py scripts/test_gameplay_diagnostics_autotest.py
+          python3 scripts/test_autotest_level_builder.py
           python3 scripts/test_gameplay_diagnostics_autotest.py
           python3 scripts/test_render_pipeline_contract.py
 
@@ -216,13 +316,16 @@ jobs:
             --serial "$SERIAL" \
             --mod-file "$MOD" \
             --base-dir /sdcard/Android/media/com.geode.launcher \
-            --report-dir "$REPORT_DIR"
+            --report-dir "$REPORT_DIR" \
+            --level-name "DashCore AutoTest" \
+            --level-manifest reports/autotest-level/autotest-level.json \
+            --observation-seconds 20
 
       - name: Upload gameplay diagnostics report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-Gameplay-Diagnostics-${{ github.run_number }}
+          name: DashCore-AutoTest-Cloud-${{ github.run_number }}
           path: |
             reports/
             artifacts/mod/
