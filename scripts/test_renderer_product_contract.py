@@ -29,11 +29,13 @@ class NativeRendererContract(unittest.TestCase):
         cls.dynamic_header = read("src/renderer/geode/GlesDynamicSsboProbe.hpp")
         cls.transfer_benchmark = read("src/renderer/geode/GlesSsboTransferBenchmark.cpp")
         cls.transfer_benchmark_header = read("src/renderer/geode/GlesSsboTransferBenchmark.hpp")
+        cls.async_transfer_benchmark = read("src/renderer/geode/GlesSsboAsyncTransferBenchmark.cpp")
+        cls.async_transfer_benchmark_header = read("src/renderer/geode/GlesSsboAsyncTransferBenchmark.hpp")
         cls.metadata = json.loads(read("mod.json"))
 
     def test_package_is_alpha_and_diagnostics_are_opt_in(self):
         self.assertEqual(self.metadata["id"], "hesta.optgod")
-        self.assertEqual(self.metadata["version"], "0.14.0-alpha")
+        self.assertEqual(self.metadata["version"], "0.15.0-alpha")
         self.assertEqual(self.metadata["name"], "DashCore Native Renderer Diagnostics")
         self.assertFalse(self.metadata["settings"]["capture-object-diagnostics"]["default"])
         self.assertFalse(self.metadata["settings"]["gles-compute-diagnostic-probe"]["default"])
@@ -42,9 +44,11 @@ class NativeRendererContract(unittest.TestCase):
         self.assertIn('"gles-compute-diagnostic-probe"', self.hooks)
         self.assertIn('"gles-dynamic-ssbo-diagnostic-probe"', self.hooks)
         self.assertFalse(self.metadata["settings"]["gles-ssbo-transfer-benchmark"]["default"])
+        self.assertFalse(self.metadata["settings"]["gles-ssbo-async-transfer-benchmark"]["default"])
         self.assertIn('"gles-ssbo-transfer-benchmark"', self.hooks)
-        self.assertIn("project(optgod VERSION 0.14.0)", self.cmake)
-        self.assertIn("0.14.0-alpha", self.module)
+        self.assertIn('"gles-ssbo-async-transfer-benchmark"', self.hooks)
+        self.assertIn("project(optgod VERSION 0.15.0)", self.cmake)
+        self.assertIn("0.15.0-alpha", self.module)
 
     def test_memory_budget_and_os_limit_diagnostics_are_read_only(self):
         self.assertIn("MemAvailable:", self.memory_source)
@@ -151,6 +155,34 @@ class NativeRendererContract(unittest.TestCase):
         self.assertNotIn("PlayLayer", self.transfer_benchmark)
         self.assertNotIn("m_objects", self.transfer_benchmark)
 
+
+    def test_async_ssbo_benchmark_uses_zero_timeout_fences_and_is_frame_stepped(self):
+        setting = self.metadata["settings"]["gles-ssbo-async-transfer-benchmark"]
+        self.assertFalse(setting["default"])
+        self.assertIn('getSettingValue<bool>("gles-ssbo-async-transfer-benchmark")', self.hooks)
+        self.assertIn("tickGlesSsboAsyncTransferBenchmark(enabled)", self.hooks)
+        self.assertIn("cancelGlesSsboAsyncTransferBenchmark();", self.hooks)
+        self.assertIn("GLsync fence", self.async_transfer_benchmark)
+        self.assertIn("glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0)", self.async_transfer_benchmark)
+        self.assertIn("glFlush()", self.async_transfer_benchmark)
+        self.assertIn("glClientWaitSync(state.fence, 0, 0)", self.async_transfer_benchmark)
+        self.assertIn("GL_TIMEOUT_EXPIRED", self.async_transfer_benchmark)
+        self.assertIn("GL_ALREADY_SIGNALED", self.async_transfer_benchmark)
+        self.assertIn("GL_CONDITION_SATISFIED", self.async_transfer_benchmark)
+        self.assertIn("kMaximumFencePollFrames = 600u", self.async_transfer_benchmark)
+        self.assertIn("glMapBufferRange(", self.async_transfer_benchmark)
+        self.assertLess(
+            self.async_transfer_benchmark.index("glClientWaitSync(state.fence, 0, 0)"),
+            self.async_transfer_benchmark.index("glMapBufferRange("),
+        )
+        self.assertIn("averageFencePollFrames", self.async_transfer_benchmark_header)
+        self.assertIn("endToEndAverageMs", self.async_transfer_benchmark_header)
+        self.assertNotIn("glFinish(", self.async_transfer_benchmark)
+        self.assertNotIn("GL_SYNC_FLUSH_COMMANDS_BIT", self.async_transfer_benchmark)
+        self.assertNotIn("glDraw", self.async_transfer_benchmark)
+        self.assertNotIn("PlayLayer", self.async_transfer_benchmark)
+        self.assertNotIn("m_objects", self.async_transfer_benchmark)
+
     def test_no_bismuth_derived_or_replacement_render_backend(self):
         self.assertIn("if (ANDROID)", self.cmake)
         self.assertIn("GLESv3", self.cmake)
@@ -173,7 +205,7 @@ class NativeRendererContract(unittest.TestCase):
         self.assertNotIn("CCNode::visit", self.hooks)
         self.assertNotIn("CCSprite::draw", self.hooks)
         self.assertNotIn("CCSpriteBatchNode::draw", self.hooks)
-        self.assertNotIn("glDraw", self.hooks + self.coordinator + self.compute_probe + self.dynamic_probe + self.transfer_benchmark)
+        self.assertNotIn("glDraw", self.hooks + self.coordinator + self.compute_probe + self.dynamic_probe + self.transfer_benchmark + self.async_transfer_benchmark)
         self.assertIn("glDispatchCompute", self.compute_probe)
         self.assertIn("glDispatchCompute", self.transfer_benchmark)
 
@@ -213,7 +245,17 @@ class NativeRendererContract(unittest.TestCase):
             self.hooks.index("runGlesComputeProbeIfEnabled();"),
             self.hooks.index("runGlesDynamicSsboProbeIfEnabled();"),
         )
+        self.assertIn("runGlesSsboAsyncTransferBenchmarkIfEnabled();", self.hooks)
         self.assertIn("runGlesSsboTransferBenchmarkIfEnabled();", self.hooks)
+        self.assertLess(
+            self.hooks.index("runGlesDynamicSsboProbeIfEnabled();"),
+            self.hooks.index("runGlesSsboAsyncTransferBenchmarkIfEnabled();"),
+        )
+        self.assertLess(
+            self.hooks.index("runGlesSsboAsyncTransferBenchmarkIfEnabled();"),
+            self.hooks.index("runGlesSsboTransferBenchmarkIfEnabled();"),
+        )
+        self.assertIn("cancelGlesSsboAsyncTransferBenchmark();", self.hooks)
         self.assertGreater(
             self.hooks.index("runGlesSsboTransferBenchmarkIfEnabled();"),
             self.hooks.index("runGlesDynamicSsboProbeIfEnabled();"),
