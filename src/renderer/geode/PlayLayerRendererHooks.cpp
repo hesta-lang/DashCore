@@ -1,6 +1,7 @@
 #include "renderer/geode/RendererCoordinator.hpp"
 #if defined(GEODE_IS_ANDROID)
 #include "renderer/geode/GlesComputeProbe.hpp"
+#include "renderer/geode/GlesDynamicSsboProbe.hpp"
 #endif
 
 #include <Geode/Geode.hpp>
@@ -38,6 +39,29 @@ void runGlesComputeProbeIfEnabled() noexcept {
         result.maxShaderStorageBlockBytes,
         result.dispatchExecuted ? "true" : "false",
         result.outputValidated ? "true" : "false"
+    );
+}
+
+void runGlesDynamicSsboProbeIfEnabled() noexcept {
+    static bool attempted = false;
+    if (attempted ||
+        !Mod::get()->getSettingValue<bool>("gles-dynamic-ssbo-diagnostic-probe")) return;
+
+    attempted = true;
+    auto const result = dashcore::renderer::geode::runGlesDynamicSsboProbe();
+    ::geode::log::info(
+        "DashCore_GLES_DYNAMIC_SSBO_PROBE status={} es={}.{} max_ssbo_bytes={} batches={} reallocations={} dispatches={} upload_bytes={} readback_bytes={} max_buffer_bytes={} validated={}",
+        dashcore::renderer::geode::glesDynamicSsboProbeStatusName(result.status),
+        result.majorVersion,
+        result.minorVersion,
+        result.maxShaderStorageBlockBytes,
+        result.completedBatches,
+        result.bufferStorageReallocations,
+        result.dispatches,
+        result.uploadBytesSubmitted,
+        result.readbackBytesMapped,
+        result.maxBufferBytes,
+        result.allBatchesValidated ? "true" : "false"
     );
 }
 
@@ -222,6 +246,7 @@ void notifyLauncherLevelDiagnostics(
 }
 #else
 void runGlesComputeProbeIfEnabled() noexcept {}
+void runGlesDynamicSsboProbeIfEnabled() noexcept {}
 void notifyLauncherLevelStarted() noexcept {}
 void notifyLauncherLevelEnded() noexcept {}
 #endif
@@ -246,6 +271,7 @@ class $modify(DashCoreExperimentalPlayLayer, PlayLayer) {
         );
         dashcore::renderer::geode::coordinator().onFrame(this, updateNanoseconds);
         runGlesComputeProbeIfEnabled();
+        runGlesDynamicSsboProbeIfEnabled();
     }
 
     void onExit() {
