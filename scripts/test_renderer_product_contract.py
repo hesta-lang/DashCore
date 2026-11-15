@@ -25,18 +25,22 @@ class NativeRendererContract(unittest.TestCase):
         cls.memory_probe = read("src/renderer/core/MemoryProbe.cpp")
         cls.compute_probe = read("src/renderer/geode/GlesComputeProbe.cpp")
         cls.compute_header = read("src/renderer/geode/GlesComputeProbe.hpp")
+        cls.dynamic_probe = read("src/renderer/geode/GlesDynamicSsboProbe.cpp")
+        cls.dynamic_header = read("src/renderer/geode/GlesDynamicSsboProbe.hpp")
         cls.metadata = json.loads(read("mod.json"))
 
     def test_package_is_alpha_and_diagnostics_are_opt_in(self):
         self.assertEqual(self.metadata["id"], "hesta.optgod")
-        self.assertEqual(self.metadata["version"], "0.12.0-alpha")
+        self.assertEqual(self.metadata["version"], "0.13.0-alpha")
         self.assertEqual(self.metadata["name"], "DashCore Native Renderer Diagnostics")
         self.assertFalse(self.metadata["settings"]["capture-object-diagnostics"]["default"])
         self.assertFalse(self.metadata["settings"]["gles-compute-diagnostic-probe"]["default"])
+        self.assertFalse(self.metadata["settings"]["gles-dynamic-ssbo-diagnostic-probe"]["default"])
         self.assertIn('"capture-object-diagnostics"', self.hooks)
         self.assertIn('"gles-compute-diagnostic-probe"', self.hooks)
-        self.assertIn("project(optgod VERSION 0.12.0)", self.cmake)
-        self.assertIn("0.12.0-alpha", self.module)
+        self.assertIn('"gles-dynamic-ssbo-diagnostic-probe"', self.hooks)
+        self.assertIn("project(optgod VERSION 0.13.0)", self.cmake)
+        self.assertIn("0.13.0-alpha", self.module)
 
     def test_memory_budget_and_os_limit_diagnostics_are_read_only(self):
         self.assertIn("MemAvailable:", self.memory_source)
@@ -93,6 +97,31 @@ class NativeRendererContract(unittest.TestCase):
         self.assertNotIn("PlayLayer", self.compute_probe)
         self.assertNotIn("m_objects", self.compute_probe)
 
+    def test_dynamic_ssbo_probe_is_opt_in_bounded_and_round_trips(self):
+        setting = self.metadata["settings"]["gles-dynamic-ssbo-diagnostic-probe"]
+        self.assertFalse(setting["default"])
+        self.assertIn('getSettingValue<bool>("gles-dynamic-ssbo-diagnostic-probe")', self.hooks)
+        self.assertIn("runGlesDynamicSsboProbeIfEnabled()", self.hooks)
+        self.assertIn("DashCore_GLES_DYNAMIC_SSBO_PROBE", self.hooks)
+        self.assertIn("static constexpr std::uint32_t batchSizes[] = {1u, 4u, 16u, 64u, 256u}", self.dynamic_probe)
+        self.assertIn("glBufferData(GL_SHADER_STORAGE_BUFFER, byteCount, nullptr, GL_DYNAMIC_DRAW)", self.dynamic_probe)
+        self.assertIn("glBufferSubData(", self.dynamic_probe)
+        self.assertIn("GL_DYNAMIC_READ", self.dynamic_probe)
+        self.assertIn("layout(std430, binding = 0) readonly buffer", self.dynamic_probe)
+        self.assertIn("layout(std430, binding = 1) writeonly buffer", self.dynamic_probe)
+        self.assertIn("glDispatchCompute(workGroupsX, 1, 1)", self.dynamic_probe)
+        self.assertIn("GL_SHADER_STORAGE_BARRIER_BIT", self.dynamic_probe)
+        self.assertIn("glMapBufferRange(", self.dynamic_probe)
+        self.assertIn("glUnmapBuffer(", self.dynamic_probe)
+        self.assertIn("previousInputStorageBuffer", self.dynamic_probe)
+        self.assertIn("previousOutputStorageBuffer", self.dynamic_probe)
+        self.assertIn("GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS", self.dynamic_probe)
+        self.assertIn("maximumBytes = 1024u", self.dynamic_probe)
+        self.assertIn("allBatchesValidated", self.dynamic_header)
+        self.assertNotIn("glDraw", self.dynamic_probe)
+        self.assertNotIn("PlayLayer", self.dynamic_probe)
+        self.assertNotIn("m_objects", self.dynamic_probe)
+
     def test_no_bismuth_derived_or_replacement_render_backend(self):
         self.assertIn("if (ANDROID)", self.cmake)
         self.assertIn("GLESv3", self.cmake)
@@ -115,7 +144,7 @@ class NativeRendererContract(unittest.TestCase):
         self.assertNotIn("CCNode::visit", self.hooks)
         self.assertNotIn("CCSprite::draw", self.hooks)
         self.assertNotIn("CCSpriteBatchNode::draw", self.hooks)
-        self.assertNotIn("glDraw", self.hooks + self.coordinator + self.compute_probe)
+        self.assertNotIn("glDraw", self.hooks + self.coordinator + self.compute_probe + self.dynamic_probe)
         self.assertIn("glDispatchCompute", self.compute_probe)
 
     def test_gameplay_hooks_never_upload_or_draw_objects(self):
@@ -149,6 +178,10 @@ class NativeRendererContract(unittest.TestCase):
         self.assertLess(
             self.hooks.index("coordinator().onFrame(this, updateNanoseconds)"),
             self.hooks.index("runGlesComputeProbeIfEnabled();"),
+        )
+        self.assertLess(
+            self.hooks.index("runGlesComputeProbeIfEnabled();"),
+            self.hooks.index("runGlesDynamicSsboProbeIfEnabled();"),
         )
         self.assertIn("m_diagnostics.record(sample)", self.coordinator)
         self.assertIn("if (m_captureEnabled)", self.coordinator)
