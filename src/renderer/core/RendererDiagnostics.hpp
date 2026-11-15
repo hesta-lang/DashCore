@@ -1,5 +1,7 @@
 #pragma once
 
+#include "renderer/core/MemoryBudget.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -69,6 +71,9 @@ struct RendererDiagnosticSummary {
     std::uint64_t maximumSnapshotCapacityBytes = 0;
     std::uint64_t lastUniqueTextureCount = 0;
     std::uint64_t maximumUniqueTextureCount = 0;
+    ProcessMemorySnapshot memory{};
+    RendererMemoryBudget memoryBudget{};
+    std::uint64_t memorySampleCount = 0;
 };
 
 // Fixed-size timing history: recording a frame does not allocate memory.
