@@ -1,8 +1,8 @@
 # DashCore — Android Object Renderer Research
 
-## 0.14.0-alpha — memory diagnostics and bounded GLES SSBO transfer benchmark
+## 0.15.0-alpha — frame-stepped asynchronous GLES SSBO validation
 
-This validation version preserves the original Cocos renderer from Geometry Dash/Geode as the only visible renderer. It adds read-only process memory-limit diagnostics and three separate, opt-in GLES compute/SSBO tests. It does not claim an FPS improvement or activate an alternate object renderer.
+This validation version preserves the original Cocos renderer from Geometry Dash/Geode as the only visible renderer. It adds read-only process memory-limit diagnostics and four separate, opt-in GLES compute/SSBO tests. It does not claim an FPS improvement or activate an alternate object renderer.
 
 ### Stage 1 — Android process memory limits
 
@@ -35,15 +35,29 @@ This validation version preserves the original Cocos renderer from Geometry Dash
 - The result is written as DashCore_GLES_DYNAMIC_SSBO_PROBE. Expected success is five validated batches, ten storage reallocations, five dispatches, and 1364 bytes uploaded and read back.
 - It does not access level objects or draw anything. It is a tiny transfer correctness test, not a throughput benchmark or optimization.
 
-### Stage 4 — bounded SSBO transfer timing benchmark
+### Stage 4 — legacy synchronous SSBO transfer timing benchmark
 
-- The setting "Run GLES SSBO transfer benchmark" is disabled by default and runs once per process when manually enabled.
+- The setting "Run legacy synchronous GLES SSBO benchmark" is disabled by default and runs once per process when manually enabled. It is retained only as a comparison with the asynchronous version and can stall the gameplay thread while reading output. It is automatically skipped whenever the asynchronous benchmark is enabled.
 - It tests 1, 4, 16, and 64 KiB payloads per SSBO, with three upload/compute/readback/validation repetitions at each size.
 - The largest allocation is 64 KiB per buffer (128 KiB total for the pair); it validates every output value before accepting a sample.
 - It records allocation time plus average/minimum/maximum CPU wall-clock times for upload, Compute submission, readback, and the complete upload-to-readback cycle.
 - The Compute measurement is command submission plus barrier overhead, not isolated GPU execution time. The readback measurement may include time spent waiting for GPU completion.
 - Expected completion counters are four payload sizes, eight storage reallocations, twelve dispatches, and 261120 bytes uploaded and read back.
 - It does not access level objects, triggers, shaders, sprites, or draw state. It is a bounded timing/correctness benchmark, not an FPS benchmark or an optimization claim.
+
+
+### Stage 5 — frame-stepped asynchronous SSBO transfer benchmark
+
+- The setting "Run asynchronous GLES SSBO benchmark" is disabled by default.
+- It tests the same 1, 4, 16, and 64 KiB payloads, with three repetitions per size and the same 64 KiB-per-buffer upper bound.
+- It advances only one bounded phase per gameplay update: allocate, upload/dispatch, or poll/readback. A single dispatch is submitted per cycle.
+- After dispatch and the shader-storage/buffer-update barrier, it inserts a GLsync fence and flushes the command queue.
+- Later frames call glClientWaitSync with flags=0 and timeout=0. GL_TIMEOUT_EXPIRED returns immediately and lets gameplay continue; there is no glFinish and no positive timeout.
+- Output mapping and CPU validation happen only after the fence reports GL_ALREADY_SIGNALED or GL_CONDITION_SATISFIED. Each frame restores the GL program and generic/indexed SSBO bindings it observed at the start of that phase.
+- It reports upload and Compute-submission CPU time, fence-observed completion latency, readback/validation time, end-to-end latency, and the number of poll frames. Fence latency includes frame polling granularity and is not isolated GPU execution time.
+- The test uses the same expected counters as Stage 4: four payload sizes, eight storage reallocations, twelve dispatches, and 261120 bytes uploaded and read back.
+- Shader compilation/linking still occurs once during initialization, and each payload size still requires two bounded glBufferData allocations. Those driver operations can take time; the asynchronous change specifically removes the CPU's immediate wait for GPU completion after each dispatch.
+- It never accesses level objects, triggers, shaders, sprites, or Cocos draw state. It issues no draw calls and does not replace the original Cocos renderer.
 
 ## Memory-budget interpretation
 
@@ -53,8 +67,8 @@ The existing planning budget remains based on system available memory and conser
 
 ## Current implementation boundary
 
-The original Geometry Dash/Geode Cocos renderer remains the only visible draw path. Object capture remains disabled by default. The memory monitor only reads OS diagnostics. All three GLES probes are opt-in, one-shot diagnostics; none is connected to object rendering or gameplay data.
+The original Geometry Dash/Geode Cocos renderer remains the only visible draw path. Object capture remains disabled by default. The memory monitor only reads OS diagnostics. All four GLES probes are opt-in diagnostics; none is connected to object rendering or gameplay data.
 
 DashCore does not copy, link, package, or distribute Bismuth source or a Bismuth-derived binary. The current branch is independent Android renderer research. No optimization or performance improvement is claimed.
 
-The acceptance gate is an Android64 build, a controlled device test with all probes off first, followed by separate runs with the tiny compute test, dynamic SSBO correctness test, and larger SSBO timing benchmark enabled one at a time. Compare the corresponding DashCore probe result in the Geode log before considering any further backend work.
+The acceptance gate is an Android64 build, a controlled device test with all probes off first, followed by separate runs with the tiny compute test, dynamic SSBO correctness test, and asynchronous SSBO benchmark enabled one at a time. Keep the legacy synchronous benchmark disabled unless a direct comparison is required. Compare the corresponding DashCore probe result in the Geode log before considering any further backend work.
