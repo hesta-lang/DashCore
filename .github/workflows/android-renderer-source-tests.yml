@@ -2,7 +2,7 @@ name: DashCore Android Renderer Source Tests
 
 on:
   push:
-    branches: ["android-renderer-source-port", "android-memory-budget", "android-memory-gles-prototype"]
+    branches: ["android-renderer-source-port", "android-memory-budget", "android-memory-gles-prototype", "android-dynamic-ssbo-prototype"]
   pull_request:
     branches: ["android-renderer-source-port"]
   workflow_dispatch:
