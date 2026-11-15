@@ -66,15 +66,15 @@ RendererMemoryBudget calculateRendererMemoryBudget(
     if (!snapshot.hasSystemMemory || snapshot.systemTotalBytes == 0 ||
         snapshot.systemAvailableBytes > snapshot.systemTotalBytes || maximumBudgetBytes == 0) return result;
     result.systemSafetyReserveBytes = std::max<std::uint64_t>(
-        kMinimumSystemReserve, snapshot.systemTotalBytes / 10u
+        kMinimumSystemReserve, snapshot.systemTotalBytes / 10ull
     );
     if (snapshot.systemAvailableBytes <= result.systemSafetyReserveBytes) return result;
     result.availableHeadroomBytes = snapshot.systemAvailableBytes - result.systemSafetyReserveBytes;
     // Only one eighth of remaining headroom is available to the renderer; this is planning only.
-    result.budgetBytes = std::min<std::uint64_t>(result.availableHeadroomBytes / 8u, maximumBudgetBytes);
+    result.budgetBytes = std::min<std::uint64_t>(result.availableHeadroomBytes / 8ull, maximumBudgetBytes);
     result.canAllocateBuffers = result.budgetBytes >= kMinimumUsableBudget;
     if (result.canAllocateBuffers) {
-        result.maxSingleBufferBytes = std::min<std::uint64_t>(result.budgetBytes / 2u, kMaximumSingleBuffer);
+        result.maxSingleBufferBytes = std::min<std::uint64_t>(result.budgetBytes / 2ull, kMaximumSingleBuffer);
     }
     return result;
 }
