@@ -43,9 +43,9 @@ class NativeRendererContract(unittest.TestCase):
         self.assertIn('"capture-object-diagnostics"', self.hooks)
         self.assertIn('"gles-compute-diagnostic-probe"', self.hooks)
         self.assertIn('"gles-dynamic-ssbo-diagnostic-probe"', self.hooks)
-        self.assertFalse(self.metadata["settings"]["gles-ssbo-transfer-benchmark"]["default"])
+        self.assertFalse(self.metadata["settings"]["gles-ssbo-legacy-sync-benchmark"]["default"])
         self.assertFalse(self.metadata["settings"]["gles-ssbo-async-transfer-benchmark"]["default"])
-        self.assertIn('"gles-ssbo-transfer-benchmark"', self.hooks)
+        self.assertIn('"gles-ssbo-legacy-sync-benchmark"', self.hooks)
         self.assertIn('"gles-ssbo-async-transfer-benchmark"', self.hooks)
         self.assertIn("project(optgod VERSION 0.15.0)", self.cmake)
         self.assertIn("0.15.0-alpha", self.module)
@@ -133,9 +133,9 @@ class NativeRendererContract(unittest.TestCase):
         self.assertNotIn("m_objects", self.dynamic_probe)
 
     def test_ssbo_transfer_benchmark_is_opt_in_bounded_and_timed(self):
-        setting = self.metadata["settings"]["gles-ssbo-transfer-benchmark"]
+        setting = self.metadata["settings"]["gles-ssbo-legacy-sync-benchmark"]
         self.assertFalse(setting["default"])
-        self.assertIn('getSettingValue<bool>("gles-ssbo-transfer-benchmark")', self.hooks)
+        self.assertIn('getSettingValue<bool>("gles-ssbo-legacy-sync-benchmark")', self.hooks)
         self.assertIn("runGlesSsboTransferBenchmarkIfEnabled()", self.hooks)
         self.assertIn("DashCore_GLES_SSBO_BENCHMARK_SUMMARY", self.hooks)
         self.assertIn("payloadSizes[] = {", self.transfer_benchmark)
@@ -162,6 +162,8 @@ class NativeRendererContract(unittest.TestCase):
         self.assertIn('getSettingValue<bool>("gles-ssbo-async-transfer-benchmark")', self.hooks)
         self.assertIn("tickGlesSsboAsyncTransferBenchmark(enabled)", self.hooks)
         self.assertIn("cancelGlesSsboAsyncTransferBenchmark();", self.hooks)
+        self.assertIn("g_asyncSsboBenchmarkRequested", self.hooks)
+        self.assertIn('getSettingValue<bool>("gles-ssbo-legacy-sync-benchmark")', self.hooks)
         self.assertIn("GLsync fence", self.async_transfer_benchmark)
         self.assertIn("glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0)", self.async_transfer_benchmark)
         self.assertIn("glFlush()", self.async_transfer_benchmark)
