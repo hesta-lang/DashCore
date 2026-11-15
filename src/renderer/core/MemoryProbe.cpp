@@ -142,15 +142,10 @@ void queryCgroupFiles(
     char* currentText,
     std::size_t currentCapacity
 ) noexcept {
-    if (readCgroupPair(root, membershipPath, limitName, currentName,
-                       limitText, limitCapacity, currentText, currentCapacity)) return;
-    if (membershipPath && membershipPath[0] != '\0' &&
-        std::strcmp(membershipPath, "/") != 0) {
-        limitText[0] = '\0';
-        currentText[0] = '\0';
-        (void)readCgroupPair(root, "/", limitName, currentName,
-                             limitText, limitCapacity, currentText, currentCapacity);
-    }
+    // Never fall back to the cgroup root for a nested process. That could report
+    // a parent limit instead of the process's actual leaf limit.
+    (void)readCgroupPair(root, membershipPath, limitName, currentName,
+                         limitText, limitCapacity, currentText, currentCapacity);
 }
 
 void assignResourceLimit(ResourceLimitPair& destination, int resource) noexcept {
