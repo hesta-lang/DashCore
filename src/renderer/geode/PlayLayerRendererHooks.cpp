@@ -1,4 +1,7 @@
 #include "renderer/geode/RendererCoordinator.hpp"
+#if defined(GEODE_IS_ANDROID)
+#include "renderer/geode/GlesComputeProbe.hpp"
+#endif
 
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
@@ -20,6 +23,24 @@ using namespace geode::prelude;
 namespace {
 
 #if defined(GEODE_IS_ANDROID)
+void runGlesComputeProbeIfEnabled() noexcept {
+    static bool attempted = false;
+    if (attempted ||
+        !Mod::get()->getSettingValue<bool>("gles-compute-diagnostic-probe")) return;
+
+    attempted = true;
+    auto const result = dashcore::renderer::geode::runGlesComputeProbe();
+    ::geode::log::info(
+        "DashCore_GLES_COMPUTE_PROBE status={} es={}.{} max_ssbo_bytes={} dispatched={} output_validated={}",
+        dashcore::renderer::geode::glesComputeProbeStatusName(result.status),
+        result.majorVersion,
+        result.minorVersion,
+        result.maxShaderStorageBlockBytes,
+        result.dispatchExecuted ? "true" : "false",
+        result.outputValidated ? "true" : "false"
+    );
+}
+
 double nanosecondsToMilliseconds(std::uint64_t nanoseconds) noexcept {
     return static_cast<double>(nanoseconds) / 1000000.0;
 }
@@ -223,6 +244,7 @@ class $modify(DashCoreExperimentalPlayLayer, PlayLayer) {
             std::chrono::duration_cast<std::chrono::nanoseconds>(updateElapsed).count()
         );
         dashcore::renderer::geode::coordinator().onFrame(this, updateNanoseconds);
+        runGlesComputeProbeIfEnabled();
     }
 
     void onExit() {
