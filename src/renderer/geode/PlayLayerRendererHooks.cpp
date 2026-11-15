@@ -26,6 +26,8 @@ using namespace geode::prelude;
 namespace {
 
 #if defined(GEODE_IS_ANDROID)
+bool g_asyncSsboBenchmarkRequested = false;
+
 void runGlesComputeProbeIfEnabled() noexcept {
     static bool attempted = false;
     if (attempted ||
@@ -74,6 +76,7 @@ void runGlesSsboAsyncTransferBenchmarkIfEnabled() noexcept {
 
     auto const enabled =
         Mod::get()->getSettingValue<bool>("gles-ssbo-async-transfer-benchmark");
+    if (enabled) g_asyncSsboBenchmarkRequested = true;
     auto const result =
         dashcore::renderer::geode::tickGlesSsboAsyncTransferBenchmark(enabled);
     if (result.status == dashcore::renderer::geode::GlesSsboAsyncTransferStatus::NotStarted ||
@@ -120,8 +123,9 @@ void runGlesSsboAsyncTransferBenchmarkIfEnabled() noexcept {
 void runGlesSsboTransferBenchmarkIfEnabled() noexcept {
     static bool attempted = false;
     if (attempted ||
+        g_asyncSsboBenchmarkRequested ||
         Mod::get()->getSettingValue<bool>("gles-ssbo-async-transfer-benchmark") ||
-        !Mod::get()->getSettingValue<bool>("gles-ssbo-transfer-benchmark")) return;
+        !Mod::get()->getSettingValue<bool>("gles-ssbo-legacy-sync-benchmark")) return;
 
     attempted = true;
     auto const result = dashcore::renderer::geode::runGlesSsboTransferBenchmark();
