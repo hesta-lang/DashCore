@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore Native Renderer Diagnostics",
-  "version": "0.11.8-alpha",
+  "version": "0.11.9-alpha",
   "developer": "hesta-lang",
-  "description": "CPU-only diagnostic tools for Geometry Dash Android. Uses the original Geometry Dash/Geode Cocos renderer; no custom OpenGL ES backend or Bismuth rendering bridge is included.",
+  "description": "CPU-only renderer and process-memory diagnostics for Geometry Dash Android. Calculates a conservative planning-only memory budget; does not reserve memory or replace the original Cocos renderer.",
   "tags": [
     "optimizations",
     "performance"
