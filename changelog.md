@@ -1,3 +1,11 @@
+## 0.11.9-alpha — adaptive memory budget diagnostics
+- Adds read-only Android/Linux procfs sampling for system available RAM and process RSS/PSS/peak RSS.
+- Calculates a conservative renderer planning budget with a dynamic OS safety reserve, a 64 MiB ceiling, and a 16 MiB per-buffer ceiling.
+- Samples at level start and once per 600 frames; no per-frame procfs I/O is added.
+- Fails closed when memory information is missing or system memory pressure is high.
+- Does not allocate/reserve memory or change the original Cocos renderer or GPU draw path.
+- Keeps object capture disabled by default. This is a diagnostics/validation prerelease, not a performance release.
+
 ## 0.11.8-alpha — restore Geode's original renderer
 - Removes all DashCore Bismuth sprite/object and trigger-state adapters.
 - Removes the custom GLES backend, GL buffer creation/upload path, GLES capability probing, and GLESv3/EGL link dependencies.
