@@ -1,8 +1,8 @@
 # DashCore — Android Object Renderer Research
 
-## 0.15.0-alpha — frame-stepped asynchronous GLES SSBO validation
+## 0.16.0-alpha — synthetic CPU object grouping validation
 
-This validation version preserves the original Cocos renderer from Geometry Dash/Geode as the only visible renderer. It adds read-only process memory-limit diagnostics and four separate, opt-in GLES compute/SSBO tests. It does not claim an FPS improvement or activate an alternate object renderer.
+This validation version preserves the original Cocos renderer from Geometry Dash/Geode as the only visible renderer. It adds a bounded, opt-in CPU-only grouping diagnostic over synthetic records, read-only process memory-limit diagnostics, and four separate, opt-in GLES compute/SSBO tests. It does not inspect actual level objects, claim an FPS improvement, or activate an alternate object renderer.
 
 ### Stage 1 — Android process memory limits
 
@@ -59,6 +59,17 @@ This validation version preserves the original Cocos renderer from Geometry Dash
 - Shader compilation/linking still occurs once during initialization, and each payload size still requires two bounded glBufferData allocations. Those driver operations can take time; the asynchronous change specifically removes the CPU's immediate wait for GPU completion after each dispatch.
 - It never accesses level objects, triggers, shaders, sprites, or Cocos draw state. It issues no draw calls and does not replace the original Cocos renderer.
 
+### Stage 6 — synthetic CPU object grouping
+
+- The setting "Run CPU object grouping diagnostic" is disabled by default and runs once when explicitly enabled during gameplay.
+- The diagnostic creates exactly 1,024 synthetic records. It never reads `PlayLayer::m_objects`, Cocos nodes, sprites, triggers, player state, or any real level content.
+- Each record contains a stable non-zero object identifier, X/Y position, rotation, X/Y scale, type identifier, and state flags.
+- The CPU builder validates finite transforms, rejects zero or duplicate identifiers, enforces a maximum of 4,096 records, and creates structure-of-arrays buffers for position, rotation, scale, type, identifier, and state.
+- Records are sorted by ascending type while preserving their original order within each type. A compact group-range table identifies each contiguous type range.
+- The builder validates array lengths, group coverage, ordering, finite values, and identifier uniqueness before reporting success.
+- Logs one `DashCore_CPU_OBJECT_GROUPING` summary containing input count, grouped count, group count, packed data bytes, group table bytes, elapsed CPU time, and validation status.
+- This stage is CPU-only: no OpenGL calls, SSBO allocation, Compute dispatch, draw calls, Cocos integration, or gameplay-object changes.
+
 ## Memory-budget interpretation
 
 processPssBytes is proportional memory attributed to the Geometry Dash process; RSS and peak RSS describe resident memory. systemAvailableBytes is the kernel's MemAvailable estimate. cgroup values represent the current memory controller hierarchy when discoverable. RLIMIT values are the process's soft and hard resource limits. These are distinct mechanisms and must not be conflated.
@@ -67,8 +78,8 @@ The existing planning budget remains based on system available memory and conser
 
 ## Current implementation boundary
 
-The original Geometry Dash/Geode Cocos renderer remains the only visible draw path. Object capture remains disabled by default. The memory monitor only reads OS diagnostics. All four GLES probes are opt-in diagnostics; none is connected to object rendering or gameplay data.
+The original Geometry Dash/Geode Cocos renderer remains the only visible draw path. Object capture remains disabled by default. The CPU grouping diagnostic uses synthetic records only and is opt-in. The memory monitor only reads OS diagnostics. All four GLES probes are opt-in diagnostics; none is connected to object rendering or gameplay data.
 
 DashCore does not copy, link, package, or distribute Bismuth source or a Bismuth-derived binary. The current branch is independent Android renderer research. No optimization or performance improvement is claimed.
 
-The acceptance gate is an Android64 build, a controlled device test with all probes off first, followed by separate runs with the tiny compute test, dynamic SSBO correctness test, and asynchronous SSBO benchmark enabled one at a time. Keep the legacy synchronous benchmark disabled unless a direct comparison is required. Compare the corresponding DashCore probe result in the Geode log before considering any further backend work.
+The acceptance gate is an Android64 build, a controlled device test with all probes off first, followed by a separate run of the CPU synthetic grouping diagnostic and then separate runs with the tiny compute test, dynamic SSBO correctness test, and asynchronous SSBO benchmark enabled one at a time. Keep the legacy synchronous benchmark disabled unless a direct comparison is required. Compare the corresponding DashCore probe result in the Geode log before considering any further backend work.
