@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore Native Renderer Diagnostics",
-  "version": "0.12.0-alpha",
+  "version": "0.13.0-alpha",
   "developer": "hesta-lang",
-  "description": "Android renderer research and diagnostics: cgroup/RLIMIT memory visibility plus an optional one-shot GLES 3.1 compute self-test. Preserves the original Cocos renderer.",
+  "description": "Android renderer research and diagnostics: process memory visibility plus opt-in GLES compute and dynamic SSBO transfer probes. Preserves the original Cocos renderer.",
   "tags": [
     "optimizations",
     "performance"
@@ -22,6 +22,12 @@
     "gles-compute-diagnostic-probe": {
       "name": "Run GLES compute diagnostic probe",
       "description": "Runs one tiny 4-value GLES 3.1 compute/SSBO self-test during gameplay. Diagnostic only; disabled by default and does not draw or process level objects.",
+      "type": "bool",
+      "default": false
+    },
+    "gles-dynamic-ssbo-diagnostic-probe": {
+      "name": "Run GLES dynamic SSBO transfer probe",
+      "description": "Runs a one-shot GLES 3.1 test that reallocates two tiny SSBOs, uploads CPU data, dispatches Compute, and validates readback. Disabled by default; does not draw or process level objects.",
       "type": "bool",
       "default": false
     }
