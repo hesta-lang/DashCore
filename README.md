@@ -1,8 +1,14 @@
 # DashCore — Android Object Renderer Research
 
-## 0.16.0-alpha — synthetic CPU object grouping validation
+## 0.16.1-alpha — JNI-safe level transition hooks
 
 This validation version preserves the original Cocos renderer from Geometry Dash/Geode as the only visible renderer. It adds a bounded, opt-in CPU-only grouping diagnostic over synthetic records, read-only process memory-limit diagnostics, and four separate, opt-in GLES compute/SSBO tests. It does not inspect actual level objects, claim an FPS improvement, or activate an alternate object renderer.
+
+### Crash fix — Android level transitions
+
+- Removed the native-to-Java `LauncherDiagnostics` callbacks from `PlayLayer` transition hooks. The previous implementation used `JniHelper::getStaticMethodInfo` from the Cocos GL thread, where `FindClass` may not resolve application classes and can pass a null class to `GetStaticMethodID`, triggering an ART `SIGABRT`.
+- DashCore no longer performs Java class or method lookups during level entry/exit. Native renderer diagnostics remain in the Geode log; launcher-side diagnostic JSONL collection remains independent.
+- This is a stability/diagnostic-only release; it does not add a renderer, change GLES behavior, or claim an FPS improvement.
 
 ### Stage 1 — Android process memory limits
 
