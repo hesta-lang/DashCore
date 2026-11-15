@@ -1,5 +1,14 @@
 # DashCore — Android rendering optimization
 
+## 0.10.15-alpha — sampled GameObject visit profiling
+
+- Adds sampled CPU timing for GameObject subtree visits through the existing `CCNode::visit` hook during the bounded 180-update render-pipeline profile.
+- Reports GameObject visit calls, timed calls, inclusive average/total/maximum duration, and duration buckets independently from all-node visit timing.
+- The GameObject metric samples one in every eight GameObject visits, only while the opt-in render-pipeline diagnostic window is active.
+- Nested GameObject visit timings can overlap because each visit includes descendant work. They must not be summed or interpreted as exclusive object cost.
+- No GameObject::update or section-management detour is added; Android64 hook addresses remain unverified for those methods.
+- Diagnostics and experimental culling remain OFF by default. The original renderer, gameplay, physics, draw order, and UI are unchanged. This is diagnostic-only; no optimization or FPS improvement is claimed.
+
 ## 0.10.14-alpha — independent callback inventory
 
 - Keeps each Cocos renderer callback independently enabled and sampled. A missing `CCNode::visit`, sprite, batch-node, or texture-atlas hook no longer disables the callbacks that are available.
