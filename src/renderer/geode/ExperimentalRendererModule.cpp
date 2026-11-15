@@ -18,7 +18,7 @@ namespace dashcore::renderer {
 
 void initialize() {
     ::geode::log::info(
-        "DashCore 0.12.0-alpha: original Geometry Dash/Geode Cocos rendering is retained; memory diagnostics are read-only and the GLES compute self-test is opt-in."
+        "DashCore 0.13.0-alpha: original Geometry Dash/Geode Cocos rendering is retained; memory diagnostics and both GLES compute probes are opt-in."
     );
 }
 
