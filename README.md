@@ -2,7 +2,7 @@
 
 ## 0.12.0-alpha — memory-limit visibility and isolated GLES compute probe
 
-This validation version preserves the original Geometry Dash/Geode Cocos renderer as the only visible renderer. It adds read-only process memory-limit diagnostics and a separate, opt-in compute-shader smoke test.
+This validation version preserves the original Cocos renderer from Geometry Dash/Geode as the only visible renderer. It adds read-only process memory-limit diagnostics and a separate, opt-in compute-shader smoke test.
 
 ### Stage 1 — Android process memory limits
 
