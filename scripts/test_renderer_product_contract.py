@@ -20,16 +20,36 @@ class NativeRendererContract(unittest.TestCase):
         cls.module = read("src/renderer/geode/ExperimentalRendererModule.cpp")
         cls.gles_header = read("src/renderer/core/GlesCapabilities.hpp")
         cls.gles_source = read("src/renderer/core/GlesCapabilities.cpp")
+        cls.memory_header = read("src/renderer/core/MemoryBudget.hpp")
+        cls.memory_source = read("src/renderer/core/MemoryBudget.cpp")
+        cls.memory_probe = read("src/renderer/core/MemoryProbe.cpp")
+        cls.memory_coordinator = read("src/renderer/geode/RendererCoordinator.cpp")
         cls.metadata = json.loads(read("mod.json"))
 
     def test_package_is_alpha_and_capture_is_off(self):
         self.assertEqual(self.metadata["id"], "hesta.optgod")
-        self.assertEqual(self.metadata["version"], "0.11.8-alpha")
+        self.assertEqual(self.metadata["version"], "0.11.9-alpha")
         self.assertEqual(self.metadata["name"], "DashCore Native Renderer Diagnostics")
         self.assertFalse(self.metadata["settings"]["capture-object-diagnostics"]["default"])
         self.assertIn('"capture-object-diagnostics"', self.hooks)
-        self.assertIn("project(optgod VERSION 0.11.8)", self.cmake)
-        self.assertIn("0.11.8-alpha", self.module)
+        self.assertIn("project(optgod VERSION 0.11.9)", self.cmake)
+        self.assertIn("0.11.9-alpha", self.module)
+
+    def test_memory_budget_is_read_only_dynamic_and_fail_closed(self):
+        self.assertIn("MemAvailable:", self.memory_source)
+        self.assertIn("VmRSS:", self.memory_source)
+        self.assertIn("Pss:", self.memory_source)
+        self.assertIn("256ull * kMiB", self.memory_source)
+        self.assertIn("snapshot.systemTotalBytes / 10ull", self.memory_source)
+        self.assertIn("result.availableHeadroomBytes / 8ull", self.memory_source)
+        self.assertIn("64ull * 1024ull * 1024ull", self.memory_header)
+        self.assertIn("planning_only_no_reservations", self.memory_coordinator)
+        self.assertIn("queryProcessMemorySnapshot()", self.memory_coordinator)
+        self.assertIn("(m_frameIndex % 600u) == 0u", self.memory_coordinator)
+        self.assertNotIn("operator new", self.memory_probe)
+        self.assertNotIn("malloc(", self.memory_probe)
+        self.assertIn("process_pss_bytes", self.hooks)
+        self.assertIn("memory_budget_bytes", self.hooks)
 
     def test_no_live_gles_or_bismuth_draw_backend_is_built(self):
         for marker in ("GLESv3", "GLES", "EGL", "GLESBackend", "bismuth_bridge", "android-port"):
