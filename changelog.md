@@ -1,3 +1,10 @@
+## 0.10.15-alpha — sampled GameObject visit profiling
+- Adds a GameObject-specific visit metric inside the existing `CCNode::visit` hook; no separate GameObject detour or unverified Android offset is introduced.
+- Counts GameObject subtree visits during the opt-in 180-update renderer sample and times one in every eight GameObject visits.
+- Reports inclusive average, total, maximum, and duration buckets separately from all-node visits. Nested GameObject subtrees can overlap and the metrics must not be summed as exclusive work.
+- Preserves the original CCNode visit call exactly once. No visibility, transforms, draw order, batching, gameplay, physics, or UI behavior changes.
+- Diagnostics and culling remain OFF by default. This is an alpha diagnostic build, not a validated optimization; no FPS improvement is claimed.
+
 ## 0.10.14-alpha — independent callback inventory and partial-hook operation
 - Removes the all-or-nothing renderer-hook gate: missing sprite, batch, atlas, or node-visit hooks no longer cause other successfully enabled callbacks to be disabled.
 - Reports every monitored callback as ABSENT, HOOK_DISABLED, ENABLED_NOT_OBSERVED, or RUNNING, with hook-found, hook-enabled, calls, and timedCalls values.
