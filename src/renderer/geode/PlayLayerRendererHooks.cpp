@@ -78,7 +78,22 @@ std::string makeLauncherDiagnosticsJson(
          << ",\"snapshot_sprites_peak\":" << report.maximumSnapshotSprites
          << ",\"snapshot_vector_capacity_bytes_last\":" << report.lastSnapshotCapacityBytes
          << ",\"snapshot_vector_capacity_bytes_peak\":" << report.maximumSnapshotCapacityBytes
-         << ",\"memory_scope\":\"snapshot_vector_capacity_only\""
+         << ",\"memory_sample_count\":" << report.memorySampleCount
+         << ",\"system_ram_total_bytes\":" << report.memory.systemTotalBytes
+         << ",\"system_ram_available_bytes\":" << report.memory.systemAvailableBytes
+         << ",\"system_memory_valid\":" << (report.memory.hasSystemMemory ? "true" : "false")
+         << ",\"process_rss_bytes\":" << report.memory.processRssBytes
+         << ",\"process_rss_valid\":" << (report.memory.hasProcessRss ? "true" : "false")
+         << ",\"process_pss_bytes\":" << report.memory.processPssBytes
+         << ",\"process_pss_valid\":" << (report.memory.hasProcessPss ? "true" : "false")
+         << ",\"process_peak_rss_bytes\":" << report.memory.processPeakRssBytes
+         << ",\"process_peak_rss_valid\":" << (report.memory.hasProcessPeakRss ? "true" : "false")
+         << ",\"memory_safety_reserve_bytes\":" << report.memoryBudget.systemSafetyReserveBytes
+         << ",\"memory_headroom_bytes\":" << report.memoryBudget.availableHeadroomBytes
+         << ",\"memory_budget_bytes\":" << report.memoryBudget.budgetBytes
+         << ",\"memory_max_single_buffer_bytes\":" << report.memoryBudget.maxSingleBufferBytes
+         << ",\"memory_budget_can_allocate\":" << (report.memoryBudget.canAllocateBuffers ? "true" : "false")
+         << ",\"memory_scope\":\"procfs_process_pss_rss_and_system_available;planning_only_no_reservations\""
          << "}";
     return json.str();
 }
