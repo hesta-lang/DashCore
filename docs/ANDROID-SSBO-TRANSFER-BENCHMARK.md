@@ -1,12 +1,12 @@
-# Android SSBO transfer benchmark
+# Android SSBO transfer benchmark (legacy synchronous reference)
 
 ## Purpose
 
-This is Stage 3 after the successful tiny dynamic-SSBO correctness probe. It measures a bounded CPU-to-GPU upload, compute submission, and GPU-to-CPU readback cycle at larger payload sizes. It is diagnostic only; it does not process Geometry Dash objects or draw anything.
+This is the legacy synchronous Stage 4 reference after the successful tiny dynamic-SSBO correctness probe. It remains available for comparison, but its immediate readback can wait for GPU completion inside the calling gameplay update. Prefer the asynchronous Stage 5 test for ordinary validation. It measures a bounded CPU-to-GPU upload, compute submission, and GPU-to-CPU readback cycle at larger payload sizes. It is diagnostic only; it does not process Geometry Dash objects or draw anything.
 
 ## Settings and workload
 
-The setting "Run GLES SSBO transfer benchmark" is disabled by default and runs once on the first gameplay PlayLayer update when manually enabled.
+The setting "Run legacy synchronous GLES SSBO benchmark" is disabled by default. It is automatically skipped when "Run asynchronous GLES SSBO benchmark" is enabled.
 
 The benchmark uses two SSBOs:
 - Input SSBO at binding 0, populated by CPU data through glBufferSubData.
@@ -39,3 +39,8 @@ Expected complete workload counters:
 The probe is one-shot and opt-in. It saves and restores the current GL program, generic SSBO binding, and indexed SSBO bindings 0 and 1. It allocates only its two private buffers and its private compute program. It does not touch framebuffers, textures, vertex arrays, Cocos nodes, gameplay state, triggers, or draw commands. The original Cocos renderer remains the only visible draw path.
 
 This test checks correctness and records timings for this specific device/driver/context. It is not an FPS benchmark, does not prove an optimization, and does not establish compatibility with level-object data. Compare repeated runs under similar device temperature and background load. Keep the existing tiny correctness probe separate from this larger timing test.
+
+
+## Important
+
+This legacy implementation maps its output immediately after dispatch. The map may stall until the GPU has completed the work. Do not enable it for the same run as the asynchronous benchmark; the mod suppresses this legacy path whenever the asynchronous setting is enabled. Use the separate asynchronous benchmark documentation for zero-timeout fence polling across frames.
