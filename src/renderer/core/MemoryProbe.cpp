@@ -112,7 +112,10 @@ bool readCgroupPair(
     char* currentText,
     std::size_t currentCapacity
 ) noexcept {
-    if (!root || !limitText || !currentText) return false;
+    // An empty membership path means we could not identify the process's cgroup.
+    // Never substitute the hierarchy root; it may have a different limit.
+    if (!root || !membershipPath || membershipPath[0] == '\0' ||
+        !limitText || !currentText) return false;
     char limitPath[640]{};
     char currentPath[640]{};
     char const* suffix = membershipPath && membershipPath[0] != '\0' &&
