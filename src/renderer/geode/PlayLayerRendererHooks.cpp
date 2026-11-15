@@ -2,6 +2,7 @@
 #if defined(GEODE_IS_ANDROID)
 #include "renderer/geode/GlesComputeProbe.hpp"
 #include "renderer/geode/GlesDynamicSsboProbe.hpp"
+#include "renderer/geode/GlesSsboTransferBenchmark.hpp"
 #endif
 
 #include <Geode/Geode.hpp>
@@ -62,6 +63,49 @@ void runGlesDynamicSsboProbeIfEnabled() noexcept {
         result.readbackBytesMapped,
         result.maxBufferBytes,
         result.allBatchesValidated ? "true" : "false"
+    );
+}
+
+void runGlesSsboTransferBenchmarkIfEnabled() noexcept {
+    static bool attempted = false;
+    if (attempted ||
+        !Mod::get()->getSettingValue<bool>("gles-ssbo-transfer-benchmark")) return;
+
+    attempted = true;
+    auto const result = dashcore::renderer::geode::runGlesSsboTransferBenchmark();
+    for (std::uint32_t index = 0; index < result.sampleCount; ++index) {
+        auto const& sample = result.samples[index];
+        ::geode::log::info(
+            "DashCore_GLES_SSBO_BENCHMARK size_bytes={} repeats={} allocation_ms={} upload_avg_ms={} upload_min_ms={} upload_max_ms={} compute_submit_avg_ms={} compute_submit_min_ms={} compute_submit_max_ms={} readback_avg_ms={} readback_min_ms={} readback_max_ms={} cycle_avg_ms={} cycle_min_ms={} cycle_max_ms={}",
+            sample.payloadBytes,
+            sample.completedRepeats,
+            sample.allocationMs,
+            sample.uploadAverageMs,
+            sample.uploadMinimumMs,
+            sample.uploadMaximumMs,
+            sample.computeSubmitAverageMs,
+            sample.computeSubmitMinimumMs,
+            sample.computeSubmitMaximumMs,
+            sample.readbackAverageMs,
+            sample.readbackMinimumMs,
+            sample.readbackMaximumMs,
+            sample.cycleAverageMs,
+            sample.cycleMinimumMs,
+            sample.cycleMaximumMs
+        );
+    }
+    ::geode::log::info(
+        "DashCore_GLES_SSBO_BENCHMARK_SUMMARY status={} es={}.{} payload_sizes={} reallocations={} dispatches={} upload_bytes={} readback_bytes={} max_buffer_bytes={} validated={}",
+        dashcore::renderer::geode::glesSsboTransferBenchmarkStatusName(result.status),
+        result.majorVersion,
+        result.minorVersion,
+        result.completedPayloadSizes,
+        result.bufferStorageReallocations,
+        result.dispatches,
+        result.uploadBytesSubmitted,
+        result.readbackBytesMapped,
+        result.maxBufferBytes,
+        result.allPayloadSizesValidated ? "true" : "false"
     );
 }
 
@@ -247,6 +291,7 @@ void notifyLauncherLevelDiagnostics(
 #else
 void runGlesComputeProbeIfEnabled() noexcept {}
 void runGlesDynamicSsboProbeIfEnabled() noexcept {}
+void runGlesSsboTransferBenchmarkIfEnabled() noexcept {}
 void notifyLauncherLevelStarted() noexcept {}
 void notifyLauncherLevelEnded() noexcept {}
 #endif
@@ -272,6 +317,7 @@ class $modify(DashCoreExperimentalPlayLayer, PlayLayer) {
         dashcore::renderer::geode::coordinator().onFrame(this, updateNanoseconds);
         runGlesComputeProbeIfEnabled();
         runGlesDynamicSsboProbeIfEnabled();
+        runGlesSsboTransferBenchmarkIfEnabled();
     }
 
     void onExit() {
