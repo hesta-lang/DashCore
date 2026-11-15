@@ -2,7 +2,7 @@ name: Build DashCore Geode Native Renderer (Android64)
 
 on:
   push:
-    branches: ["experimental-renderer", "android-memory-budget"]
+    branches: ["experimental-renderer", "android-memory-budget", "android-memory-gles-prototype"]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
