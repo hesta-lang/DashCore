@@ -221,6 +221,7 @@ void notifyLauncherLevelDiagnostics(
     method.env->DeleteLocalRef(method.classID);
 }
 #else
+void runGlesComputeProbeIfEnabled() noexcept {}
 void notifyLauncherLevelStarted() noexcept {}
 void notifyLauncherLevelEnded() noexcept {}
 #endif
