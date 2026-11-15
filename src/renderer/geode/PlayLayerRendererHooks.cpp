@@ -88,12 +88,29 @@ std::string makeLauncherDiagnosticsJson(
          << ",\"process_pss_valid\":" << (report.memory.hasProcessPss ? "true" : "false")
          << ",\"process_peak_rss_bytes\":" << report.memory.processPeakRssBytes
          << ",\"process_peak_rss_valid\":" << (report.memory.hasProcessPeakRss ? "true" : "false")
+         << ",\"process_virtual_bytes\":" << report.memory.processVirtualBytes
+         << ",\"process_virtual_valid\":" << (report.memory.hasProcessVirtual ? "true" : "false")
+         << ",\"cgroup_memory_limit_bytes\":" << report.memory.cgroupMemoryLimitBytes
+         << ",\"cgroup_memory_limit_valid\":" << (report.memory.hasCgroupMemoryLimit ? "true" : "false")
+         << ",\"cgroup_memory_limit_unlimited\":" << (report.memory.cgroupMemoryLimitUnlimited ? "true" : "false")
+         << ",\"cgroup_memory_current_bytes\":" << report.memory.cgroupMemoryCurrentBytes
+         << ",\"cgroup_memory_current_valid\":" << (report.memory.hasCgroupMemoryCurrent ? "true" : "false")
+         << ",\"rlimit_as_soft_bytes\":" << report.memory.resourceLimits.addressSpace.softBytes
+         << ",\"rlimit_as_hard_bytes\":" << report.memory.resourceLimits.addressSpace.hardBytes
+         << ",\"rlimit_as_valid\":" << (report.memory.resourceLimits.addressSpace.available ? "true" : "false")
+         << ",\"rlimit_as_soft_unlimited\":" << (report.memory.resourceLimits.addressSpace.softUnlimited ? "true" : "false")
+         << ",\"rlimit_as_hard_unlimited\":" << (report.memory.resourceLimits.addressSpace.hardUnlimited ? "true" : "false")
+         << ",\"rlimit_rss_soft_bytes\":" << report.memory.resourceLimits.residentSet.softBytes
+         << ",\"rlimit_rss_hard_bytes\":" << report.memory.resourceLimits.residentSet.hardBytes
+         << ",\"rlimit_rss_valid\":" << (report.memory.resourceLimits.residentSet.available ? "true" : "false")
+         << ",\"rlimit_rss_soft_unlimited\":" << (report.memory.resourceLimits.residentSet.softUnlimited ? "true" : "false")
+         << ",\"rlimit_rss_hard_unlimited\":" << (report.memory.resourceLimits.residentSet.hardUnlimited ? "true" : "false")
          << ",\"memory_safety_reserve_bytes\":" << report.memoryBudget.systemSafetyReserveBytes
          << ",\"memory_headroom_bytes\":" << report.memoryBudget.availableHeadroomBytes
          << ",\"memory_budget_bytes\":" << report.memoryBudget.budgetBytes
          << ",\"memory_max_single_buffer_bytes\":" << report.memoryBudget.maxSingleBufferBytes
          << ",\"memory_budget_can_allocate\":" << (report.memoryBudget.canAllocateBuffers ? "true" : "false")
-         << ",\"memory_scope\":\"procfs_process_pss_rss_and_system_available;planning_only_no_reservations\""
+         << ",\"memory_scope\":\"procfs_cgroup_v1_v2_rlimit_soft_hard_read_only_diagnostics\""
          << "}";
     return json.str();
 }
