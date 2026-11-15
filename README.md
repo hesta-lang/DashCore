@@ -1,8 +1,8 @@
 # DashCore — Android Object Renderer Research
 
-## 0.13.0-alpha — memory diagnostics and dynamic GLES SSBO transfer probe
+## 0.14.0-alpha — memory diagnostics and bounded GLES SSBO transfer benchmark
 
-This validation version preserves the original Cocos renderer from Geometry Dash/Geode as the only visible renderer. It adds read-only process memory-limit diagnostics and two separate, opt-in GLES compute tests. It does not claim an FPS improvement or activate an alternate object renderer.
+This validation version preserves the original Cocos renderer from Geometry Dash/Geode as the only visible renderer. It adds read-only process memory-limit diagnostics and three separate, opt-in GLES compute/SSBO tests. It does not claim an FPS improvement or activate an alternate object renderer.
 
 ### Stage 1 — Android process memory limits
 
@@ -43,8 +43,8 @@ The existing planning budget remains based on system available memory and conser
 
 ## Current implementation boundary
 
-The original Geometry Dash/Geode Cocos renderer remains the only visible draw path. Object capture remains disabled by default. The memory monitor only reads OS diagnostics. Both compute probes are opt-in, one-shot diagnostics; neither is connected to object rendering or gameplay data.
+The original Geometry Dash/Geode Cocos renderer remains the only visible draw path. Object capture remains disabled by default. The memory monitor only reads OS diagnostics. All three GLES probes are opt-in, one-shot diagnostics; neither is connected to object rendering or gameplay data.
 
 DashCore does not copy, link, package, or distribute Bismuth source or a Bismuth-derived binary. The current branch is independent Android renderer research. No optimization or performance improvement is claimed.
 
-The acceptance gate is an Android64 build, a controlled device test with both compute settings off first, followed by separate runs with each setting enabled. Compare the corresponding DashCore probe result in the Geode log before considering any further backend work.
+The acceptance gate is an Android64 build, a controlled device test with all probes off first, followed by separate runs with the tiny compute test, dynamic SSBO correctness test, and larger SSBO timing benchmark enabled one at a time. Compare the corresponding DashCore probe result in the Geode log before considering any further backend work.
