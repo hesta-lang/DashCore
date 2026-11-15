@@ -7,7 +7,7 @@ This validation version preserves the original Cocos renderer from Geometry Dash
 ### Crash fix — Android level transitions
 
 - Removed the native-to-Java `LauncherDiagnostics` callbacks from `PlayLayer` transition hooks. The previous implementation used `JniHelper::getStaticMethodInfo` from the Cocos GL thread, where `FindClass` may not resolve application classes and can pass a null class to `GetStaticMethodID`, triggering an ART `SIGABRT`.
-- DashCore no longer performs Java class or method lookups during level entry/exit. Native renderer diagnostics remain in the Geode log; launcher-side diagnostic JSONL collection remains independent.
+- DashCore no longer performs Java class or method lookups during level entry/exit. Native renderer diagnostics remain in the Geode log. DashCore per-level summaries are temporarily not forwarded into launcher JSONL until a class-loader-safe bridge is implemented.
 - This is a stability/diagnostic-only release; it does not add a renderer, change GLES behavior, or claim an FPS improvement.
 
 ### Stage 1 — Android process memory limits
