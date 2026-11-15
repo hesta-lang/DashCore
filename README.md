@@ -2,7 +2,7 @@
 
 ## 0.11.9-alpha — adaptive memory budget diagnostics
 
-This validation version preserves the original Geometry Dash/Geode Cocos renderer as the only visible renderer and adds read-only process/system memory sampling.
+This validation version preserves the original Cocos renderer from Geometry Dash/Geode as the only visible renderer and adds read-only process/system memory sampling.
 
 - Samples Android/Linux `/proc/meminfo`, `/proc/self/status`, and `/proc/self/smaps_rollup`.
 - Records system RAM total/available, process RSS/PSS, and process peak RSS when exposed by the kernel.
