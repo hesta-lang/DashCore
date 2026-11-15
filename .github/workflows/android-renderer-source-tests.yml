@@ -2,7 +2,7 @@ name: DashCore Android Renderer Source Tests
 
 on:
   push:
-    branches: ["android-renderer-source-port", "android-memory-budget", "android-memory-gles-prototype", "android-dynamic-ssbo-prototype"]
+    branches: ["android-renderer-source-port", "android-memory-budget", "android-memory-gles-prototype", "android-dynamic-ssbo-prototype", "android-object-grouping"]
   pull_request:
     branches: ["android-renderer-source-port"]
   workflow_dispatch:
@@ -24,6 +24,21 @@ jobs:
             tests/renderer_model_tests.cpp src/renderer/core/*.cpp \
             -o /tmp/dashcore-renderer-model-tests
           /tmp/dashcore-renderer-model-tests
+
+
+      - name: Compile and run CPU object grouping tests
+        run: |
+          set -euo pipefail
+          c++ -std=c++20 -Wall -Wextra -Werror -Isrc \
+            tests/object_grouping_tests.cpp src/renderer/core/ObjectGrouping.cpp \
+            -o /tmp/dashcore-object-grouping-tests
+          /tmp/dashcore-object-grouping-tests
+
+      - name: Validate CPU grouping integration contract
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/test_object_grouping_contract.py
+          python3 scripts/test_object_grouping_contract.py
 
       - name: Compile and run Android GLES capability tests
         run: |
