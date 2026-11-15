@@ -18,7 +18,7 @@ namespace dashcore::renderer {
 
 void initialize() {
     ::geode::log::info(
-        "DashCore 0.11.8-alpha: original Geometry Dash/Geode Cocos rendering is retained; optional diagnostics are CPU-only."
+        "DashCore 0.11.9-alpha: original Geometry Dash/Geode Cocos rendering is retained; optional diagnostics are CPU-only."
     );
 }
 
