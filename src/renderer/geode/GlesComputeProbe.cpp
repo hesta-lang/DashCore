@@ -2,6 +2,28 @@
 
 #if defined(GEODE_IS_ANDROID)
 
+// Geode's Android CCGL.h maps core VAO names to OES compatibility
+// symbols in the precompiled header. Undefine only these aliases in this
+// translation unit before including the GLES 3.1 core declarations.
+#ifdef glBindVertexArray
+#undef glBindVertexArray
+#endif
+#ifdef glDeleteVertexArrays
+#undef glDeleteVertexArrays
+#endif
+#ifdef glGenVertexArrays
+#undef glGenVertexArrays
+#endif
+#ifdef glBindVertexArrayOES
+#undef glBindVertexArrayOES
+#endif
+#ifdef glDeleteVertexArraysOES
+#undef glDeleteVertexArraysOES
+#endif
+#ifdef glGenVertexArraysOES
+#undef glGenVertexArraysOES
+#endif
+
 #ifndef GL_GLEXT_PROTOTYPES
 #define GL_GLEXT_PROTOTYPES 1
 #endif
