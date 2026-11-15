@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore Native Renderer Diagnostics",
-  "version": "0.15.0-alpha",
+  "version": "0.16.0-alpha",
   "developer": "hesta-lang",
-  "description": "Android renderer research and diagnostics: process memory visibility plus opt-in GLES compute and asynchronous SSBO transfer tests. Preserves the original Cocos renderer.",
+  "description": "Android object grouping research and renderer diagnostics: synthetic CPU object grouping plus opt-in GLES compute and asynchronous SSBO transfer tests. Preserves the original Cocos renderer.",
   "tags": [
     "optimizations",
     "performance"
@@ -40,6 +40,12 @@
     "gles-ssbo-legacy-sync-benchmark": {
       "name": "Run legacy synchronous GLES SSBO benchmark",
       "description": "Legacy blocking comparison at 1, 4, 16, and 64 KiB per SSBO. Can stall while reading GPU output; disabled by default, reset from the previous setting key, and automatically skipped after the asynchronous benchmark is requested.",
+      "type": "bool",
+      "default": false
+    },
+    "cpu-object-grouping-diagnostic": {
+      "name": "Run CPU object grouping diagnostic",
+      "description": "Builds and validates one bounded set of 1,024 synthetic object records grouped into structure-of-arrays by type. CPU-only; does not inspect or modify level objects and does not call OpenGL. Disabled by default.",
       "type": "bool",
       "default": false
     }
