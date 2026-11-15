@@ -3,6 +3,7 @@
 #include "renderer/geode/GlesComputeProbe.hpp"
 #include "renderer/geode/GlesDynamicSsboProbe.hpp"
 #include "renderer/geode/GlesSsboTransferBenchmark.hpp"
+#include "renderer/geode/GlesSsboAsyncTransferBenchmark.hpp"
 #endif
 
 #include <Geode/Geode.hpp>
@@ -66,9 +67,60 @@ void runGlesDynamicSsboProbeIfEnabled() noexcept {
     );
 }
 
+
+void runGlesSsboAsyncTransferBenchmarkIfEnabled() noexcept {
+    static bool logged = false;
+    if (logged) return;
+
+    auto const enabled =
+        Mod::get()->getSettingValue<bool>("gles-ssbo-async-transfer-benchmark");
+    auto const result =
+        dashcore::renderer::geode::tickGlesSsboAsyncTransferBenchmark(enabled);
+    if (result.status == dashcore::renderer::geode::GlesSsboAsyncTransferStatus::NotStarted ||
+        result.status == dashcore::renderer::geode::GlesSsboAsyncTransferStatus::Running) {
+        return;
+    }
+
+    logged = true;
+    for (std::uint32_t index = 0; index < result.sampleCount; ++index) {
+        auto const& sample = result.samples[index];
+        ::geode::log::info(
+            "DashCore_GLES_SSBO_ASYNC_BENCHMARK size_bytes={} repeats={} allocation_ms={} upload_avg_ms={} compute_submit_avg_ms={} fence_latency_avg_ms={} fence_latency_max_ms={} fence_poll_frames_avg={} fence_poll_frames_max={} readback_avg_ms={} end_to_end_avg_ms={}",
+            sample.payloadBytes,
+            sample.completedRepeats,
+            sample.allocationMs,
+            sample.uploadAverageMs,
+            sample.computeSubmitAverageMs,
+            sample.fenceLatencyAverageMs,
+            sample.fenceLatencyMaximumMs,
+            sample.averageFencePollFrames,
+            sample.maximumFencePollFrames,
+            sample.readbackAverageMs,
+            sample.endToEndAverageMs
+        );
+    }
+    ::geode::log::info(
+        "DashCore_GLES_SSBO_ASYNC_BENCHMARK_SUMMARY status={} es={}.{} payload_sizes={} reallocations={} dispatches={} upload_bytes={} readback_bytes={} max_buffer_bytes={} fence_poll_calls={} pending_polls={} max_poll_frames={} validated={}",
+        dashcore::renderer::geode::glesSsboAsyncTransferStatusName(result.status),
+        result.majorVersion,
+        result.minorVersion,
+        result.completedPayloadSizes,
+        result.bufferStorageReallocations,
+        result.dispatches,
+        result.uploadBytesSubmitted,
+        result.readbackBytesMapped,
+        result.maxBufferBytes,
+        result.fencePollCalls,
+        result.pendingFencePolls,
+        result.maximumFencePollFrames,
+        result.allPayloadSizesValidated ? "true" : "false"
+    );
+}
+
 void runGlesSsboTransferBenchmarkIfEnabled() noexcept {
     static bool attempted = false;
     if (attempted ||
+        Mod::get()->getSettingValue<bool>("gles-ssbo-async-transfer-benchmark") ||
         !Mod::get()->getSettingValue<bool>("gles-ssbo-transfer-benchmark")) return;
 
     attempted = true;
@@ -292,6 +344,7 @@ void notifyLauncherLevelDiagnostics(
 void runGlesComputeProbeIfEnabled() noexcept {}
 void runGlesDynamicSsboProbeIfEnabled() noexcept {}
 void runGlesSsboTransferBenchmarkIfEnabled() noexcept {}
+void runGlesSsboAsyncTransferBenchmarkIfEnabled() noexcept {}
 void notifyLauncherLevelStarted() noexcept {}
 void notifyLauncherLevelEnded() noexcept {}
 #endif
@@ -317,6 +370,7 @@ class $modify(DashCoreExperimentalPlayLayer, PlayLayer) {
         dashcore::renderer::geode::coordinator().onFrame(this, updateNanoseconds);
         runGlesComputeProbeIfEnabled();
         runGlesDynamicSsboProbeIfEnabled();
+        runGlesSsboAsyncTransferBenchmarkIfEnabled();
         runGlesSsboTransferBenchmarkIfEnabled();
     }
 
@@ -330,6 +384,9 @@ class $modify(DashCoreExperimentalPlayLayer, PlayLayer) {
 #endif
             renderCoordinator.onLevelExit();
         }
+#if defined(GEODE_IS_ANDROID)
+        dashcore::renderer::geode::cancelGlesSsboAsyncTransferBenchmark();
+#endif
         PlayLayer::onExit();
     }
 };
