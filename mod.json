@@ -31,15 +31,15 @@
       "type": "bool",
       "default": false
     },
-    "gles-ssbo-transfer-benchmark": {
-      "name": "Run legacy synchronous GLES SSBO benchmark",
-      "description": "Legacy blocking comparison at 1, 4, 16, and 64 KiB per SSBO. Can stall while reading GPU output; disabled by default and automatically skipped when the asynchronous benchmark is enabled.",
-      "type": "bool",
-      "default": false
-    },
     "gles-ssbo-async-transfer-benchmark": {
       "name": "Run asynchronous GLES SSBO benchmark",
       "description": "Runs a bounded 1, 4, 16, and 64 KiB SSBO test over multiple gameplay frames. Uses GLsync with zero-timeout polling and reads back only after the fence signals. Shader compilation and bounded allocations still occur; disabled by default and does not draw or process level objects.",
+      "type": "bool",
+      "default": false
+    },
+    "gles-ssbo-legacy-sync-benchmark": {
+      "name": "Run legacy synchronous GLES SSBO benchmark",
+      "description": "Legacy blocking comparison at 1, 4, 16, and 64 KiB per SSBO. Can stall while reading GPU output; disabled by default, reset from the previous setting key, and automatically skipped after the asynchronous benchmark is requested.",
       "type": "bool",
       "default": false
     }
