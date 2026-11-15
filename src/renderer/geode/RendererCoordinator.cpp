@@ -67,11 +67,32 @@ void logLevelDiagnostics(core::RendererDiagnosticSummary const& report) {
          << " snapshot_sprites_peak=" << report.maximumSnapshotSprites
          << " snapshot_vector_capacity_bytes_last=" << report.lastSnapshotCapacityBytes
          << " snapshot_vector_capacity_bytes_peak=" << report.maximumSnapshotCapacityBytes
-         << " memory_scope=snapshot_vector_capacity_only";
+         << " memory_sample_count=" << report.memorySampleCount
+         << " system_ram_total_bytes=" << report.memory.systemTotalBytes
+         << " system_ram_available_bytes=" << report.memory.systemAvailableBytes
+         << " system_memory_valid=" << (report.memory.hasSystemMemory ? "true" : "false")
+         << " process_rss_bytes=" << report.memory.processRssBytes
+         << " process_rss_valid=" << (report.memory.hasProcessRss ? "true" : "false")
+         << " process_pss_bytes=" << report.memory.processPssBytes
+         << " process_pss_valid=" << (report.memory.hasProcessPss ? "true" : "false")
+         << " process_peak_rss_bytes=" << report.memory.processPeakRssBytes
+         << " process_peak_rss_valid=" << (report.memory.hasProcessPeakRss ? "true" : "false")
+         << " memory_safety_reserve_bytes=" << report.memoryBudget.systemSafetyReserveBytes
+         << " memory_headroom_bytes=" << report.memoryBudget.availableHeadroomBytes
+         << " memory_budget_bytes=" << report.memoryBudget.budgetBytes
+         << " memory_max_single_buffer_bytes=" << report.memoryBudget.maxSingleBufferBytes
+         << " memory_budget_can_allocate=" << (report.memoryBudget.canAllocateBuffers ? "true" : "false")
+         << " memory_scope=procfs_process_pss_rss_and_system_available;planning_only_no_reservations";
     ::geode::log::info("{}", line.str());
 }
 
 } // namespace
+
+void RendererCoordinator::refreshMemoryBudget() noexcept {
+    m_memorySnapshot = core::queryProcessMemorySnapshot();
+    m_memoryBudget = core::calculateRendererMemoryBudget(m_memorySnapshot);
+    if (m_memorySampleCount != UINT64_MAX) ++m_memorySampleCount;
+}
 
 void RendererCoordinator::onLevelInit(PlayLayer* layer, bool captureEnabled) noexcept {
     ++m_generation;
@@ -81,6 +102,8 @@ void RendererCoordinator::onLevelInit(PlayLayer* layer, bool captureEnabled) noe
     m_snapshot = {};
     m_diagnostics.reset();
     m_frameIndex = 0;
+    m_memorySampleCount = 0;
+    refreshMemoryBudget();
     m_captureEnabled = captureEnabled;
     m_active = true;
 }
@@ -131,11 +154,13 @@ void RendererCoordinator::onFrame(
 
     m_diagnostics.record(sample);
     ++m_frameIndex;
+    // Procfs is sampled at level start and once per 600 frames, never per frame.
+    if ((m_frameIndex % 600u) == 0u) refreshMemoryBudget();
 }
 
 void RendererCoordinator::onLevelExit() noexcept {
     if (m_active) {
-        auto const report = m_diagnostics.summary();
+        auto const report = summary();
         if (report.totalFrames != 0) {
             try {
                 logLevelDiagnostics(report);
@@ -147,6 +172,9 @@ void RendererCoordinator::onLevelExit() noexcept {
 
     m_snapshot = {};
     m_source.reset(nullptr);
+    m_memorySnapshot = {};
+    m_memoryBudget = {};
+    m_memorySampleCount = 0;
     m_captureEnabled = false;
     m_active = false;
     m_frameIndex = 0;
