@@ -90,7 +90,7 @@ GlesComputeProbeResult runGlesComputeProbe() noexcept {
     glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 0, &maxWorkGroupCountX);
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &maxStorageBindings);
 
-    if (maxStorageBlock <= 0 || maxWorkGroupInvocations < 4 ||
+    if (maxStorageBlock < 16 || maxWorkGroupInvocations < 4 ||
         maxWorkGroupCountX < 1 || maxStorageBindings < 1) {
         result.status = GlesComputeProbeStatus::MissingComputeLimits;
         return result;
@@ -172,6 +172,15 @@ GlesComputeProbeResult runGlesComputeProbe() noexcept {
         nullptr,
         GL_DYNAMIC_READ
     );
+    GLint allocatedBytes = 0;
+    glGetBufferParameteriv(GL_SHADER_STORAGE_BUFFER, GL_BUFFER_SIZE, &allocatedBytes);
+    if (allocatedBytes < static_cast<GLint>(sizeof(expected))) {
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, static_cast<GLuint>(previousGenericStorageBuffer));
+        glDeleteBuffers(1, &buffer);
+        glDeleteProgram(program);
+        result.status = GlesComputeProbeStatus::BufferAllocationFailed;
+        return result;
+    }
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, buffer);
     glUseProgram(program);
     glDispatchCompute(1, 1, 1);
