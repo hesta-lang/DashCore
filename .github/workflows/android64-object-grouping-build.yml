@@ -2,7 +2,7 @@ name: DashCore Android64 Object Grouping Build
 
 on:
   push:
-    branches: ["android-object-grouping"]
+    branches: ["android-object-grouping", "android-jni-transition-crash-fix"]
   workflow_dispatch:
 
 permissions:
@@ -28,7 +28,7 @@ jobs:
       - name: Upload Android64 .geode artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DashCore-0.16.0-alpha-Android64
+          name: DashCore-0.16.1-alpha-Android64
           path: ${{ steps.build.outputs.build-output }}/*.geode
           if-no-files-found: error
           retention-days: 14
