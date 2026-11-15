@@ -126,6 +126,26 @@ class RenderPipelineContractTests(unittest.TestCase):
             with self.subTest(call=call):
                 self.assertIn(call, self.source)
 
+    def test_gameobject_visit_timing_uses_existing_ccnode_hook(self):
+        required = (
+            "RenderCallbackMetric gameObjectVisit;",
+            "bool const gameObjectProfileActive = g_generalEnabled && g_rendererProfile.active;",
+            "typeinfo_cast<GameObject*>(this)",
+            "g_rendererProfile.gameObjectVisit.calls % kRenderPipelineTimingStride == 0",
+            "RenderCallScope gameObjectVisitMetric",
+            'reportRenderCallback("GameObject::visit (via CCNode::visit)"',
+            'reportTimingBuckets("GameObject::visit (via CCNode::visit)"',
+            "GameObject visits are observed through the existing CCNode::visit hook",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.source)
+
+        # GameObject is observed through the existing CCNode hook. Do not add a
+        # separate unverified GameObject update/visit detour for Android64.
+        self.assertNotIn("class $modify(OptGodGameObject", self.source)
+        self.assertNotIn("GameObject::update(", self.source)
+
     def test_update_subphase_hooks_are_optional_and_sampled(self):
         required = (
             "g_baseGameLayerUpdateHook = registerOptionalHook",
@@ -211,7 +231,7 @@ class RenderPipelineContractTests(unittest.TestCase):
 
 
     def test_diagnostic_release_version_and_defaults(self):
-        self.assertEqual(self.metadata["version"], "0.10.14-alpha")
+        self.assertEqual(self.metadata["version"], "0.10.15-alpha")
         self.assertIs(self.metadata["settings"]["render-pipeline-diagnostics"]["default"], False)
         self.assertIs(self.metadata["settings"]["experimental-render-culling"]["default"], False)
         self.assertIn("does not change rendering", self.metadata["settings"]["render-pipeline-diagnostics"]["description"])
