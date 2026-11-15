@@ -20,7 +20,7 @@ class ObjectGroupingContract(unittest.TestCase):
         cls.workflow = read(".github/workflows/android64-object-grouping-build.yml")
 
     def test_version_and_diagnostic_are_alpha_and_disabled(self):
-        self.assertEqual(self.metadata["version"], "0.16.0-alpha")
+        self.assertEqual(self.metadata["version"], "0.16.1-alpha")
         setting = self.metadata["settings"]["cpu-object-grouping-diagnostic"]
         self.assertFalse(setting["default"])
         self.assertIn("synthetic", setting["description"].lower())
