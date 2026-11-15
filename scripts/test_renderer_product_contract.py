@@ -35,7 +35,7 @@ class NativeRendererContract(unittest.TestCase):
 
     def test_package_is_alpha_and_diagnostics_are_opt_in(self):
         self.assertEqual(self.metadata["id"], "hesta.optgod")
-        self.assertEqual(self.metadata["version"], "0.15.0-alpha")
+        self.assertEqual(self.metadata["version"], "0.16.0-alpha")
         self.assertEqual(self.metadata["name"], "DashCore Native Renderer Diagnostics")
         self.assertFalse(self.metadata["settings"]["capture-object-diagnostics"]["default"])
         self.assertFalse(self.metadata["settings"]["gles-compute-diagnostic-probe"]["default"])
@@ -47,8 +47,8 @@ class NativeRendererContract(unittest.TestCase):
         self.assertFalse(self.metadata["settings"]["gles-ssbo-async-transfer-benchmark"]["default"])
         self.assertIn('"gles-ssbo-legacy-sync-benchmark"', self.hooks)
         self.assertIn('"gles-ssbo-async-transfer-benchmark"', self.hooks)
-        self.assertIn("project(optgod VERSION 0.15.0)", self.cmake)
-        self.assertIn("0.15.0-alpha", self.module)
+        self.assertIn("project(optgod VERSION 0.16.0)", self.cmake)
+        self.assertIn("0.16.0-alpha", self.module)
 
     def test_memory_budget_and_os_limit_diagnostics_are_read_only(self):
         self.assertIn("MemAvailable:", self.memory_source)
