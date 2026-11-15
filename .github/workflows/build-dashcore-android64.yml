@@ -2,7 +2,7 @@ name: Build DashCore Geode Native Renderer (Android64)
 
 on:
   push:
-    branches: ["experimental-renderer"]
+    branches: ["experimental-renderer", "android-memory-budget"]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -58,6 +58,15 @@ jobs:
             src/renderer/core/RendererDiagnostics.cpp \
             -o /tmp/dashcore-renderer-diagnostics-tests
           /tmp/dashcore-renderer-diagnostics-tests
+          c++ -std=c++20 -Wall -Wextra -Werror -Isrc \
+            tests/android_gles_capabilities_tests.cpp src/renderer/core/GlesCapabilities.cpp \
+            -o /tmp/dashcore-android-gles-capabilities-tests
+          /tmp/dashcore-android-gles-capabilities-tests
+          c++ -std=c++20 -Wall -Wextra -Werror -Isrc \
+            tests/memory_budget_tests.cpp \
+            src/renderer/core/MemoryBudget.cpp src/renderer/core/MemoryProbe.cpp \
+            -o /tmp/dashcore-memory-budget-tests
+          /tmp/dashcore-memory-budget-tests
 
       - name: Run Cppcheck
         run: |
