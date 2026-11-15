@@ -268,7 +268,7 @@ GlesDynamicSsboProbeResult runGlesDynamicSsboProbe() noexcept {
         glGetBufferParameteriv(
             GL_SHADER_STORAGE_BUFFER, GL_BUFFER_SIZE, &inputAllocatedBytes
         );
-        if (inputAllocatedBytes < byteCount) {
+        if (inputAllocatedBytes < 0 || static_cast<GLsizeiptr>(inputAllocatedBytes) < byteCount) {
             return finish(GlesDynamicSsboProbeStatus::BufferAllocationFailed);
         }
         glBufferSubData(
@@ -283,7 +283,7 @@ GlesDynamicSsboProbeResult runGlesDynamicSsboProbe() noexcept {
         glGetBufferParameteriv(
             GL_SHADER_STORAGE_BUFFER, GL_BUFFER_SIZE, &outputAllocatedBytes
         );
-        if (outputAllocatedBytes < byteCount) {
+        if (outputAllocatedBytes < 0 || static_cast<GLsizeiptr>(outputAllocatedBytes) < byteCount) {
             return finish(GlesDynamicSsboProbeStatus::BufferAllocationFailed);
         }
 
