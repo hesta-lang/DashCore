@@ -1,3 +1,12 @@
+## 0.12.0-alpha — cgroup/RLIMIT diagnostics and isolated GLES compute probe
+- Adds read-only cgroup v2 and v1 memory limit/current sampling using the current process membership where exposed.
+- Records process VmSize and soft/hard RLIMIT_AS and RLIMIT_RSS values.
+- Extends DashCore and launcher JSONL diagnostics with validity/unlimited flags so unavailable and unlimited values are distinguishable.
+- Adds an opt-in one-shot GLES 3.1 compute/SSBO smoke test using four 32-bit outputs (16-byte buffer).
+- Preserves and restores the current GL program and shader-storage-buffer bindings; does not issue draw calls or inspect level objects.
+- Keeps the original Cocos renderer as the only visible renderer and leaves object capture disabled by default.
+- Diagnostic prerelease only; no FPS or optimization claim.
+
 ## 0.11.9-alpha — adaptive memory budget diagnostics
 - Adds read-only Android/Linux procfs sampling for system available RAM and process RSS/PSS/peak RSS.
 - Calculates a conservative renderer planning budget with a dynamic OS safety reserve, a 64 MiB ceiling, and a 16 MiB per-buffer ceiling.
