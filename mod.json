@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore Native Renderer Diagnostics",
-  "version": "0.13.0-alpha",
+  "version": "0.14.0-alpha",
   "developer": "hesta-lang",
-  "description": "Android renderer research and diagnostics: process memory visibility plus opt-in GLES compute and dynamic SSBO transfer probes. Preserves the original Cocos renderer.",
+  "description": "Android renderer research and diagnostics: process memory visibility plus opt-in GLES compute, dynamic SSBO correctness, and bounded SSBO transfer timing probes. Preserves the original Cocos renderer.",
   "tags": [
     "optimizations",
     "performance"
@@ -28,6 +28,12 @@
     "gles-dynamic-ssbo-diagnostic-probe": {
       "name": "Run GLES dynamic SSBO transfer probe",
       "description": "Runs a one-shot GLES 3.1 test that reallocates two tiny SSBOs, uploads CPU data, dispatches Compute, and validates readback. Disabled by default; does not draw or process level objects.",
+      "type": "bool",
+      "default": false
+    },
+    "gles-ssbo-transfer-benchmark": {
+      "name": "Run GLES SSBO transfer benchmark",
+      "description": "Runs a one-shot diagnostic at 1, 4, 16, and 64 KiB per SSBO with three upload/compute/readback validations per size. Records CPU wall-clock phase timings; disabled by default and does not process level objects or draw.",
       "type": "bool",
       "default": false
     }
