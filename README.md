@@ -35,6 +35,16 @@ This validation version preserves the original Cocos renderer from Geometry Dash
 - The result is written as DashCore_GLES_DYNAMIC_SSBO_PROBE. Expected success is five validated batches, ten storage reallocations, five dispatches, and 1364 bytes uploaded and read back.
 - It does not access level objects or draw anything. It is a tiny transfer correctness test, not a throughput benchmark or optimization.
 
+### Stage 4 — bounded SSBO transfer timing benchmark
+
+- The setting "Run GLES SSBO transfer benchmark" is disabled by default and runs once per process when manually enabled.
+- It tests 1, 4, 16, and 64 KiB payloads per SSBO, with three upload/compute/readback/validation repetitions at each size.
+- The largest allocation is 64 KiB per buffer (128 KiB total for the pair); it validates every output value before accepting a sample.
+- It records allocation time plus average/minimum/maximum CPU wall-clock times for upload, Compute submission, readback, and the complete upload-to-readback cycle.
+- The Compute measurement is command submission plus barrier overhead, not isolated GPU execution time. The readback measurement may include time spent waiting for GPU completion.
+- Expected completion counters are four payload sizes, eight storage reallocations, twelve dispatches, and 261120 bytes uploaded and read back.
+- It does not access level objects, triggers, shaders, sprites, or draw state. It is a bounded timing/correctness benchmark, not an FPS benchmark or an optimization claim.
+
 ## Memory-budget interpretation
 
 processPssBytes is proportional memory attributed to the Geometry Dash process; RSS and peak RSS describe resident memory. systemAvailableBytes is the kernel's MemAvailable estimate. cgroup values represent the current memory controller hierarchy when discoverable. RLIMIT values are the process's soft and hard resource limits. These are distinct mechanisms and must not be conflated.
@@ -43,7 +53,7 @@ The existing planning budget remains based on system available memory and conser
 
 ## Current implementation boundary
 
-The original Geometry Dash/Geode Cocos renderer remains the only visible draw path. Object capture remains disabled by default. The memory monitor only reads OS diagnostics. All three GLES probes are opt-in, one-shot diagnostics; neither is connected to object rendering or gameplay data.
+The original Geometry Dash/Geode Cocos renderer remains the only visible draw path. Object capture remains disabled by default. The memory monitor only reads OS diagnostics. All three GLES probes are opt-in, one-shot diagnostics; none is connected to object rendering or gameplay data.
 
 DashCore does not copy, link, package, or distribute Bismuth source or a Bismuth-derived binary. The current branch is independent Android renderer research. No optimization or performance improvement is claimed.
 
