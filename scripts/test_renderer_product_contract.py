@@ -35,7 +35,7 @@ class NativeRendererContract(unittest.TestCase):
 
     def test_package_is_alpha_and_diagnostics_are_opt_in(self):
         self.assertEqual(self.metadata["id"], "hesta.optgod")
-        self.assertEqual(self.metadata["version"], "0.16.0-alpha")
+        self.assertEqual(self.metadata["version"], "0.16.1-alpha")
         self.assertEqual(self.metadata["name"], "DashCore Native Renderer Diagnostics")
         self.assertFalse(self.metadata["settings"]["capture-object-diagnostics"]["default"])
         self.assertFalse(self.metadata["settings"]["gles-compute-diagnostic-probe"]["default"])
@@ -47,8 +47,8 @@ class NativeRendererContract(unittest.TestCase):
         self.assertFalse(self.metadata["settings"]["gles-ssbo-async-transfer-benchmark"]["default"])
         self.assertIn('"gles-ssbo-legacy-sync-benchmark"', self.hooks)
         self.assertIn('"gles-ssbo-async-transfer-benchmark"', self.hooks)
-        self.assertIn("project(optgod VERSION 0.16.0)", self.cmake)
-        self.assertIn("0.16.0-alpha", self.module)
+        self.assertIn("project(optgod VERSION 0.16.1)", self.cmake)
+        self.assertIn("0.16.1-alpha", self.module)
 
     def test_memory_budget_and_os_limit_diagnostics_are_read_only(self):
         self.assertIn("MemAvailable:", self.memory_source)
@@ -264,6 +264,17 @@ class NativeRendererContract(unittest.TestCase):
         )
         self.assertIn("m_diagnostics.record(sample)", self.coordinator)
         self.assertIn("if (m_captureEnabled)", self.coordinator)
+
+    def test_level_transition_hooks_do_not_use_unsafe_android_jni_lookup(self):
+        # FindClass from the native Cocos GL thread may use the wrong class
+        # loader. A null jclass passed to GetStaticMethodID aborts ART.
+        self.assertNotIn("JniHelper", self.hooks)
+        self.assertNotIn("getStaticMethodInfo", self.hooks)
+        self.assertNotIn("GetStaticMethodID", self.hooks)
+        self.assertNotIn("LauncherDiagnostics", self.hooks)
+        self.assertNotIn("notifyLauncherLevelStarted", self.hooks)
+        self.assertNotIn("notifyLauncherLevelEnded", self.hooks)
+        self.assertNotIn("notifyLauncherLevelDiagnostics", self.hooks)
 
     def test_gles_capability_model_remains_pure_and_conservative(self):
         self.assertIn("GL_EXT_multi_draw_indirect", self.gles_source)
