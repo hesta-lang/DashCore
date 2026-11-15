@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore Native Renderer Diagnostics",
-  "version": "0.11.9-alpha",
+  "version": "0.12.0-alpha",
   "developer": "hesta-lang",
-  "description": "CPU-only renderer and process-memory diagnostics for Geometry Dash Android. Calculates a conservative planning-only memory budget; does not reserve memory or replace the original Cocos renderer.",
+  "description": "Android renderer research and diagnostics: cgroup/RLIMIT memory visibility plus an optional one-shot GLES 3.1 compute self-test. Preserves the original Cocos renderer.",
   "tags": [
     "optimizations",
     "performance"
@@ -16,6 +16,12 @@
     "capture-object-diagnostics": {
       "name": "Capture object diagnostics",
       "description": "Enables optional per-frame read-only CPU inspection of level objects for diagnostics. Disabled by default; no custom renderer or OpenGL calls are used.",
+      "type": "bool",
+      "default": false
+    },
+    "gles-compute-diagnostic-probe": {
+      "name": "Run GLES compute diagnostic probe",
+      "description": "Runs one tiny 4-value GLES 3.1 compute/SSBO self-test during gameplay. Diagnostic only; disabled by default and does not draw or process level objects.",
       "type": "bool",
       "default": false
     }
