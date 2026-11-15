@@ -1,4 +1,5 @@
 #include "renderer/geode/RendererCoordinator.hpp"
+#include "renderer/core/ObjectGrouping.hpp"
 #if defined(GEODE_IS_ANDROID)
 #include "renderer/geode/GlesComputeProbe.hpp"
 #include "renderer/geode/GlesDynamicSsboProbe.hpp"
@@ -24,6 +25,29 @@
 using namespace geode::prelude;
 
 namespace {
+
+void runCpuObjectGroupingDiagnosticIfEnabled() noexcept {
+    static bool attempted = false;
+    if (attempted ||
+        !Mod::get()->getSettingValue<bool>("cpu-object-grouping-diagnostic")) {
+        return;
+    }
+
+    attempted = true;
+    auto const result =
+        dashcore::renderer::core::runSyntheticObjectGroupingDiagnostic();
+    ::geode::log::info(
+        "DashCore_CPU_OBJECT_GROUPING status={} synthetic=true objects={} grouped_objects={} groups={} packed_bytes={} group_table_bytes={} elapsed_ms={} validated={}",
+        dashcore::renderer::core::objectGroupingStatusName(result.status),
+        result.inputObjects,
+        result.groupedObjects,
+        result.groupCount,
+        result.packedDataBytes,
+        result.groupRangeBytes,
+        static_cast<double>(result.elapsedNanoseconds) / 1000000.0,
+        result.validated ? "true" : "false"
+    );
+}
 
 #if defined(GEODE_IS_ANDROID)
 bool g_asyncSsboBenchmarkRequested = false;
@@ -372,6 +396,7 @@ class $modify(DashCoreExperimentalPlayLayer, PlayLayer) {
             std::chrono::duration_cast<std::chrono::nanoseconds>(updateElapsed).count()
         );
         dashcore::renderer::geode::coordinator().onFrame(this, updateNanoseconds);
+        runCpuObjectGroupingDiagnosticIfEnabled();
         runGlesComputeProbeIfEnabled();
         runGlesDynamicSsboProbeIfEnabled();
         runGlesSsboAsyncTransferBenchmarkIfEnabled();
