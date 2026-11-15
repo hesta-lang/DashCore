@@ -5,9 +5,9 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore",
-  "version": "0.10.14-alpha",
+  "version": "0.10.15-alpha",
   "developer": "hesta-lang",
-  "description": "DashCore 0.10.14-alpha: measures each renderer callback independently and reports whether its hook is absent, disabled, enabled but unobserved, or running. One missing callback does not disable the others. Diagnostics and experimental culling remain OFF by default; no rendering, gameplay, physics, draw-order, or UI changes.",
+  "description": "DashCore 0.10.15-alpha: adds sampled CPU timing for GameObject subtree visits through the existing CCNode::visit hook during the bounded render-pipeline sample. Diagnostics and experimental culling remain OFF by default; the original renderer, gameplay, draw order, and UI are unchanged. No optimization or FPS improvement is claimed.",
   "tags": [
     "optimizations",
     "performance"
@@ -40,7 +40,7 @@
     "render-pipeline-diagnostics": {
       "type": "bool",
       "name": "Render Pipeline Diagnostics (alpha)",
-      "description": "Collects a read-only CPU sample over 180 gameplay frames, driven by PlayLayer::postUpdate, plus optional Cocos callback timings. CCDirector::drawScene is supplementary and may be unavailable on Android; the final report states draw-path coverage separately. Hooks remain disabled when OFF. It does not change rendering, gameplay, or UI and does not measure GPU execution time.",
+      "description": "Collects a read-only CPU sample over 180 gameplay frames, including optional Cocos callback timings and GameObject subtree-visit timings (one in every eight GameObject visits). CCDirector::drawScene is supplementary and may be unavailable on Android; the final report states draw-path coverage separately. GameObject timings are inclusive and nested; they do not measure exclusive per-object work or GPU execution. This setting does not change rendering, gameplay, or UI.",
       "default": false
     }
   }
