@@ -5,7 +5,7 @@
   },
   "id": "hesta.optgod",
   "name": "DashCore Native Renderer Diagnostics",
-  "version": "0.16.0-alpha",
+  "version": "0.16.1-alpha",
   "developer": "hesta-lang",
   "description": "Android object grouping research and renderer diagnostics: synthetic CPU object grouping plus opt-in GLES compute and asynchronous SSBO transfer tests. Preserves the original Cocos renderer.",
   "tags": [
