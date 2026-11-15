@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cmath>
 #include <limits>
+#include <string_view>
 #include <vector>
 
 using namespace dashcore::renderer::core;
